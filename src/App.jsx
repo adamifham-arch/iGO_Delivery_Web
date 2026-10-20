@@ -1254,6 +1254,7 @@ export default function App() {
   );
   const openPackageSummary = (status = 'All') => {
     setSearch('');
+    setStatusFilter(status);
     setShowForm(false);
     setShowMobileNav(false);
     setPage('Packages');
@@ -4121,17 +4122,17 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       return initialState;
     }
   };
-  const [billing, setBilling] = useState(readState);
+  const [billing, setBilling] = useState(() => (liveMode ? initialState : readState()));
   const [databaseFinanceReady, setDatabaseFinanceReady] = useState(false);
   const [databaseFinanceError, setDatabaseFinanceError] = useState('');
   const [paymentAccountId, setPaymentAccountId] = useState(null);
-  const [withdrawalRequests, setWithdrawalRequests] = useState(
-    readDriverWithdrawalRequests
+  const [withdrawalRequests, setWithdrawalRequests] = useState(() =>
+    liveMode ? [] : readDriverWithdrawalRequests()
   );
   const refreshDatabaseFinance = async (notifyRoot = false) => {
     if (!liveMode) return;
     try {
-      const records = await loadFinanceRecords();
+      const records = await loadFinanceRecords({ workspace });
       setBilling((current) => ({
         ...current,
         cutoff: records.invoiceCutoff || current.cutoff,
@@ -4147,6 +4148,10 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       setDatabaseFinanceError('');
       if (notifyRoot) window.dispatchEvent(new Event('igo-live-finance-updated'));
     } catch (error) {
+      setBilling((current) => ({ ...current, invoices: [], payments: [], expenses: [] }));
+      setPaymentAccountId(null);
+      setWithdrawalRequests([]);
+      setDatabaseFinanceReady(false);
       setDatabaseFinanceError(error.message || 'Could not load finance records.');
     }
   };
@@ -4164,7 +4169,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       window.removeEventListener('igo-driver-withdrawals-updated', sync);
       window.removeEventListener('storage', sync);
     };
-  }, [liveMode]);
+  }, [liveMode, workspace]);
   const decideDriverWithdrawal = async (id, status) => {
     if (liveMode) {
       try {
@@ -4886,7 +4891,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
                   </div>
                 </div>
                 <p>
-                  <strong>Partner:</strong> Style Hub　 <strong>Status:</strong>{' '}
+                  <strong>Partner:</strong> {viewingInvoice.partner}　 <strong>Status:</strong>{' '}
                   {getInvoiceStatus(viewingInvoice)}
                 </p>
                 <div style={{ overflowX: 'auto' }}>

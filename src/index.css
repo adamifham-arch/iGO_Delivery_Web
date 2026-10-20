@@ -2937,3 +2937,28 @@ button {
 .app[data-theme="night"] .main .simple-list > p {
   color: #cbd5e1 !important;
 }
+
+
+/* Keep the admin workspace switcher reachable on narrow phones. */
+@media (max-width: 600px) {
+  header.topbar {
+    grid-template-rows: 42px 38px;
+    row-gap: 6px;
+    padding-bottom: 8px;
+  }
+  header.topbar > .dashboard-logo { top: 29px; }
+  header.topbar > .workspace-switch:has(select) {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+    width: min(220px, calc(100vw - 24px));
+    max-width: 220px;
+    margin: 0;
+  }
+  header.topbar > .workspace-switch:has(select) select {
+    width: 100%;
+    min-height: 36px;
+    font-size: 12px;
+  }
+}

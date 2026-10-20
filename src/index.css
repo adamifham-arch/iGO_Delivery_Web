@@ -2973,3 +2973,76 @@ header.topbar > .workspace-switch:has(select) {
   background: #172033;
   color: #f8fafc;
 }
+
+/* Driver availability switch */
+.driver-availability-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 132px;
+  padding: 7px 9px 7px 12px;
+  border: 1px solid var(--line, #d7dce5);
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  color: var(--text, #172033);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.driver-availability-label {
+  line-height: 1;
+}
+
+.driver-switch-track {
+  position: relative;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: #7b8494;
+  transition: background-color 160ms ease;
+}
+
+.driver-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  transition: transform 160ms ease;
+}
+
+.driver-availability-switch.is-online .driver-switch-track {
+  background: #168451;
+}
+
+.driver-availability-switch.is-online .driver-switch-thumb {
+  transform: translateX(18px);
+}
+
+.driver-availability-switch.is-offline .driver-switch-track {
+  background: #7b8494;
+}
+
+.driver-availability-switch:focus-visible {
+  outline: 3px solid #2778ff;
+  outline-offset: 2px;
+}
+
+.app[data-theme="night"] .driver-availability-switch {
+  border-color: #46536a;
+  background: #202b3d;
+  color: #f8fafc;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .driver-switch-track,
+  .driver-switch-thumb {
+    transition: none;
+  }
+}

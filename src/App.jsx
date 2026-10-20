@@ -3291,12 +3291,16 @@ function DriverWorkflowDashboard({
         </div>
         <button
           type="button"
-          className={online ? 'driver-action' : 'secondary-btn'}
+          className={`driver-availability-switch ${online ? 'is-online' : 'is-offline'}`}
           onClick={changeOnline}
-          aria-pressed={online}
+          role="switch"
+          aria-checked={online}
+          aria-label={online ? 'Online, switch to go offline' : 'Offline, switch to go online'}
         >
-          <span className={online ? 'driver-live-dot' : 'status-dot-offline'} />{' '}
-          {online ? 'Online · Go offline' : 'Go online'}
+          <span className="driver-availability-label">{online ? 'Online' : 'Offline'}</span>
+          <span className="driver-switch-track" aria-hidden="true">
+            <span className="driver-switch-thumb" />
+          </span>
         </button>
       </div>
       <div className="driver-metrics">

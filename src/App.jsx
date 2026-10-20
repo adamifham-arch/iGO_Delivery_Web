@@ -322,6 +322,9 @@ export default function App() {
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
   const [partnerLogo, setPartnerLogo] = useState('');
   const [logoSaving, setLogoSaving] = useState(false);
+  const [logoFileSelected, setLogoFileSelected] = useState(false);
+  const [logoFeedback, setLogoFeedback] = useState('');
+  const [logoFeedbackKind, setLogoFeedbackKind] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
@@ -507,29 +510,43 @@ export default function App() {
 
   const savePartnerLogoFromProfile = async (event) => {
     event.preventDefault();
+    setNotice('');
     const formElement = event.currentTarget;
     const file = formElement.elements.partner_logo.files?.[0];
-    if (!file) { setNotice('Choose a logo image first.'); return; }
+    if (!file) {
+      setLogoFeedbackKind('error');
+      setLogoFeedback('Choose a logo image before saving.');
+      return;
+    }
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 256 * 1024) {
-      setNotice('Choose a PNG, JPEG, or WebP image up to 256 KB.');
+      setLogoFeedbackKind('error');
+      setLogoFeedback('Choose a PNG, JPEG, or WebP image up to 256 KB.');
       return;
     }
     setLogoSaving(true);
+    setLogoFeedback('');
     const reader = new FileReader();
     reader.onload = async () => {
       try {
         const logoDataUrl = String(reader.result || '');
         await savePartnerLogo(logoDataUrl);
         setPartnerLogo(logoDataUrl);
-        setNotice('Partner logo saved. It will appear on driver job tiles.');
+        setLogoFeedbackKind('success');
+        setLogoFeedback('Logo saved. Drivers will see it on your job tiles.');
         formElement.reset();
+        setLogoFileSelected(false);
       } catch (error) {
-        setNotice(error.message || 'Could not save the partner logo.');
+        setLogoFeedbackKind('error');
+        setLogoFeedback(error.message || 'Could not save the logo. Please try again.');
       } finally {
         setLogoSaving(false);
       }
     };
-    reader.onerror = () => { setNotice('Could not read that image. Please choose it again.'); setLogoSaving(false); };
+    reader.onerror = () => {
+      setLogoFeedbackKind('error');
+      setLogoFeedback('Could not read that image. Please choose it again.');
+      setLogoSaving(false);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -1717,8 +1734,10 @@ export default function App() {
                     <h3>Business logo</h3>
                     <p>Add a logo to help drivers recognize your packages. PNG, JPEG, or WebP · up to 256 KB.</p>
                     {partnerLogo && <img src={partnerLogo} alt="Current partner logo" className="profile-logo-preview" />}
-                    <label>Choose logo<input name="partner_logo" type="file" accept="image/png,image/jpeg,image/webp" /></label>
-                    <button className="secondary-btn" type="submit" disabled={logoSaving}>{logoSaving ? 'Saving…' : partnerLogo ? 'Save logo' : 'Add logo'}</button>
+                    <label>Choose logo<input name="partner_logo" type="file" accept="image/png,image/jpeg,image/webp" required onChange={(event) => { setLogoFileSelected(Boolean(event.currentTarget.files?.[0])); setLogoFeedback(''); setNotice(''); }} /></label>
+                    <p className="profile-logo-hint">{logoFileSelected ? 'Logo selected. Save to apply it.' : 'Choose an image above to enable the save button.'}</p>
+                    <button className="secondary-btn" type="submit" disabled={logoSaving || !logoFileSelected}>{logoSaving ? 'Saving…' : partnerLogo ? 'Save logo' : 'Add logo'}</button>
+                    {logoFeedback && <p className={'profile-logo-feedback ' + logoFeedbackKind} role={logoFeedbackKind === 'error' ? 'alert' : 'status'}>{logoFeedback}</p>}
                   </form>
                 )}
                 {databaseProfile?.role !== 'admin' && <ProfileChangeRequests profile={databaseProfile} user={databaseUser} workspace={workspace} setNotice={setNotice} />}

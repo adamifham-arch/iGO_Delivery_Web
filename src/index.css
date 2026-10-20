@@ -2878,3 +2878,14 @@ button {
 .app[data-theme="night"] .welcome-card p {
   color: #f8fafc !important;
 }
+
+
+/* Keep empty package tables readable in the signed-in night theme. */
+.app[data-theme="night"] .table-wrap {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .table-wrap .empty {
+  color: #cbd5e1 !important;
+}

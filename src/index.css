@@ -2865,3 +2865,16 @@ button {
   header.topbar .notification-icon-button { width: 34px; height: 34px; }
   header.topbar .profile-avatar { width: 30px; height: 30px; flex-basis: 30px; }
 }
+
+
+/* Give the partner overview summary panel a matching night-mode surface. */
+.app[data-theme="night"] .welcome-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+.app[data-theme="night"] .welcome-card h2,
+.app[data-theme="night"] .welcome-card p {
+  color: #f8fafc !important;
+}

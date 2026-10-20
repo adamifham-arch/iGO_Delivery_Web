@@ -3469,6 +3469,20 @@ function DriverWorkflowDashboard({
             <p className="driver-partner-filter-label">
               {activePartner ? 'Showing ' + (partnerGroups.find((group) => group.id === activePartner)?.name || 'partner') + ' jobs' : 'Select a partner to view available packages'}
             </p>
+            <label className="driver-select-all">
+              <input
+                type="checkbox"
+                checked={visibleWaiting.length > 0 && visibleWaiting.every((p) => selected.includes(p.id))}
+                onChange={(e) =>
+                  setSelected((current) =>
+                    e.target.checked
+                      ? [...new Set([...current, ...visibleWaiting.map((p) => p.id)])]
+                      : current.filter((id) => !visibleWaiting.some((p) => p.id === id))
+                  )
+                }
+              />
+              <span>Select all packages</span>
+            </label>
             <div className="driver-delivery-list">
             {visibleWaiting.map((p) => (
                 <label

@@ -2926,3 +2926,14 @@ button {
   border: 0 !important;
   box-shadow: none !important;
 }
+
+
+/* Keep partner finance summaries readable in night mode. */
+.app[data-theme="night"] .main .simple-list {
+  background: #1e293b !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .main .simple-list > p {
+  color: #cbd5e1 !important;
+}

@@ -2261,7 +2261,7 @@ export default function App() {
                       </select>
                     </div>
                     <strong>MVR {partnerTotalSpent.toLocaleString()}</strong>
-                    <small>{liveMode ? 'Confirmed payments' : 'Confirmed payments · demo'}</small>
+                    <small>{databaseProfile ? 'Confirmed payments' : 'Confirmed payments · demo'}</small>
                   </div>
                 )}
               </div>

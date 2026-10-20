@@ -3261,7 +3261,7 @@ function DriverWorkflowDashboard({
   }, new Map()).values()];
   const visibleWaiting = activePartner
     ? waiting.filter((p) => String(p.partnerId || p.partnerName || p.partner || 'Unknown partner') === activePartner)
-    : waiting;
+    : [];
   const active = assigned.filter(
     (p) => !['Delivered', 'Cancelled'].includes(p.status)
   );
@@ -3467,7 +3467,7 @@ function DriverWorkflowDashboard({
               ))}
             </div>
             <p className="driver-partner-filter-label">
-              {activePartner ? 'Showing ' + (partnerGroups.find((group) => group.id === activePartner)?.name || 'partner') + ' jobs' : 'Jobs from all partners'}
+              {activePartner ? 'Showing ' + (partnerGroups.find((group) => group.id === activePartner)?.name || 'partner') + ' jobs' : 'Select a partner to view available packages'}
             </p>
             <div className="driver-delivery-list">
             {visibleWaiting.map((p) => (

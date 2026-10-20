@@ -3127,3 +3127,19 @@ header.topbar > .workspace-switch:has(select) {
   object-fit: contain;
   border-radius: 7px;
 }
+
+
+.profile-logo-editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid #eceef1;
+  border-radius: 12px;
+  background: #fafbfc;
+}
+.profile-logo-editor h3 { margin: 0; font-size: 16px; }
+.profile-logo-editor p { margin: 0; color: #777d86; font-size: 13px; line-height: 1.5; }
+.profile-logo-editor label { display: grid; gap: 7px; color: #777d86; font-size: 12px; }
+.profile-logo-editor input[type='file'] { max-width: 100%; font: inherit; color: #202124; }
+.profile-logo-preview { width: 82px; height: 82px; padding: 6px; object-fit: contain; background: #fff; border: 1px solid #e3e6e9; border-radius: 10px; }

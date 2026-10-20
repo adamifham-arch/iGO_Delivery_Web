@@ -20,6 +20,8 @@ import {
   reviewPayment,
   reviewWithdrawal,
   savePaymentAccount,
+  loadPartnerLogo,
+  savePartnerLogo,
   saveInvoiceCutoff,
   saveDriverSettings,
   adminUpdateDriverSettings,
@@ -318,6 +320,8 @@ export default function App() {
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
+  const [partnerLogo, setPartnerLogo] = useState('');
+  const [logoSaving, setLogoSaving] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
@@ -432,6 +436,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
+        setPartnerLogo('');
         setPackages([]);
         setDatabaseLoading(false);
         return;
@@ -447,9 +452,10 @@ export default function App() {
         if (!roleWorkspace) throw new Error('This account has no supported iGO role.');
         let approvalStatus = 'approved';
         if (profile.role === 'partner') {
-          const { data: approvalRecord, error: approvalError } = await supabase.from('partners').select('approval_status').eq('owner_id', user.id).maybeSingle();
+          const { data: approvalRecord, error: approvalError } = await supabase.from('partners').select('approval_status,logo_data_url').eq('owner_id', user.id).maybeSingle();
           if (approvalError) throw approvalError;
           approvalStatus = approvalRecord?.approval_status || 'pending';
+          setPartnerLogo(approvalRecord?.logo_data_url || '');
         } else if (profile.role === 'driver') {
           const { data: approvalRecord, error: approvalError } = await supabase.from('drivers').select('approval_status').eq('user_id', user.id).maybeSingle();
           if (approvalError) throw approvalError;
@@ -474,6 +480,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
+        setPartnerLogo('');
         setPackages([]);
         setDatabaseError(error.message || 'Could not load this iGO account.');
       } finally {
@@ -497,6 +504,34 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  const savePartnerLogoFromProfile = async (event) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const file = formElement.elements.partner_logo.files?.[0];
+    if (!file) { setNotice('Choose a logo image first.'); return; }
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 256 * 1024) {
+      setNotice('Choose a PNG, JPEG, or WebP image up to 256 KB.');
+      return;
+    }
+    setLogoSaving(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const logoDataUrl = String(reader.result || '');
+        await savePartnerLogo(logoDataUrl);
+        setPartnerLogo(logoDataUrl);
+        setNotice('Partner logo saved. It will appear on driver job tiles.');
+        formElement.reset();
+      } catch (error) {
+        setNotice(error.message || 'Could not save the partner logo.');
+      } finally {
+        setLogoSaving(false);
+      }
+    };
+    reader.onerror = () => { setNotice('Could not read that image. Please choose it again.'); setLogoSaving(false); };
+    reader.readAsDataURL(file);
+  };
 
   const signInToDatabase = async (event) => {
     event.preventDefault();
@@ -1671,12 +1706,21 @@ export default function App() {
             <section className="profile-details-card">
               <h2>Profile</h2>
               <dl>
-              <div><dt>Name</dt><dd>{databaseProfile && databaseProfile.role !== 'admin' ? <form onSubmit={async (event) => { event.preventDefault(); const fullName = String(new FormData(event.currentTarget).get('full_name') || '').trim(); if (!fullName) return; const { error } = await supabase.rpc('submit_profile_change_request', { p_field_name: 'full_name', p_requested_value: fullName }); if (error) { setNotice(error.message); return; } setNotice('Name change request sent for admin approval.'); }}><input name="full_name" aria-label="Name" defaultValue={databaseProfile.full_name || viewedProfileName} required disabled={databaseProfile.role === "admin"} /><button type="submit" className="secondary-btn" disabled={databaseProfile.role === "admin"}>{databaseProfile.role === 'admin' ? 'Superadmin only' : 'Request name change'}</button></form> : viewedProfileName}</dd></div>
+              <div><dt>Name</dt><dd>{viewedProfileName}</dd></div>
                 {workspace === 'Partner' && linkedPartnerProfile?.contact_name && <div><dt>Contact name</dt><dd>{linkedPartnerProfile.contact_name}</dd></div>}
                 {workspace === 'Driver' && linkedDriverProfile?.phone && <div><dt>Phone</dt><dd>{linkedDriverProfile.phone}</dd></div>}
                 <div><dt>Email</dt><dd>{databaseUser?.email || 'Demo profile'}</dd></div>
                 <div><dt>Profile</dt><dd>{viewedProfileType}</dd></div>
                 </dl>
+                {workspace === 'Partner' && databaseProfile?.role === 'partner' && (
+                  <form className="profile-logo-editor" onSubmit={savePartnerLogoFromProfile}>
+                    <h3>Business logo</h3>
+                    <p>Add a logo to help drivers recognize your packages. PNG, JPEG, or WebP · up to 256 KB.</p>
+                    {partnerLogo && <img src={partnerLogo} alt="Current partner logo" className="profile-logo-preview" />}
+                    <label>Choose logo<input name="partner_logo" type="file" accept="image/png,image/jpeg,image/webp" /></label>
+                    <button className="secondary-btn" type="submit" disabled={logoSaving}>{logoSaving ? 'Saving…' : partnerLogo ? 'Save logo' : 'Add logo'}</button>
+                  </form>
+                )}
                 {databaseProfile?.role !== 'admin' && <ProfileChangeRequests profile={databaseProfile} user={databaseUser} workspace={workspace} setNotice={setNotice} />}
             </section>
           )}

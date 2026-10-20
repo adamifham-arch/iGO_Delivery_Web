@@ -438,3 +438,22 @@ export async function setAccountApproval(type, id, status) {
   const { error } = await requireClient().from(table).update({ approval_status: status }).eq('id', id);
   if (error) throw error;
 }
+
+
+export async function loadPartnerLogo() {
+  const partnerId = await getCurrentPartnerId();
+  const { data, error } = await requireClient()
+    .from('partners')
+    .select('logo_data_url')
+    .eq('id', partnerId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.logo_data_url || '';
+}
+
+export async function savePartnerLogo(logoDataUrl) {
+  const { error } = await requireClient().rpc('save_igo_partner_logo', {
+    p_logo_data_url: logoDataUrl,
+  });
+  if (error) throw error;
+}

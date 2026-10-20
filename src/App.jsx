@@ -2261,7 +2261,7 @@ export default function App() {
                       </select>
                     </div>
                     <strong>MVR {partnerTotalSpent.toLocaleString()}</strong>
-                    <small>Confirmed payments · demo</small>
+                    <small>{liveMode ? 'Confirmed payments' : 'Confirmed payments · demo'}</small>
                   </div>
                 )}
               </div>
@@ -2337,7 +2337,7 @@ export default function App() {
               )}
               <div className="simple-list">
                 <h2>Invoices and payments</h2>
-                <p>Official records appear after database setup.</p>
+                <p>{databaseProfile ? 'Official invoices and payment status from your account.' : 'Official records appear after database setup.'}</p>
                 <FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} />
               </div>
             </>

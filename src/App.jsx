@@ -716,6 +716,31 @@ export default function App() {
     setNotice('Demo status updated in this preview.');
   };
 
+  function handleNotificationNavigate(item) {
+    const explicitPage = [item.target_page, item.related_page, item.page, item.destination]
+      .find((value) => typeof value === 'string' && value.trim());
+    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Profile', 'About'];
+    let destination = pages.find((page) => page.toLowerCase() === String(explicitPage || '').trim().toLowerCase());
+    const details = [item.type, item.category, item.entity_type, item.related_type, item.title, item.message]
+      .filter(Boolean).join(' ').toLowerCase();
+    const packageReference = item.package_number || item.tracking_number || item.tracking_code || item.package_code || item.package_id ||
+      (/(package|delivery)/.test(String(item.entity_type || item.related_type || '').toLowerCase()) ? item.related_id || item.entity_id : '');
+
+    if (!destination && packageReference) destination = 'Packages';
+    if (!destination && /(approval|application|pending account|partner request|rider request)/.test(details)) {
+      destination = workspace === 'Admin' ? 'Approvals' : 'Profile';
+    } else if (!destination && /(invoice|payment|withdrawal|expense|financial|finance|billing)/.test(details)) {
+      destination = workspace === 'Admin' ? 'Finance Management' : 'Invoices & Payments';
+    } else if (!destination && /(package|delivery|tracking|shipment|pickup)/.test(details)) {
+      destination = 'Packages';
+    } else if (!destination && /(profile|account|user)/.test(details)) {
+      destination = workspace === 'Admin' ? 'User Management' : 'Profile';
+    }
+
+    if (destination === 'Packages' && packageReference) setSearch(String(packageReference));
+    setPage(destination || (workspace === 'Admin' ? 'Admin Operations' : workspace === 'Driver' ? 'About' : 'Overview'));
+  }
+
   function setPage(nextPage) {
     setNavigation((current) =>
       current.page === nextPage
@@ -1533,7 +1558,7 @@ export default function App() {
           <span className="breadcrumb">
             {workspace} / {page}
           </span>
-          <button className="workspace-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const app = event.currentTarget.closest('.app'); const night = app.dataset.theme !== 'night'; app.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button>{databaseProfile && <NotificationCenter />}
+          <button className="workspace-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const app = event.currentTarget.closest('.app'); const night = app.dataset.theme !== 'night'; app.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button>{databaseProfile && <NotificationCenter onNavigate={handleNotificationNavigate} />}
 <div className="profile-menu-container">
             <button
               type="button"
@@ -4056,7 +4081,7 @@ function ProfileChangeRequests({ profile, user, workspace, setNotice }) {
   </section>;
 }
 
-function NotificationCenter() {
+function NotificationCenter({ onNavigate }) {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
@@ -4080,6 +4105,11 @@ function NotificationCenter() {
       setNotifications((rows) => rows.map((row) => row.id === id ? { ...row, read: true } : row));
     } catch (markError) { setError(markError.message || 'Could not update notification.'); }
   };
+  const handleNotificationClick = (item) => {
+    void markRead(item.id);
+    setOpen(false);
+    onNavigate?.(item);
+  };
   const unread = notifications.filter((item) => !item.read).length;
   return (
     <div className="notification-center" style={{ position: 'relative' }}>
@@ -4090,12 +4120,14 @@ function NotificationCenter() {
         </svg>
         {unread > 0 && <span className="notification-count" aria-hidden="true">{unread > 9 ? '9+' : unread}</span>}
       </button>
-      {open && <section className="notification-panel" style={{ position: 'absolute', zIndex: 100, right: 0, top: 'calc(100% + 8px)', width: 'min(340px, 90vw)', maxHeight: 360, overflow: 'auto', background: '#fff', border: '1px solid #ddd', borderRadius: 12, padding: 14, boxShadow: '0 8px 24px #0002' }}>
+      {open && <section className="notification-panel" style={{ position: 'fixed', zIndex: 1000, right: 12, top: 'calc(env(safe-area-inset-top, 0px) + 68px)', width: 'min(360px, calc(100vw - 24px))', maxHeight: 'min(70vh, 420px)', overflowY: 'auto', background: localStorage.getItem('igo-theme') === 'night' ? '#1e293b' : '#fff', color: localStorage.getItem('igo-theme') === 'night' ? '#f3f4f6' : '#111827', border: `1px solid ${localStorage.getItem('igo-theme') === 'night' ? '#334155' : '#ddd'}`, borderRadius: 12, padding: 14, boxShadow: '0 8px 24px #0002' }}>
         <h3 style={{ marginTop: 0 }}>Notifications</h3>
         {error && <p role="alert">{error}</p>}
         {notifications.length ? notifications.map((item) => <article key={item.id} style={{ borderTop: '1px solid #eee', padding: '10px 0' }}>
-          <strong>{item.title}</strong><p style={{ margin: '4px 0' }}>{item.message}</p>
+          <button type="button" className="notification-item" onClick={() => handleNotificationClick(item)} style={{ display: 'block', width: '100%', background: 'transparent', border: 0, color: 'inherit', textAlign: 'left', font: 'inherit', padding: '6px 0', cursor: 'pointer' }}>
+            <strong>{item.title}</strong><span style={{ display: 'block', margin: '4px 0' }}>{item.message}</span>
           <small>{new Date(item.created_at).toLocaleString()}</small>
+          </button>
           {!item.read && <button type="button" className="secondary-btn" onClick={() => markRead(item.id)}>Mark read</button>}
         </article>) : <p>No notifications.</p>}
       </section>}

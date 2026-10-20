@@ -1639,7 +1639,7 @@ export default function App() {
             <section style={{ display: 'grid', gap: 20 }}>
               <header>
                 <p className="eyebrow">ADMIN WORKSPACE</p>
-                <h1>User Management</h1>
+                
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
               <AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} />

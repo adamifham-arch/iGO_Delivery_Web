@@ -1447,7 +1447,7 @@ export default function App() {
             }}
           >
             <img
-              src={localStorage.getItem('igo-theme') === 'night' ? '/igo-logo-transparent-night.png' : '/igo-logo-transparent-v2.png'}
+              src="/igo-logo.jpg"
               alt="iGO Delivery"
               width="46"
               height="36"

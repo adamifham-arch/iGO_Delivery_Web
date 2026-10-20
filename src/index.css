@@ -2919,3 +2919,10 @@ button {
   header.topbar > .notification-center { grid-column: 4; justify-self: end; }
   header.topbar > .profile-menu-container { grid-column: 5; justify-self: end; }
 }
+
+
+.dashboard-logo {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}

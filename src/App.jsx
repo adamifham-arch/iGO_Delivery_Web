@@ -1447,7 +1447,7 @@ export default function App() {
             }}
           >
             <img
-              src="https://stackblitz.com/storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6MTkwNjc4OTcxLCJwdXIiOiJibG9iX2lkIn19--9f96ed189389e08c57defc6ae287bfc8825e24e8/igo%20Logo.jpg"
+              src={localStorage.getItem('igo-theme') === 'night' ? '/igo-logo-transparent-night.png' : '/igo-logo-transparent-v2.png'}
               alt="iGO Delivery"
               width="46"
               height="36"

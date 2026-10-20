@@ -2813,3 +2813,55 @@ button {
     margin-bottom: 1px;
   }
 }
+
+
+/* Keep the dashboard controls aligned on one row at phone widths. */
+@media (max-width: 768px) {
+  header.topbar {
+    display: grid;
+    grid-template-columns: 34px auto minmax(70px, 1fr) 38px 38px 38px;
+    align-items: center;
+    justify-content: stretch;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    min-height: 58px;
+    height: auto;
+    padding: 8px 10px;
+  }
+
+  header.topbar > .dashboard-logo { width: 34px; min-width: 34px; padding: 0; }
+  header.topbar > .dashboard-logo img { width: 34px !important; height: 32px !important; }
+  header.topbar > .mobile-nav-toggle {
+    grid-column: 2; min-width: 0; width: auto; min-height: 38px;
+    padding: 6px 7px; font-size: 11px; white-space: nowrap;
+  }
+  header.topbar > .workspace-switch { grid-column: 3; min-width: 0; width: 100%; max-width: none; }
+  header.topbar > .workspace-switch > span { display: none; }
+  header.topbar > .workspace-switch select {
+    width: 100%; min-width: 0; max-width: none; min-height: 38px;
+    padding: 6px 4px; font-size: 10px;
+  }
+  header.topbar > .breadcrumb { display: none; }
+  header.topbar > .workspace-theme-toggle { grid-column: 4; justify-self: end; width: 38px; height: 38px; }
+  header.topbar > .notification-center { grid-column: 5; justify-self: end; min-width: 0; }
+  header.topbar .notification-icon-button { width: 36px; height: 36px; }
+  header.topbar > .profile-menu-container { grid-column: 6; justify-self: end; min-width: 0; }
+  header.topbar .profile-trigger { min-width: 0; padding: 2px; gap: 2px; }
+  header.topbar .profile-trigger-name { display: none; }
+  header.topbar .profile-avatar { width: 32px; height: 32px; flex-basis: 32px; }
+  header.topbar .profile-chevron { font-size: 11px; }
+}
+
+@media (max-width: 360px) {
+  header.topbar {
+    grid-template-columns: 32px auto minmax(58px, 1fr) 34px 34px 34px;
+    gap: 4px; padding-left: 6px; padding-right: 6px;
+  }
+  header.topbar > .dashboard-logo,
+  header.topbar > .dashboard-logo img { width: 32px !important; min-width: 32px; }
+  header.topbar > .mobile-nav-toggle { padding-left: 5px; padding-right: 5px; font-size: 10px; }
+  header.topbar > .workspace-theme-toggle,
+  header.topbar .notification-icon-button { width: 34px; height: 34px; }
+  header.topbar .profile-avatar { width: 30px; height: 30px; flex-basis: 30px; }
+}

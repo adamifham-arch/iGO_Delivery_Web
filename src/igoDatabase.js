@@ -37,6 +37,7 @@ export function packageFromDb(row) {
     partnerName: row.partners?.name || row.partner_name || '',
     partnerPhone: row.partners?.phone || '',
     partnerAddress: row.partners?.address || '',
+    partnerLogo: row.partners?.logo_data_url || '',
     driver: row.drivers?.name || '',
     driverPhone: row.drivers?.phone || '',
     customer: row.customer_name,
@@ -98,7 +99,7 @@ export async function loadPackages() {
   const client = requireClient();
   const { data, error } = await client
     .from('packages')
-    .select('*,partners(name,phone,address),drivers(name,phone)')
+    .select('*,partners(name,phone,address,logo_data_url),drivers(name,phone)')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data || []).map(packageFromDb);
@@ -111,7 +112,7 @@ export async function createPackages(entries, partnerId) {
     partner_id: partnerId,
     status: 'awaiting_collection',
   }));
-  const { data, error } = await client.from('packages').insert(rows).select('*,partners(name,phone,address),drivers(name,phone)');
+  const { data, error } = await client.from('packages').insert(rows).select('*,partners(name,phone,address,logo_data_url),drivers(name,phone)');
   if (error) throw error;
   return (data || []).map(packageFromDb);
 }
@@ -122,7 +123,7 @@ export async function updatePackage(id, changes) {
     .from('packages')
     .update(packageToDb(changes))
     .eq('id', id)
-    .select('*,partners(name,phone,address),drivers(name,phone)')
+    .select('*,partners(name,phone,address,logo_data_url),drivers(name,phone)')
     .single();
   if (error) throw error;
   return packageFromDb(data);

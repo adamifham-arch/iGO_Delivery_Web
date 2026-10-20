@@ -545,33 +545,59 @@ export default function App() {
     const phone = String(values.get('phone') || '').trim();
     const email = String(values.get('email') || '').trim();
     const password = String(values.get('password') || '');
+    const logoFile = role === 'partner' ? values.get('logo') : null;
+    let logoDataUrl = '';
+    if (logoFile?.size) {
+      const allowedLogoTypes = ['image/png', 'image/jpeg', 'image/webp'];
+      if (!allowedLogoTypes.includes(logoFile.type) || logoFile.size > 256 * 1024) {
+        setDatabaseError('Choose a PNG, JPEG, or WebP logo no larger than 256 KB.');
+        return;
+      }
+      try {
+        logoDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('The logo could not be read.'));
+          reader.readAsDataURL(logoFile);
+        });
+      } catch (logoError) {
+        setDatabaseError(logoError.message || 'The logo could not be read.');
+        return;
+      }
+    }
     setLoginBusy(true);
     setDatabaseError('');
     setAuthNotice('');
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          igo_self_registration: true,
-          role,
-          full_name: fullName,
-          phone,
-          business_name: String(values.get('business_name') || '').trim(),
-          address: String(values.get('address') || '').trim(),
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: {
+            igo_self_registration: true,
+            role,
+            full_name: fullName,
+            phone,
+            business_name: String(values.get('business_name') || '').trim(),
+            address: String(values.get('address') || '').trim(),
+            logo_data_url: logoDataUrl || null,
+          },
         },
-      },
-    });
-    if (error) {
-      setDatabaseError(error.message);
-    } else {
-      setLoginEmail(email);
-      setLoginPassword('');
-      setAuthMode('signin');
-      setAuthNotice('Your request has been submitted. Check your email to confirm the address. ' + (role === 'partner' ? 'A partner account needs admin approval before you can use the workspace.' : 'A rider account needs admin approval before you can use the workspace.'));
+      });
+      if (error) {
+        setDatabaseError(error.message);
+      } else {
+        setLoginEmail(email);
+        setLoginPassword('');
+        setAuthMode('signin');
+        setAuthNotice('Your request has been submitted. Check your email to confirm the address. ' + (role === 'partner' ? 'A partner account needs admin approval before you can use the workspace.' : 'A rider account needs admin approval before you can use the workspace.'));
+      }
+    } catch (registrationError) {
+      setDatabaseError(registrationError.message || 'Your application could not be submitted. Please try again.');
+    } finally {
+      setLoginBusy(false);
     }
-    setLoginBusy(false);
   };
 
   const requestPasswordReset = async (event) => {
@@ -1384,7 +1410,7 @@ export default function App() {
     if (authMode === 'register-partner' || authMode === 'register-driver') {
       const isPartnerRegistration = authMode === 'register-partner';
       return (
-        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); setAuthMode('signin'); }}>Log in</button></p></form></main>
+        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label><label>Partner logo (optional)<input name="logo" type="file" accept="image/png,image/jpeg,image/webp" /><small>Upload a PNG, JPEG, or WebP image, up to 256 KB.</small></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); setAuthMode('signin'); }}>Log in</button></p></form></main>
       );
     }
 
@@ -3164,7 +3190,8 @@ function DriverWorkflowDashboard({
   const partnerGroups = [...waiting.reduce((groups, p) => {
     const name = p.partnerName || p.partner || 'Unknown partner';
     const id = String(p.partnerId || name);
-    const group = groups.get(id) || { id, name, packages: [] };
+    const group = groups.get(id) || { id, name, logoUrl: p.partnerLogo || '', packages: [] };
+    if (!group.logoUrl && p.partnerLogo) group.logoUrl = p.partnerLogo;
     group.packages.push(p);
     groups.set(id, group);
     return groups;
@@ -3370,6 +3397,7 @@ function DriverWorkflowDashboard({
                   }}
                   aria-pressed={activePartner === group.id}
                 >
+                  {group.logoUrl && <img className="driver-partner-logo" src={group.logoUrl} alt="" loading="lazy" />}
                   <span className="driver-partner-tile-name">{group.name}</span>
                   <span className="driver-partner-count" aria-label={group.packages.length + ' packages'}>{group.packages.length}</span>
                 </button>

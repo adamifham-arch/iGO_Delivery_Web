@@ -3057,7 +3057,10 @@ header.topbar > .workspace-switch:has(select) {
 .driver-partner-tile {
   position: relative;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 4px;
   min-height: 92px;
   aspect-ratio: 1;
   padding: 12px 10px;
@@ -3114,4 +3117,13 @@ header.topbar > .workspace-switch:has(select) {
     gap: 8px;
   }
   .driver-partner-tile { min-height: 82px; }
+}
+
+.driver-partner-logo {
+  display: block;
+  align-self: center;
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  border-radius: 7px;
 }

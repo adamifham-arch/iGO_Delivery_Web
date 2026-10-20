@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './index.css';
 import { supabase, supabaseConfigured } from './supabase';
 import {
@@ -303,6 +303,7 @@ async function loadSuperadminLinkedProfiles(user, profile) {
 }
 
 export default function App() {
+  const customerNameInputRef = useRef(null);
   const [navigation, setNavigation] = useState({
     page: 'Overview',
     history: [],
@@ -828,6 +829,7 @@ export default function App() {
       setNotice('');
       setShowForm(true);
       setPage('Register Package');
+      window.requestAnimationFrame(() => customerNameInputRef.current?.focus());
     } else {
       setShowForm(false);
       setPage('Packages');
@@ -2018,6 +2020,7 @@ export default function App() {
                     <label>
                       Customer name *
                       <input
+                        ref={customerNameInputRef}
                         name="customer"
                         value={form.customer}
                         onChange={updateForm}

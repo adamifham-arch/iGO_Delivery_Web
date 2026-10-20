@@ -1,0 +1,154 @@
+
+import { useState } from "react";
+import "./index.css";
+
+const initialPackages = [
+  { id: "IGO-1001", customer: "Aminath Ahmed", partner: "Style Hub", area: "Hulhumale", status: "Pending" },
+  { id: "IGO-1002", customer: "Mohamed Ali", partner: "Tech Store", area: "Male'", status: "Picked Up" },
+  { id: "IGO-1003", customer: "Fathimath Zaina", partner: "Fashion MV", area: "Villimale", status: "Delivered" },
+  { id: "IGO-1004", customer: "Ibrahim Hassan", partner: "Style Hub", area: "Male'", status: "Out for Delivery" },
+];
+
+const nav = [
+  ["Overview", "⌂"],
+  ["Packages", "▣"],
+  ["Partners", "♙"],
+  ["Drivers", "♧"],
+  ["Accounts", "▤"],
+];
+
+export default function App() {
+  const [page, setPage] = useState("Overview");
+  const [packages, setPackages] = useState(initialPackages);
+  const [search, setSearch] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [customer, setCustomer] = useState("");
+  const [partner, setPartner] = useState("");
+  const [area, setArea] = useState("Male'");
+  const [notice, setNotice] = useState("");
+
+  const filtered = packages.filter((p) =>
+    `${p.id} ${p.customer} ${p.partner} ${p.area} ${p.status}`
+      .toLowerCase().includes(search.toLowerCase())
+  );
+
+  function addPackage(e) {
+    e.preventDefault();
+    const next = {
+      id: `IGO-${1001 + packages.length}`,
+      customer,
+      partner,
+      area,
+      status: "Pending",
+    };
+    setPackages((old) => [next, ...old]);
+    setCustomer("");
+    setPartner("");
+    setArea("Male'");
+    setShowForm(false);
+    setNotice("Package added to this demo.");
+    setTimeout(() => setNotice(""), 3000);
+  }
+
+  const stats = [
+    ["Total Packages", packages.length, "All recorded packages"],
+    ["Pending", packages.filter(p => p.status === "Pending").length, "Awaiting pickup"],
+    ["In Transit", packages.filter(p => ["Picked Up", "Out for Delivery"].includes(p.status)).length, "On the way"],
+    ["Delivered", packages.filter(p => p.status === "Delivered").length, "Completed deliveries"],
+  ];
+
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-icon">iG</div>
+          <div><h2>iGO Delivery</h2><span>ADMIN CONSOLE</span></div>
+        </div>
+        <p className="nav-label">MANAGEMENT</p>
+        {nav.map(([name, icon]) => (
+          <button key={name} className={`nav-item ${page === name ? "selected" : ""}`}
+            onClick={() => { setPage(name); setNotice(""); }}>
+            <span>{icon}</span>{name}
+          </button>
+        ))}
+        <div className="sidebar-bottom">
+          <div className="status-dot" />
+          <div><strong>Demo workspace</strong><p>Not connected to a database</p></div>
+        </div>
+      </aside>
+
+      <main className="main">
+        <header className="topbar">
+          <span className="breadcrumb">Admin / {page}</span>
+          <div className="profile"><span>AD</span> Administrator</div>
+        </header>
+        <section className="content">
+          <div className="eyebrow">IGO DELIVERY · ADMIN</div>
+          <h1>{page}</h1>
+          <p className="subtitle">Manage your delivery operations from one workspace.</p>
+
+          {notice && <div className="notice">{notice}</div>}
+
+          {page === "Overview" && <>
+            <div className="welcome-card">
+              <div><span className="welcome-label">OPERATIONS OVERVIEW</span>
+                <h2>Keep every delivery<br />moving forward.</h2>
+                <p>Monitor packages and daily operations.</p></div>
+              <div className="hero-symbol">iG<span>O</span></div>
+            </div>
+            <div className="stats-grid">
+              {stats.map(([label, value, detail]) => (
+                <div className="stat-card" key={label}>
+                  <span>{label}</span><strong>{value}</strong><small>{detail}</small>
+                </div>
+              ))}
+            </div>
+            <div className="section-heading"><div><h2>Recent packages</h2>
+              <p>Latest package activity in this demo.</p></div>
+              <button className="primary-btn" onClick={() => { setPage("Packages"); setShowForm(true); }}>+ Add package</button>
+            </div>
+            <PackageTable packages={filtered.slice(0, 4)} />
+          </>}
+
+          {page === "Packages" && <>
+            <div className="toolbar">
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search packages..." />
+              <button className="primary-btn" onClick={() => setShowForm(!showForm)}>+ Add package</button>
+            </div>
+            {showForm && <form className="package-form" onSubmit={addPackage}>
+              <h3>Register package</h3>
+              <label>Customer name<input required value={customer} onChange={e => setCustomer(e.target.value)} /></label>
+              <label>Partner / shop<input required value={partner} onChange={e => setPartner(e.target.value)} /></label>
+              <label>Delivery area<select value={area} onChange={e => setArea(e.target.value)}>
+                <option>Male'</option><option>Hulhumale</option><option>Villimale</option><option>Other island</option>
+              </select></label>
+              <button className="primary-btn" type="submit">Save package</button>
+            </form>}
+            <PackageTable packages={filtered} />
+          </>}
+
+          {page === "Partners" && <SimpleList title="Partner shops" description="Partner management will be connected to the database later." items={["Style Hub", "Tech Store", "Fashion MV"]} />}
+          {page === "Drivers" && <SimpleList title="Delivery team" description="Driver accounts and assignments will be added in a later step." items={["Driver 01 — Available", "Driver 02 — On delivery"]} />}
+          {page === "Accounts" && <SimpleList title="Accounts overview" description="Financial records are sample information only." items={["Outstanding invoices — MVR 1,250", "Payments awaiting confirmation — 2", "This month's delivery revenue — MVR 4,850"]} />}
+
+          <footer>iGO Delivery · Admin demo · Sample data only</footer>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function PackageTable({ packages }) {
+  return <div className="table-wrap"><table>
+    <thead><tr><th>Package ID</th><th>Customer</th><th>Partner</th><th>Area</th><th>Status</th></tr></thead>
+    <tbody>{packages.map(p => <tr key={p.id}>
+      <td><strong>{p.id}</strong></td><td>{p.customer}</td><td>{p.partner}</td><td>{p.area}</td>
+      <td><span className={`status status-${p.status.toLowerCase().replaceAll(" ", "-")}`}>{p.status}</span></td>
+    </tr>)}</tbody>
+  </table>{packages.length === 0 && <p className="empty">No packages found.</p>}</div>;
+}
+
+function SimpleList({ title, description, items }) {
+  return <div className="simple-list"><h2>{title}</h2><p>{description}</p>
+    {items.map(item => <div className="simple-item" key={item}>{item}</div>)}</div>;
+}

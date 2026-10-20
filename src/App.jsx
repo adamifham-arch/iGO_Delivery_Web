@@ -3115,6 +3115,7 @@ function DriverWorkflowDashboard({
     }
   });
   const [selected, setSelected] = useState([]);
+  const [activePartner, setActivePartner] = useState('');
   const [proofs, setProofs] = useState({});
   const [reasons, setReasons] = useState({});
   const [rate, setRate] = useState(() => {
@@ -3160,6 +3161,17 @@ function DriverWorkflowDashboard({
   const waiting = packages.filter(
     (p) => !p.driver && !['Delivered', 'Cancelled'].includes(p.status)
   );
+  const partnerGroups = [...waiting.reduce((groups, p) => {
+    const name = p.partnerName || p.partner || 'Unknown partner';
+    const id = String(p.partnerId || name);
+    const group = groups.get(id) || { id, name, packages: [] };
+    group.packages.push(p);
+    groups.set(id, group);
+    return groups;
+  }, new Map()).values()];
+  const visibleWaiting = activePartner
+    ? waiting.filter((p) => String(p.partnerId || p.partnerName || p.partner || 'Unknown partner') === activePartner)
+    : waiting;
   const active = assigned.filter(
     (p) => !['Delivered', 'Cancelled'].includes(p.status)
   );
@@ -3346,8 +3358,28 @@ function DriverWorkflowDashboard({
         )}
         {waiting.length ? (
           <>
+            <div className="driver-partner-grid" aria-label="New jobs by partner">
+              {partnerGroups.map((group) => (
+                <button
+                  type="button"
+                  key={group.id}
+                  className={'driver-partner-tile' + (activePartner === group.id ? ' is-selected' : '')}
+                  onClick={() => {
+                    setActivePartner(activePartner === group.id ? '' : group.id);
+                    setSelected([]);
+                  }}
+                  aria-pressed={activePartner === group.id}
+                >
+                  <span className="driver-partner-tile-name">{group.name}</span>
+                  <span className="driver-partner-count" aria-label={group.packages.length + ' packages'}>{group.packages.length}</span>
+                </button>
+              ))}
+            </div>
+            <p className="driver-partner-filter-label">
+              {activePartner ? 'Showing ' + (partnerGroups.find((group) => group.id === activePartner)?.name || 'partner') + ' jobs' : 'Jobs from all partners'}
+            </p>
             <div className="driver-delivery-list">
-              {waiting.map((p) => (
+            {visibleWaiting.map((p) => (
                 <label
                   className="driver-delivery-card"
                   key={p.id}

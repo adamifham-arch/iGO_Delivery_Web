@@ -1582,6 +1582,30 @@ export default function App() {
                   <strong>{viewedProfileName}</strong>
                   <span>{databaseUser?.email || workspace + ' profile'}</span>
                 </div>
+                {databaseProfile?.role === 'admin' && (
+                  <label className="profile-workspace-switch">
+                    <span>View workspace</span>
+                    <select
+                      aria-label="Switch workspace"
+                      value={workspace}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setWorkspace(next);
+                        setNavigation({ page: next === 'Admin' ? 'Admin Operations' : next === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
+                        setShowForm(false);
+                        setShowProfileMenu(false);
+                        setShowMobileNav(false);
+                        setNotice('');
+                        setStatusFilter('All');
+                        setSearch('');
+                      }}
+                    >
+                      <option value="Admin">Admin workspace</option>
+                      <option value="Partner">Partner workspace</option>
+                      <option value="Driver">Driver workspace</option>
+                    </select>
+                  </label>
+                )}
                 <button type="button" role="menuitem" onClick={() => {
                   setPage(workspace === 'Driver' ? 'About' : 'Profile');
                   setShowProfileMenu(false);

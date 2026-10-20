@@ -89,7 +89,7 @@ export function packageToDb(entry) {
     warehouseReceivedAt: 'warehouse_received_at',
   };
   for (const [from, to] of Object.entries(fields)) {
-    if (Object.hasOwn(entry, from)) result[to] = from === 'status' ? statusToDb(entry[from]) : entry[from];
+    if (Object.hasOwn(entry, from)) result[to] = from === 'status' ? statusToDb(entry[from]) : from === 'departureTime' && entry[from] === '' ? null : entry[from];
   }
   return result;
 }

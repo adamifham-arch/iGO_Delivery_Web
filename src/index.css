@@ -2889,3 +2889,33 @@ button {
 .app[data-theme="night"] .table-wrap .empty {
   color: #cbd5e1 !important;
 }
+
+
+/* Balance the phone header: menu left, brand centered, account controls right. */
+@media (max-width: 768px) {
+  header.topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 38px 38px 38px;
+    align-items: center;
+    justify-content: stretch;
+    gap: 6px;
+    position: relative;
+  }
+  header.topbar > .dashboard-logo {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+  }
+  header.topbar > .mobile-nav-toggle {
+    grid-column: 1;
+    justify-self: start;
+    z-index: 2;
+  }
+  header.topbar > .workspace-switch { display: none; }
+  header.topbar > .breadcrumb { display: none; }
+  header.topbar > .workspace-theme-toggle { grid-column: 3; justify-self: end; }
+  header.topbar > .notification-center { grid-column: 4; justify-self: end; }
+  header.topbar > .profile-menu-container { grid-column: 5; justify-self: end; }
+}

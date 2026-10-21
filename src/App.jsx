@@ -6,6 +6,9 @@ import {
   getDriverIdByName,
   getCurrentDriverId,
   getCurrentPartnerId,
+  getCurrentPartnerIdOptional,
+  ensureAdminDriverWorkspace,
+  setupAdminPartnerWorkspace,
   getPrivateFileUrl,
   loadApprovalAccounts,
   loadManagedUserAccounts,
@@ -357,6 +360,10 @@ export default function App() {
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
+  const [partnerSetupOpen, setPartnerSetupOpen] = useState(false);
+  const [partnerBusinessName, setPartnerBusinessName] = useState('');
+  const [partnerBusinessAddress, setPartnerBusinessAddress] = useState('');
+  const [partnerSetupBusy, setPartnerSetupBusy] = useState(false);
   const [partnerLogo, setPartnerLogo] = useState('');
   const [logoSaving, setLogoSaving] = useState(false);
   const [logoFileSelected, setLogoFileSelected] = useState(false);
@@ -698,6 +705,70 @@ export default function App() {
     setLoginBusy(false);
   };
 
+  const switchWorkspace = async (next) => {
+    setNotice('');
+    setDatabaseError('');
+    setShowForm(false);
+    setShowMobileNav(false);
+    setStatusFilter('All');
+    setSearch('');
+    if (databaseProfile?.role === 'admin' && next === 'Partner') {
+      try {
+        const partnerId = await getCurrentPartnerIdOptional();
+        setWorkspace('Partner');
+        setNavigation({ page: 'Overview', history: [] });
+        if (!partnerId) {
+          setPackages([]);
+          setPartnerBusinessName('');
+          setPartnerBusinessAddress('');
+          setPartnerSetupOpen(true);
+        } else {
+          const { data: partner, error } = await supabase.from('partners').select('id,name,contact_name,phone,email,approval_status').eq('id', partnerId).single();
+          if (error) throw error;
+          setLinkedPartnerProfile(partner);
+          setPackages(await loadPackages({ partnerId }));
+          applyDatabaseFinanceSnapshot(await loadFinanceRecords({ workspace: 'Partner', partnerId }));
+        }
+      } catch (error) { setNotice(error.message || 'Could not open the partner workspace.'); }
+      return;
+    }
+    if (databaseProfile?.role === 'admin' && next === 'Driver') {
+      try {
+        const driverId = await ensureAdminDriverWorkspace();
+        const { data: driver, error } = await supabase.from('drivers').select('id,name,phone,approval_status,active').eq('id', driverId).single();
+        if (error) throw error;
+        setLinkedDriverProfile(driver);
+        setPackages(await loadPackages({ driverId }));
+      } catch (error) { setNotice(error.message || 'Could not open the driver workspace.'); return; }
+    }
+    if (databaseProfile?.role === 'admin' && next === 'Admin') {
+      try {
+        setPackages(await loadPackages());
+        applyDatabaseFinanceSnapshot(await loadFinanceRecords({ workspace: 'Admin' }));
+      } catch (error) { setNotice(error.message || 'Could not load admin operations.'); }
+    }
+    setWorkspace(next);
+    setNavigation({ page: next === 'Admin' ? 'Admin Operations' : next === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
+  };
+
+  const saveAdminPartnerSetup = async (event) => {
+    event.preventDefault();
+    if (!partnerBusinessName.trim() || !partnerBusinessAddress.trim()) return;
+    setPartnerSetupBusy(true);
+    setNotice('');
+    try {
+      const partnerId = await setupAdminPartnerWorkspace({ businessName: partnerBusinessName, address: partnerBusinessAddress });
+      const { data: partner, error } = await supabase.from('partners').select('id,name,contact_name,phone,email,approval_status').eq('id', partnerId).single();
+      if (error) throw error;
+      setLinkedPartnerProfile(partner);
+      setPackages(await loadPackages({ partnerId }));
+      applyDatabaseFinanceSnapshot(await loadFinanceRecords({ workspace: 'Partner', partnerId }));
+      setPartnerSetupOpen(false);
+      setNotice('Partner workspace is ready.');
+    } catch (error) { setNotice(error.message || 'Could not save partner details.'); }
+    finally { setPartnerSetupBusy(false); }
+  };
+
   const completeInvitedPasswordSetup = async (event) => {
     event.preventDefault();
     if (!supabase) return;
@@ -840,10 +911,12 @@ export default function App() {
     let active = true;
     const refresh = async () => {
       try {
-        const rows = await loadPackages();
+        const partnerId = databaseProfile?.role === 'admin' && workspace === 'Partner' ? await getCurrentPartnerIdOptional() : null;
+        const driverId = databaseProfile?.role === 'admin' && workspace === 'Driver' ? await getCurrentDriverId() : null;
+        const rows = databaseProfile?.role === 'admin' && workspace === 'Partner' && !partnerId ? [] : await loadPackages({ partnerId: partnerId || undefined, driverId: driverId || undefined });
         if (active) setPackages(rows);
         try {
-          const finance = await loadFinanceRecords();
+          const finance = await loadFinanceRecords({ workspace, partnerId: partnerId || undefined });
           if (active) {
             applyDatabaseFinanceSnapshot(finance);
             window.dispatchEvent(new Event('igo-live-data-refreshed'));
@@ -860,7 +933,7 @@ export default function App() {
       window.clearInterval(interval);
       window.removeEventListener('igo-live-finance-updated', refresh);
     };
-  }, [databaseUser, partnerSpendPeriod]);
+  }, [databaseUser, databaseProfile, workspace, partnerSpendPeriod]);
 
   const updatePackageRecord = async (id, rawChanges) => {
     const current = packages.find((item) => item.id === id);
@@ -1012,7 +1085,7 @@ export default function App() {
     };
 
     if (supabaseConfigured) {
-      if (!databaseUser || databaseProfile?.role !== 'partner' && !(isSuperadmin && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) {
+      if (!databaseUser || databaseProfile?.role !== 'partner' && !(databaseProfile?.role === 'admin' && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) {
         setNotice('Sign in to an approved partner account before registering packages.');
         return;
       }
@@ -1191,7 +1264,7 @@ export default function App() {
           status: 'Pending',
         }));
       if (supabaseConfigured) {
-        if (databaseProfile?.role !== 'partner' && !(isSuperadmin && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) throw new Error('Sign in to an approved partner account to add packages.');
+        if (databaseProfile?.role !== 'partner' && !(databaseProfile?.role === 'admin' && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) throw new Error('Sign in to an approved partner account to add packages.');
         const partnerId = await getCurrentPartnerId();
         const saved = await createPackages(added, partnerId);
         setPackages((current) => [...saved, ...current]);
@@ -1458,7 +1531,7 @@ export default function App() {
         status: 'Pending',
       }));
     if (supabaseConfigured) {
-      if (databaseProfile?.role !== 'partner' && !(isSuperadmin && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) {
+      if (databaseProfile?.role !== 'partner' && !(databaseProfile?.role === 'admin' && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) {
         setMessageNotice('Sign in to an approved partner account to add packages.');
         return;
       }
@@ -1553,7 +1626,7 @@ export default function App() {
     );
   }
 
-  const activeLinkedProfile = isSuperadmin ? (workspace === 'Partner' ? linkedPartnerProfile : workspace === 'Driver' ? linkedDriverProfile : null) : null;
+  const activeLinkedProfile = databaseProfile?.role === 'admin' ? (workspace === 'Partner' ? linkedPartnerProfile : workspace === 'Driver' ? linkedDriverProfile : null) : null;
   const viewedProfileName = activeLinkedProfile?.name || databaseProfile?.full_name || (workspace === 'Admin' ? 'Operations' : workspace === 'Driver' ? 'Ahmed Rasheed' : 'Style Hub');
   const viewedProfileType = activeLinkedProfile ? workspace.toLowerCase() : databaseProfile?.role || workspace + ' preview';
 
@@ -1723,20 +1796,11 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 <select
                   aria-label="View profile"
                   value={workspace}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setWorkspace(next);
-                    setNavigation({ page: next === 'Admin' ? 'Admin Operations' : next === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
-                    setShowForm(false);
-                    setShowMobileNav(false);
-                    setNotice('');
-                    setStatusFilter('All');
-                    setSearch('');
-                  }}
+                  onChange={(event) => void switchWorkspace(event.target.value)}
                 >
                   <option value="Admin">Admin profile</option>
-                  <option value="Partner">Partner profile{isSuperadmin && linkedPartnerProfile ? '' : ' · preview'}</option>
-                  <option value="Driver">Driver profile{isSuperadmin && linkedDriverProfile ? '' : ' · preview'}</option>
+                  <option value="Partner">Partner workspace</option>
+                  <option value="Driver">Driver workspace</option>
                 </select>
               </label>
             ) : (
@@ -1795,15 +1859,8 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                       aria-label="Switch workspace"
                       value={workspace}
                       onChange={(event) => {
-                        const next = event.target.value;
-                        setWorkspace(next);
-                        setNavigation({ page: next === 'Admin' ? 'Admin Operations' : next === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
-                        setShowForm(false);
                         setShowProfileMenu(false);
-                        setShowMobileNav(false);
-                        setNotice('');
-                        setStatusFilter('All');
-                        setSearch('');
+                        void switchWorkspace(event.target.value);
                       }}
                     >
                       <option value="Admin">Admin workspace</option>
@@ -1827,6 +1884,22 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
         </header>
 
         <section className="content">
+          {partnerSetupOpen && databaseProfile?.role === 'admin' && (
+            <div className="workspace-setup-backdrop">
+              <form className="workspace-setup-card" role="dialog" aria-modal="true" aria-labelledby="partner-workspace-setup-title" onSubmit={saveAdminPartnerSetup}>
+                <p className="approval-kicker">PARTNER WORKSPACE SETUP</p>
+                <h2 id="partner-workspace-setup-title">Add your partner details</h2>
+                <p>Use the usual partner application process for partner accounts. This setup creates the partner workspace linked to your admin account.</p>
+                <label>Business or partner name<input autoComplete="organization" required maxLength={120} value={partnerBusinessName} onChange={(event) => setPartnerBusinessName(event.target.value)} /></label>
+                <label>Business address<textarea autoComplete="street-address" required maxLength={500} rows={3} value={partnerBusinessAddress} onChange={(event) => setPartnerBusinessAddress(event.target.value)} /></label>
+                {notice && <p className="notice" role="alert">{notice}</p>}
+                <div className="workspace-setup-actions">
+                  <button className="primary-btn" type="submit" disabled={partnerSetupBusy}>{partnerSetupBusy ? 'Saving details…' : 'Save partner details'}</button>
+                  <button className="secondary-btn" type="button" disabled={partnerSetupBusy} onClick={() => { setPartnerSetupOpen(false); setWorkspace('Admin'); setNavigation({ page: 'Admin Operations', history: [] }); }}>Back to admin workspace</button>
+                </div>
+              </form>
+            </div>
+          )}
           <div className="eyebrow">
             {workspace === 'Admin'
               ? 'OPERATIONS WORKSPACE'
@@ -1872,10 +1945,8 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             </section>
           )}
 
-          {databaseProfile?.role === 'admin' && workspace !== 'Admin' && !(isSuperadmin && (workspace === 'Partner' ? linkedPartnerProfile : linkedDriverProfile)) && (
-            <div className="profile-preview-note" role="status">
-              Previewing the {workspace.toLowerCase()} profile. A real {workspace.toLowerCase()} account is needed to use its account-specific actions.
-            </div>
+          {databaseProfile?.role === 'admin' && workspace !== 'Admin' && !activeLinkedProfile && !partnerSetupOpen && (
+            <div className="profile-preview-note" role="status">Set up your {workspace.toLowerCase()} workspace to use its account-specific features.</div>
           )}
 
           {workspace === 'Driver' && page === 'About' && (

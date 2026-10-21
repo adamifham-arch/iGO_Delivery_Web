@@ -4712,95 +4712,78 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         : 'Demo payment marked for partner follow-up.'
     );
   };
-  const invoiceList = (partnerMode) => (
-    <div style={{ overflowX: 'auto' }}>
-      <table
-        style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}
-      >
-        <thead>
-          <tr>
-            <th>Status</th>
-            <th>Invoice</th>
-            <th>Partner</th>
-            <th>Period</th>
-            <th>Delivered packages</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {billing.invoices
-            .filter(
-              (invoice) => !partnerMode || invoice.partner === 'Style Hub'
-            )
-            .map((invoice) => (
+  const invoiceList = (partnerMode) => {
+    const visibleInvoices = billing.invoices.filter(
+      (invoice) => !partnerMode || invoice.partner === 'Style Hub'
+    );
+    const headerCell = {
+      padding: '11px 10px',
+      color: '#65736c',
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: '.04em',
+      textAlign: 'left',
+      textTransform: 'uppercase',
+    };
+    const cellStyle = {
+      padding: '12px 10px',
+      borderTop: '1px solid #e7ece9',
+      verticalAlign: 'middle',
+      fontSize: 13,
+    };
+
+    return (
+      <div className="finance-invoice-table-wrap" style={{ overflowX: 'auto', border: '1px solid #e7ece9', borderRadius: 12 }}>
+        <table className="finance-invoice-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', textAlign: 'left' }}>
+          <colgroup>
+            <col style={{ width: '19%' }} />
+            <col style={{ width: '43%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '20%' }} />
+          </colgroup>
+          <thead style={{ background: '#f6f8f7' }}>
+            <tr>
+              <th scope="col" style={headerCell}>Status</th>
+              <th scope="col" style={headerCell}>Invoice</th>
+              <th scope="col" style={headerCell}>Total</th>
+              <th scope="col" style={headerCell}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleInvoices.map((invoice) => (
               <tr key={invoice.id}>
-                <td>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      padding: '4px 9px',
-                      borderRadius: 999,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      background:
-                        getInvoiceStatus(invoice) === 'Paid'
-                          ? '#e8f5e9'
-                          : getInvoiceStatus(invoice) === 'Partially paid'
-                          ? '#e3f2fd'
-                          : '#fff4d6',
-                      color:
-                        getInvoiceStatus(invoice) === 'Paid'
-                          ? '#1b5e20'
-                          : getInvoiceStatus(invoice) === 'Partially paid'
-                          ? '#0d47a1'
-                          : '#8a5700',
-                    }}
-                  >
+                <td style={cellStyle}>
+                  <span style={{ display: 'inline-block', padding: '4px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: getInvoiceStatus(invoice) === 'Paid' ? '#e8f5e9' : getInvoiceStatus(invoice) === 'Partially paid' ? '#e3f2fd' : '#fff4d6', color: getInvoiceStatus(invoice) === 'Paid' ? '#1b5e20' : getInvoiceStatus(invoice) === 'Partially paid' ? '#0d47a1' : '#8a5700' }}>
                     {getInvoiceStatus(invoice)}
                   </span>
-                  {getPaid(invoice.id) > 0 && (
-                    <small style={{ display: 'block' }}>
-                      {money(getPaid(invoice.id))} paid
-                    </small>
-                  )}
+                  {getPaid(invoice.id) > 0 && <small style={{ display: 'block', marginTop: 5 }}>{money(getPaid(invoice.id))} paid</small>}
                 </td>
-                <td>
-                  <strong>{invoice.id}</strong>
+                <td style={{ ...cellStyle, overflowWrap: 'anywhere' }}>
+                  <strong style={{ fontSize: 12 }}>{invoice.id}</strong>
+                  <small style={{ display: 'block', marginTop: 4, color: '#65736c' }}>
+                    {invoice.partner} · {invoice.period} · {invoice.lines.length} packages
+                  </small>
                 </td>
-                <td>{invoice.partner}</td>
-                <td>{invoice.period}</td>
-                <td>{invoice.lines.length}</td>
-                <td>{money(invoice.amount)}</td>
+                <td style={{ ...cellStyle, whiteSpace: 'nowrap', fontWeight: 700 }}>{money(invoice.amount)}</td>
+                <td style={cellStyle}>
+                  <button type="button" style={{ ...buttonStyle, padding: '7px 9px', fontSize: 12, whiteSpace: 'nowrap' }} onClick={() => setViewingInvoice(invoice)}>
+                    View invoice
+                  </button>
+                </td>
               </tr>
             ))}
-          {!billing.invoices.length && (
-            <tr>
-              <td colSpan="6">
-                No invoices yet. Admins can generate one after packages are
-                delivered.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      {billing.invoices
-        .filter((invoice) => !partnerMode || invoice.partner === 'Style Hub')
-        .map((invoice) => (
-          <details key={invoice.id} style={{ marginTop: 12 }}>
-            <summary>{invoice.id} · package details</summary>
-            <ul>
-              {invoice.lines.map((line) => (
-                <li key={line.packageId}>
-                  {line.packageId} · {line.customer} · {line.area} ·{' '}
-                  {line.description} · {money(line.amount)}
-                </li>
-              ))}
-            </ul>
-            <strong>Total: {money(invoice.amount)}</strong>
-          </details>
-        ))}
-    </div>
-  );
+            {!visibleInvoices.length && (
+              <tr>
+                <td colSpan="4" style={{ padding: 16, color: '#65736c', textAlign: 'center' }}>
+                  No invoices yet. Admins can generate one after packages are delivered.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
   if (workspace === 'Partner') {
     const partnerInvoices = liveMode ? billing.invoices : billing.invoices.filter((invoice) => invoice.partner === 'Style Hub');
     return (

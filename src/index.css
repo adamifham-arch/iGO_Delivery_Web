@@ -6394,3 +6394,41 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .profile-dropdown button:hover { color: #202124 !important; background: #f3f4f6 !important; }
 .profile-dropdown .profile-signout { color: #9c342e !important; background: transparent !important; }
 .profile-dropdown .profile-signout:hover { color: #842923 !important; background: #fff1f0 !important; }
+
+  
+
+/* Keep partner package registration readable in night mode. */
+.app[data-theme="night"] .main .package-form,
+.app[data-theme="night"] .main .bulk-upload-panel {
+  color: #e2e8f0 !important;
+  background: #1e293b !important;
+  border-color: #475569 !important;
+  box-shadow: 0 10px 24px #0002;
+}
+
+.app[data-theme="night"] .main .package-form h3,
+.app[data-theme="night"] .main .package-form label,
+.app[data-theme="night"] .main .bulk-upload-panel > summary,
+.app[data-theme="night"] .main .bulk-upload-panel h3,
+.app[data-theme="night"] .main .bulk-file-label {
+  color: #f8fafc !important;
+}
+
+.app[data-theme="night"] .main .bulk-upload-panel p,
+.app[data-theme="night"] .main .package-form input::placeholder,
+.app[data-theme="night"] .main .package-form textarea::placeholder {
+  color: #aab8cc !important;
+}
+
+.app[data-theme="night"] .main .bulk-upload-panel input[type="file"] {
+  color: #f8fafc !important;
+}
+
+.app[data-theme="night"] .main .bulk-upload-panel input[type="file"]::file-selector-button {
+  color: #f8fafc;
+  background: #243247;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-right: 10px;
+}

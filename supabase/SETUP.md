@@ -16,9 +16,9 @@ Run each SQL file separately in Supabase SQL Editor, in this order:
 1. `migrations/202610190001_add_operational_statuses.sql`
 2. `migrations/202610190002_persistent_workflows.sql`
 3. `migrations/202610190003_invoice_cutoff_scheduler.sql`
-6. `migrations/202610210003_admin_partner_driver_workspaces.sql` (already applied to the production iGO Supabase project)
 4. `migrations/202610210001_partner_payment_review_and_credits.sql`
 5. `migrations/202610210002_payment_receipt_email_log.sql`
+6. `migrations/202610210003_admin_partner_driver_workspaces.sql` (already applied to the production iGO Supabase project)
 
 The first file adds enum values, which must commit before the next migration refers to them. The third file enables Supabase Cron (`pg_cron`) and schedules a once-per-minute check; invoices are generated once the configured Maldives-local cutoff passes. If Supabase says the extension is unavailable or cannot be enabled through SQL, enable **pg_cron** in the project dashboard under Integrations → Cron, then run migration 3 again. Manual invoice generation works independently of the scheduler.
 

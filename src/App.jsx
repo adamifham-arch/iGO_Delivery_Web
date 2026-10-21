@@ -341,6 +341,7 @@ class SectionErrorBoundary extends Component {
 
 export default function App() {
   const customerNameInputRef = useRef(null);
+  const customerMessageInputRef = useRef(null);
   const [navigation, setNavigation] = useState({
     page: 'Overview',
     history: [],
@@ -1466,6 +1467,7 @@ export default function App() {
           .join(', ') +
         '. Check the list before adding packages.'
     );
+    window.requestAnimationFrame(() => customerMessageInputRef.current?.focus());
   }
 
   function updateQueuedPackage(queueId, field, value) {
@@ -2099,6 +2101,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                         then confirm them all together.
                       </p>
                       <textarea
+                        ref={customerMessageInputRef}
                         value={messageDraft}
                         onChange={(event) =>
                           setMessageDraft(event.target.value)

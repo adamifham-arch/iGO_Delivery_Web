@@ -6533,3 +6533,37 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   border: 1px solid #a78bfa !important;
   color: #ede9fe !important;
 }
+
+
+
+/* Match the partner message package review list to night mode. */
+.app[data-theme="night"] .main .message-queue-panel {
+  background: #1e293b !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+.app[data-theme="night"] .main .message-queue-panel strong,
+.app[data-theme="night"] .main .message-queue-row label {
+  color: #f1f5f9 !important;
+}
+.app[data-theme="night"] .main .message-queue-row {
+  background: #172235 !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .main .message-queue-row p,
+.app[data-theme="night"] .main .message-queue-fee {
+  color: #cbd5e1 !important;
+}
+.app[data-theme="night"] .main .message-queue-row input,
+.app[data-theme="night"] .main .message-queue-row select,
+.app[data-theme="night"] .main .message-queue-row textarea {
+  background: #111c2d !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+}
+.app[data-theme="night"] .main .message-queue-row input::placeholder,
+.app[data-theme="night"] .main .message-queue-row textarea::placeholder {
+  color: #94a3b8 !important;
+}

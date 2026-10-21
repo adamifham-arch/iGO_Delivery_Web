@@ -4534,8 +4534,11 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     (liveMode
       ? Number(billing.invoices.find((invoice) => invoice.id === invoiceId)?.paidAmount || 0)
       : billing.payments
-      .filter((p) => p.invoiceId === invoiceId && p.status === 'confirmed')
-      .reduce((sum, p) => sum + Number(p.amount || 0), 0));
+      .filter((p) => p.status === 'confirmed')
+      .reduce((sum, p) => sum + Number(
+        p.allocations?.find((allocation) => allocation.invoiceId === invoiceId)?.amount ||
+        (p.invoiceId === invoiceId ? p.amount : 0)
+      ), 0));
   const getInvoiceStatus = (invoice) => {
     const paid = getPaid(invoice.id);
     return paid >= invoice.amount
@@ -4650,32 +4653,34 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         ' demo invoice(s) from delivered packages.'
     );
   };
-  const submitPayment = async (event, invoice) => {
+  const submitPayment = async (event, invoices) => {
     event.preventDefault();
-    const draft = drafts[invoice.id] || {};
-    const amount = Number(draft.amount || invoice.amount - getPaid(invoice.id));
-    const due = Math.max(0, invoice.amount - getPaid(invoice.id));
-    if (!draft.slipName || amount <= 0 || amount > due) {
-      setNotice(
-        'Select the payment slip and enter an amount no greater than the balance due.'
-      );
+    const payable = invoices.filter((invoice) => invoice.amount - getPaid(invoice.id) > 0);
+    const amount = payable.reduce((sum, invoice) => sum + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
+    const invoiceIds = payable.map((invoice) => invoice.id);
+    const paymentKey = 'all-outstanding-invoices';
+    const draft = drafts[paymentKey] || {};
+    if (!draft.slipName || amount <= 0) {
+      setNotice(amount <= 0 ? 'There is no outstanding balance to pay.' : 'Attach the payment slip before submitting.');
       return;
     }
+    const reference = (draft.reference || 'Full invoice payment').trim();
+    const note = 'Full payment for invoices: ' + invoiceIds.join(', ');
     if (liveMode) {
       try {
         const partnerId = await getCurrentPartnerId();
         await submitInvoicePayment({
           partnerId,
-          invoiceId: invoice.dbId,
+          invoiceId: null,
           amount,
-          reference: (draft.reference || invoice.id).trim(),
+          reference,
           transferDate: draft.transferDate || localDateKey(new Date()),
-          note: 'Payment for invoice ' + invoice.id,
+          note,
           file: draft.file,
         });
         await refreshDatabaseFinance(true);
-        setDrafts((current) => ({ ...current, [invoice.id]: {} }));
-        setNotice('Payment slip uploaded and submitted to admin for review.');
+        setDrafts((current) => ({ ...current, [paymentKey]: {} }));
+        setNotice('Full outstanding balance submitted to admin for review.');
       } catch (error) {
         setNotice(error.message || 'Could not submit the payment.');
       }
@@ -4683,10 +4688,14 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     }
     const payment = {
       id: 'PAY-' + Date.now(),
-      invoiceId: invoice.id,
-      partner: invoice.partner,
+      invoiceId: invoiceIds.join(', '),
+      allocations: payable.map((invoice) => ({
+        invoiceId: invoice.id,
+        amount: Math.max(0, invoice.amount - getPaid(invoice.id)),
+      })),
+      partner: payable[0]?.partner || 'Style Hub',
       amount,
-      reference: (draft.reference || invoice.id).trim(),
+      reference,
       slipName: draft.slipName,
       status: 'pending_verification',
       submittedAt: new Date().toISOString(),
@@ -4697,12 +4706,12 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       notifications: addNotification(
         current.notifications,
         'Payment submitted for review',
-        invoice.id + ' · ' + money(amount) + ' · ' + invoice.partner
+        invoiceIds.join(', ') + ' · ' + money(amount) + ' · ' + payment.partner
       ),
     }));
-    setDrafts((current) => ({ ...current, [invoice.id]: {} }));
+    setDrafts((current) => ({ ...current, [paymentKey]: {} }));
     setNotice(
-      'Payment details were added to this demo. The selected slip file was not uploaded.'
+      'Full payment details were added to this demo. The selected slip file was not uploaded.'
     );
   };
   const decidePayment = async (payment, status) => {
@@ -4853,7 +4862,6 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   if (workspace === 'Partner') {
     const partnerInvoices = liveMode ? billing.invoices : billing.invoices.filter((invoice) => invoice.partner === 'Style Hub');
     const payableInvoices = partnerInvoices.filter((invoice) => getInvoiceStatus(invoice) !== 'Paid');
-    const selectedPaymentInvoice = payableInvoices.find((invoice) => invoice.id === selectedPaymentInvoiceId) || payableInvoices[0] || null;
     const totalOutstanding = partnerInvoices.reduce((total, invoice) => total + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
     return (
       <section style={{ paddingBottom: 28 }}>
@@ -4864,15 +4872,15 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
 
         <section id="partner-invoice-payment-options" style={panel}>
           <h3>Invoices</h3>
+          <p style={{ fontSize: 13, color: '#64748b', marginTop: 0 }}>Only delivered packages are invoiced.</p>
           {partnerInvoices.length ? (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                <thead><tr>{['Pay', 'Invoice', 'Status', 'Amount due', ''].map((label, index) => <th key={label || index} style={{ padding: '9px 8px', borderBottom: '1px solid #dfe7e2', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
+                <thead><tr>{['Invoice', 'Status', 'Amount due', ''].map((label, index) => <th key={label || index} style={{ padding: '9px 8px', borderBottom: '1px solid #dfe7e2', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
                 <tbody>
                   {partnerInvoices.map((invoice) => {
                     const due = Math.max(0, invoice.amount - getPaid(invoice.id));
                     return <tr key={invoice.id} style={{ borderBottom: '1px solid #e7e9e5' }}>
-                      <td style={{ padding: '9px 8px' }}><input type="radio" name="partner-payment-invoice" aria-label={`Pay invoice ${invoice.id}`} checked={selectedPaymentInvoice?.id === invoice.id} disabled={due === 0} onChange={() => setSelectedPaymentInvoiceId(invoice.id)} /></td>
                       <td style={{ padding: '9px 8px', whiteSpace: 'nowrap' }}><strong>{invoice.id}</strong></td>
                       <td style={{ padding: '9px 8px', whiteSpace: 'nowrap' }}>{getInvoiceStatus(invoice)}</td>
                       <td style={{ padding: '9px 8px', whiteSpace: 'nowrap' }}>{money(due)}</td>
@@ -4889,7 +4897,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           </div>
 
           <div style={{ border: '1px solid #dfe7e2', borderRadius: 10, padding: 12, marginBottom: 14 }}>
-            <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>iGO account details</h4>
+            <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>Account Details</h4>
             <div style={{ display: 'grid', gap: 6 }}>
               {[['Account name', billing.transferAccountName], ['Account number', billing.transferAccountNumber]].map(([label, value]) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -4900,15 +4908,12 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             </div>
           </div>
 
-          {selectedPaymentInvoice ? (
-            <>
-              <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px' }}>Payment will be submitted for {selectedPaymentInvoice.id}. Select another invoice in the table to change it.</p>
-              <form onSubmit={(event) => submitPayment(event, selectedPaymentInvoice)} style={{ display: 'grid', gap: 10 }}>
-                <label>Payment amount (MVR)<input required type="number" min="0.01" step="0.01" max={selectedPaymentInvoice.amount - getPaid(selectedPaymentInvoice.id)} value={drafts[selectedPaymentInvoice.id]?.amount ?? selectedPaymentInvoice.amount - getPaid(selectedPaymentInvoice.id)} onChange={(event) => setDrafts((current) => ({ ...current, [selectedPaymentInvoice.id]: { ...current[selectedPaymentInvoice.id], amount: event.target.value } }))} /></label>
-                <label>Payment slip<input required type="file" accept="image/*,application/pdf" onChange={(event) => setDrafts((current) => ({ ...current, [selectedPaymentInvoice.id]: { ...current[selectedPaymentInvoice.id], slipName: event.target.files?.[0]?.name || '', file: event.target.files?.[0] || null } }))} /></label>
-                <button style={buttonStyle} type="submit">Submit payment for review</button>
-              </form>
-            </>
+          {totalOutstanding > 0 ? (
+            <form onSubmit={(event) => submitPayment(event, payableInvoices)} style={{ display: 'grid', gap: 10 }}>
+              <p style={{ fontSize: 13, margin: 0 }}>Pay the full outstanding balance of <strong>{money(totalOutstanding)}</strong> for all listed invoices.</p>
+              <label>Payment slip<input required type="file" accept="image/*,application/pdf" onChange={(event) => setDrafts((current) => ({ ...current, 'all-outstanding-invoices': { ...current['all-outstanding-invoices'], slipName: event.target.files?.[0]?.name || '', file: event.target.files?.[0] || null } }))} /></label>
+              <button style={buttonStyle} type="submit">Submit full payment for review</button>
+            </form>
           ) : <p>There are no outstanding invoices to pay.</p>}
 
           {viewingInvoice && (

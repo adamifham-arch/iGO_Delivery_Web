@@ -78,8 +78,8 @@ begin
 
   return query
     select audit.invited_user_id,
-           inviter.full_name,
-           inviter_user.email,
+           inviter.full_name::text,
+           inviter_user.email::text,
            audit.invited_at
     from public.igo_admin_invite_audit as audit
     left join public.profiles as inviter on inviter.id = audit.invited_by_user_id

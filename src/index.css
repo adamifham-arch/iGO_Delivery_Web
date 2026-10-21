@@ -7101,3 +7101,21 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .app[data-theme='night'] .profile-details-card dt {
   color: #cbd5e1;
 }
+
+
+.driver-route-details {
+  margin: 14px 0;
+}
+.driver-route-details > summary {
+  width: fit-content;
+  color: #f4ce24;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+.driver-route-details[open] > summary {
+  margin-bottom: 12px;
+}
+.driver-route-details .driver-delivery-details {
+  margin: 0;
+}

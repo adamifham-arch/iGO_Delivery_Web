@@ -6567,3 +6567,160 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .app[data-theme="night"] .main .message-queue-row textarea::placeholder {
   color: #94a3b8 !important;
 }
+
+  
+
+/* Driver workspace night mode: consistent surfaces and readable content. */
+.app[data-theme="night"] .main .driver-banner {
+  background: #1e293b !important;
+  background-image: none !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+.app[data-theme="night"] .main .driver-banner h2 { color: #f8fafc !important; }
+.app[data-theme="night"] .main .driver-banner p:not(.driver-kicker) { color: #cbd5e1 !important; }
+.app[data-theme="night"] .main .driver-metrics article {
+  background: #1e293b !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+}
+.app[data-theme="night"] .main .driver-metrics article:hover {
+  background: #26364c !important;
+  border-color: #64748b !important;
+}
+.app[data-theme="night"] .main .driver-metrics article strong { color: #f8fafc !important; }
+.app[data-theme="night"] .main .driver-metrics article span,
+.app[data-theme="night"] .main .driver-metrics article small { color: #aab8cc !important; }
+.app[data-theme="night"] .main .driver-section {
+  background: #1e293b !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+.app[data-theme="night"] .main .driver-section h3,
+.app[data-theme="night"] .main .driver-section h4,
+.app[data-theme="night"] .main .driver-section strong { color: #f8fafc !important; }
+.app[data-theme="night"] .main .driver-section p,
+.app[data-theme="night"] .main .driver-section .driver-demo-note,
+.app[data-theme="night"] .main .driver-section .driver-delivery-details,
+.app[data-theme="night"] .main .driver-section .driver-delivery-footer { color: #cbd5e1 !important; }
+.app[data-theme="night"] .main .driver-kicker,
+.app[data-theme="night"] .main .driver-contact-label,
+.app[data-theme="night"] .main .driver-package-id { color: #facc15 !important; }
+.app[data-theme="night"] .main .driver-count {
+  background: #243247 !important;
+  border: 1px solid #475569 !important;
+  color: #dbeafe !important;
+}
+.app[data-theme="night"] .main .driver-notification-badge {
+  background: #dc2626 !important;
+  border: 1px solid #f87171 !important;
+  color: #fff !important;
+}
+.app[data-theme="night"] .main .driver-partner-tile {
+  background: #172235 !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+}
+.app[data-theme="night"] .main .driver-partner-tile.is-selected {
+  background: #26364c !important;
+  border: 2px solid #facc15 !important;
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.16) !important;
+}
+.app[data-theme="night"] .main .driver-partner-count {
+  background: #dc2626 !important;
+  border-color: #1e293b !important;
+  color: #fff !important;
+}
+.app[data-theme="night"] .main .driver-partner-filter-label { color: #cbd5e1 !important; }
+.app[data-theme="night"] .main .driver-select-all { color: #e2e8f0 !important; }
+.app[data-theme="night"] .main .driver-select-all input,
+.app[data-theme="night"] .main .driver-delivery-card input[type="checkbox"] { accent-color: #facc15; }
+.app[data-theme="night"] .main .driver-delivery-card {
+  background: #172235 !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .main .driver-delivery-card > strong,
+.app[data-theme="night"] .main .driver-delivery-top h4 { color: #f8fafc !important; }
+.app[data-theme="night"] .main .driver-delivery-card > span { color: #cbd5e1 !important; }
+.app[data-theme="night"] .main .driver-delivery-card .status {
+  background: #713f12 !important;
+  border: 1px solid #eab308 !important;
+  color: #fef3c7 !important;
+}
+.app[data-theme="night"] .main .driver-delivery-card .status-delivered {
+  background: #14532d !important;
+  border-color: #22c55e !important;
+  color: #dcfce7 !important;
+}
+.app[data-theme="night"] .main .driver-delivery-card .status-picked-up {
+  background: #1e3a5f !important;
+  border-color: #60a5fa !important;
+  color: #dbeafe !important;
+}
+.app[data-theme="night"] .main .driver-delivery-card .status-out-for-delivery {
+  background: #4c1d95 !important;
+  border-color: #a78bfa !important;
+  color: #ede9fe !important;
+}
+.app[data-theme="night"] .main .driver-contact-group,
+.app[data-theme="night"] .main .driver-stop-group {
+  background: #111c2d !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .main .driver-contact-group > strong,
+.app[data-theme="night"] .main .driver-stop-group > strong { color: #f8fafc !important; }
+.app[data-theme="night"] .main .driver-delivery-details a,
+.app[data-theme="night"] .main .driver-stop-actions a {
+  background: #243247 !important;
+  border-color: #64748b !important;
+  color: #bfdbfe !important;
+}
+.app[data-theme="night"] .main .driver-delivery-footer { border-color: #475569 !important; }
+.app[data-theme="night"] .main .driver-delivery-footer strong { color: #f8fafc !important; }
+.app[data-theme="night"] .main .driver-empty > span {
+  background: #14532d !important;
+  color: #dcfce7 !important;
+}
+.app[data-theme="night"] .main .driver-empty p,
+.app[data-theme="night"] .main .driver-demo-note { color: #aab8cc !important; }
+.app[data-theme="night"] .main .driver-section [role="tab"][aria-selected="true"] {
+  background: #166534 !important;
+  border-color: #22c55e !important;
+  color: #f0fdf4 !important;
+}
+.app[data-theme="night"] .main .driver-section [role="tab"][aria-selected="false"] {
+  background: #243247 !important;
+  border-color: #64748b !important;
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .main .driver-action {
+  background: #166534 !important;
+  border: 1px solid #22c55e !important;
+  color: #f0fdf4 !important;
+}
+.app[data-theme="night"] .main .driver-action:hover {
+  background: #15803d !important;
+  border-color: #4ade80 !important;
+}
+.app[data-theme="night"] .main .driver-withdrawal-request {
+  background: #172235 !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .main .driver-withdrawal-request strong,
+.app[data-theme="night"] .main .driver-withdrawal-request h3 { color: #f8fafc !important; }
+.app[data-theme="night"] .main .driver-withdrawal-request p,
+.app[data-theme="night"] .main .driver-withdrawal-history p { color: #cbd5e1 !important; }
+.app[data-theme="night"] .main .driver-withdrawal-history p { border-color: #334155 !important; }
+.app[data-theme="night"] .main .driver-about-form label { color: #e2e8f0 !important; }
+.app[data-theme="night"] .main .driver-about-form input,
+.app[data-theme="night"] .main .driver-about-form select,
+.app[data-theme="night"] .main .driver-about-form textarea {
+  background: #111c2d !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+}

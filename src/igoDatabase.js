@@ -214,13 +214,15 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
     paymentQuery = paymentQuery.eq('partner_id', partnerId);
     creditQuery = creditQuery.eq('partner_id', partnerId);
   }
+  let partnerQuery = client.from('partners').select('id,invoice_cutoff').order('created_at', { ascending: false });
+  if (partnerId) partnerQuery = partnerQuery.eq('id', partnerId);
   const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult] = await Promise.all([
     invoiceQuery,
     paymentQuery,
     isAdmin ? client.from('business_expenses').select('*').order('expense_date', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     isAdmin ? client.from('driver_withdrawal_requests').select('*,drivers(name)').order('requested_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     client.from('bank_accounts').select('*').order('created_at', { ascending: false }),
-    client.from('partners').select('id,invoice_cutoff').order('created_at', { ascending: false }),
+    partnerQuery,
     creditQuery,
   ]);
   for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult]) {

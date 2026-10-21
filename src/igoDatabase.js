@@ -183,15 +183,16 @@ export async function getDriverIdByName(name) {
 export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
   const isAdmin = workspace === 'Admin';
   const client = requireClient();
-  const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult] = await Promise.all([
+  const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult] = await Promise.all([
     client.from('invoices').select('*,partners(name),invoice_items(id,package_id,amount,packages(package_number,customer_name,customer_phone,address,area,item_description,delivery_fee))').order('created_at', { ascending: false }),
     client.from('payments').select('*,partners(name),invoices!payments_target_invoice_id_fkey(invoice_number),payment_allocations(invoice_id,amount,invoices(invoice_number))').order('submitted_at', { ascending: false }),
     isAdmin ? client.from('business_expenses').select('*').order('expense_date', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     isAdmin ? client.from('driver_withdrawal_requests').select('*,drivers(name)').order('requested_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     client.from('bank_accounts').select('*').order('created_at', { ascending: false }),
     client.from('partners').select('id,invoice_cutoff').order('created_at', { ascending: false }),
+    client.from('partner_credit_ledger').select('partner_id,amount'),
   ]);
-  for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult]) {
+  for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult]) {
     if (result.error) throw result.error;
   }
   return {
@@ -216,10 +217,13 @@ export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
     })),
     payments: (paymentResult.data || []).map((row) => ({
       id: row.id,
-      invoiceId: row.payment_allocations?.map((a) => a.invoices?.invoice_number).filter(Boolean).join(', ') || row.invoices?.invoice_number || row.note?.match(/Full payment for invoices:\s*(.*)/)?.[1] || '',
+      invoiceId: row.payment_allocations?.map((a) => a.invoices?.invoice_number).filter(Boolean).join(', ') || row.invoices?.invoice_number || row.note?.match(/Invoices included:\s*(.*)/i)?.[1] || row.note?.match(/Full payment for invoices:\s*(.*)/i)?.[1] || '',
+      invoiceIds: row.invoice_ids || (row.target_invoice_id ? [row.target_invoice_id] : []),
+      allocations: (row.payment_allocations || []).map((a) => ({ invoiceId: a.invoices?.invoice_number || a.invoice_id, amount: Number(a.amount || 0) })),
       partnerId: row.partner_id,
       partner: row.partners?.name || '',
       amount: Number(row.amount || 0),
+      verifiedAmount: Number(row.verified_amount || 0),
       reference: row.reference_number || '',
       transferDate: row.transfer_date,
       slipPath: row.receipt_path,
@@ -238,43 +242,57 @@ export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
       bankDetails: row.bank_details_snapshot,
     })),
     bankAccounts: accountResult.data || [],
+    partnerCredits: (creditResult.data || []).reduce((totals, row) => {
+      totals[row.partner_id] = (totals[row.partner_id] || 0) + Number(row.amount || 0);
+      return totals;
+    }, {}),
     invoiceCutoff: partnerResult.data?.[0]?.invoice_cutoff || '18:00',
   };
 }
 
-export async function submitInvoicePayment({ partnerId, invoices, reference, transferDate, note, file }) {
+export async function submitInvoicePayment({ partnerId, invoices, amount, reference, transferDate, note, file }) {
   const client = requireClient();
-  if (!Array.isArray(invoices) || invoices.length === 0 || invoices.some((invoice) => !invoice.invoiceId || Number(invoice.amount) <= 0)) {
-    throw new Error('No outstanding invoices were provided for payment.');
+  if (!Array.isArray(invoices) || invoices.length === 0 || invoices.some((invoice) => !invoice.invoiceId)) {
+    throw new Error('Choose at least one outstanding invoice.');
   }
-  const batchReference = (reference || 'Full invoice payment').trim();
-  const path = await uploadIgoFile(file, 'receipts', 'full-balance-' + Date.now());
-  const paymentRows = invoices.map((invoice) => ({
+  if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+    throw new Error('Enter the amount you actually transferred.');
+  }
+  const path = await uploadIgoFile(file, 'receipts', 'payment-' + Date.now());
+  const displayInvoices = invoices.map((invoice) => invoice.label || invoice.invoiceId);
+  const { data, error } = await client.from('payments').insert({
     partner_id: partnerId,
-    target_invoice_id: invoice.invoiceId,
-    amount: Number(invoice.amount),
-    reference_number: batchReference,
+    target_invoice_id: null,
+    invoice_ids: invoices.map((invoice) => invoice.invoiceId),
+    amount: Number(amount),
+    reference_number: (reference || 'Payment for invoices').trim(),
     transfer_date: transferDate || new Date().toISOString().slice(0, 10),
-    note: (note || 'Full balance payment') + ' · ' + invoice.invoiceId,
+    note: (note || 'Payment for invoices') + ' · Invoices included: ' + displayInvoices.join(', '),
     receipt_path: path,
     status: 'pending_verification',
-  }));
-  const { data, error } = await client.from('payments').insert(paymentRows).select();
+  }).select().single();
   if (error) throw error;
   return data;
 }
 
-export async function reviewPayment(paymentId, status, reason = '') {
-  const client = requireClient();
-  const { data: userData, error: userError } = await client.auth.getUser();
-  if (userError || !userData.user) throw userError || new Error('Sign in first.');
-  const { error } = await client.from('payments').update({
-    status,
-    rejection_reason: status === 'rejected' ? reason : null,
-    verified_by: userData.user.id,
-    verified_at: new Date().toISOString(),
-  }).eq('id', paymentId);
+export async function reviewPayment(paymentId, status, verifiedAmount, reason = '') {
+  const { data, error } = await requireClient().rpc('review_partner_payment', {
+    p_payment_id: paymentId,
+    p_status: status,
+    p_verified_amount: status === 'confirmed' ? Number(verifiedAmount) : null,
+    p_rejection_reason: status === 'rejected' ? reason : null,
+  });
   if (error) throw error;
+  return data;
+}
+
+export async function sendPaymentReceipt(paymentId) {
+  const { data, error } = await requireClient().functions.invoke('send-payment-receipt', {
+    body: { paymentId },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
 }
 
 export async function loadDriverSettings() {

@@ -219,6 +219,19 @@ export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
       id: row.id,
       invoiceId: row.payment_allocations?.map((a) => a.invoices?.invoice_number).filter(Boolean).join(', ') || row.invoices?.invoice_number || row.note?.match(/Invoices included:\s*(.*)/i)?.[1] || row.note?.match(/Full payment for invoices:\s*(.*)/i)?.[1] || '',
       invoiceIds: row.invoice_ids || (row.target_invoice_id ? [row.target_invoice_id] : []),
+      invoiceDues: (row.invoice_ids || (row.target_invoice_id ? [row.target_invoice_id] : [])).map((invoiceId) => {
+        const invoice = (invoiceResult.data || []).find((item) => item.id === invoiceId || item.invoice_number === invoiceId);
+        return invoice ? {
+          invoiceId: invoice.invoice_number,
+          amount: Math.max(0, Number(invoice.subtotal || 0) - Number(invoice.paid_amount || 0)),
+          lines: (invoice.invoice_items || []).map((line) => ({
+            id: line.id,
+            packageId: line.packages?.package_number ? `IGO-${line.packages.package_number}` : line.package_id,
+            description: line.packages?.item_description || '',
+            amount: Number(line.amount || 0),
+          })),
+        } : null;
+      }).filter(Boolean),
       allocations: (row.payment_allocations || []).map((a) => ({ invoiceId: a.invoices?.invoice_number || a.invoice_id, amount: Number(a.amount || 0) })),
       partnerId: row.partner_id,
       partner: row.partners?.name || '',

@@ -7073,3 +7073,13 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   .payment-review-actions { display: grid; grid-template-columns: 1fr; }
   .payment-review-actions button { width: 100%; }
 }
+
+
+/* First-use setup form for admin-linked partner workspaces. */
+.workspace-setup-backdrop { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 20px; background: rgba(12, 18, 29, .72); }
+.workspace-setup-card { width: min(100%, 520px); max-height: min(90vh, 760px); overflow-y: auto; display: grid; gap: 16px; padding: 26px; color: #eaf0f8; background: #1e293b; border: 1px solid #475569; border-radius: 18px; box-shadow: 0 24px 80px rgba(0, 0, 0, .38); }
+.workspace-setup-card h2, .workspace-setup-card p { margin: 0; }
+.workspace-setup-card > p:not(.approval-kicker) { color: #c2cede; line-height: 1.55; }
+.workspace-setup-card label { display: grid; gap: 7px; font-weight: 600; }
+.workspace-setup-card input, .workspace-setup-card textarea { width: 100%; color: #f4f7fb; background: #152033; border: 1px solid #52647c; border-radius: 9px; padding: 11px 12px; font: inherit; }
+.workspace-setup-actions { display: flex; flex-wrap: wrap; gap: 10px; }

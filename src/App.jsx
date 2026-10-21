@@ -2556,6 +2556,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 function ManagedIgoAccounts() {
   const [accounts, setAccounts] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -2593,14 +2594,18 @@ function ManagedIgoAccounts() {
   };
 
   const managed = accounts.filter((account) =>
-    account.status === 'approved' || account.status === 'suspended'
+    account.type === 'Admin' || account.status === 'approved' || account.status === 'suspended'
   );
   const visible = managed.filter((account) => {
-    const matchesFilter = filter === 'all' || account.status === filter;
+    const matchesType = typeFilter === 'all' ||
+      (typeFilter === 'partners' && account.type === 'Partner') ||
+      (typeFilter === 'riders' && account.type === 'Driver') ||
+      (typeFilter === 'admins' && account.type === 'Admin');
+    const matchesStatus = filter === 'all' || account.status === filter;
     const query = search.trim().toLowerCase();
-    const searchable = [account.name, account.contact_name, account.phone, account.email, account.type === 'Driver' ? 'Rider' : 'Partner']
+    const searchable = [account.name, account.contact_name, account.phone, account.email, account.type === 'Driver' ? 'Rider' : account.type]
       .filter(Boolean).join(' ').toLowerCase();
-    return matchesFilter && (!query || searchable.includes(query));
+    return matchesType && matchesStatus && (!query || searchable.includes(query));
   });
 
   return (
@@ -2619,20 +2624,37 @@ function ManagedIgoAccounts() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Name, phone, or email"
-            aria-label="Search partner and rider accounts by name, phone, or email"
+            aria-label="Search partner, rider, and admin accounts by name, phone, or email"
           />
         </label>
-        <label>Show accounts<select value={filter} onChange={(event) => setFilter(event.target.value)}>
-          <option value="all">Approved and suspended</option>
+        <label>Show status<select value={filter} onChange={(event) => setFilter(event.target.value)}>
+          <option value="all">All</option>
           <option value="approved">Approved</option>
           <option value="suspended">Suspended</option>
         </select></label>
+      </div>
+      <div role="group" aria-label="Quick filter by account type" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+        {[
+          ['all', 'All'],
+          ['partners', 'Partners'],
+          ['riders', 'Riders'],
+          ['admins', 'Admins'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={typeFilter === value ? 'primary-btn' : 'secondary-btn'}
+            aria-pressed={typeFilter === value}
+            onClick={() => setTypeFilter(value)}
+          >{label}</button>
+        ))}
       </div>
       {message && <p role="status" className="notice">{message}</p>}
       {error && <p role="alert" className="notice">{error}</p>}
       {loading ? <p>Loading accounts…</p> : visible.length ? (
         <div className="managed-account-list">
           {visible.map((account) => {
+            const isAdmin = account.type === 'Admin';
             const approved = account.status === 'approved';
             return (
               <article
@@ -2648,26 +2670,26 @@ function ManagedIgoAccounts() {
                   className={`status status-${statusClass(account.status)}`}
                   style={{
                     flex: '0 0 auto',
-                    background: approved ? '#166534' : '#9a3412',
+                    background: isAdmin ? '#1d4ed8' : approved ? '#166534' : '#9a3412',
                     color: '#fff',
                     fontWeight: 700,
                     fontSize: 12,
                     padding: '5px 10px',
                   }}
-                >{account.status}</span>
-                <button
+                >{isAdmin ? 'Admin' : account.status}</span>
+                {!isAdmin && <button
                   type="button"
                   className={approved ? 'secondary-btn' : 'primary-btn'}
                   disabled={busyId === account.accountId}
                   onClick={() => changeStatus(account)}
                 >
                   {busyId === account.accountId ? 'Saving…' : approved ? 'Suspend' : 'Reactivate'}
-                </button>
+                </button>}
               </article>
             );
           })}
         </div>
-      ) : <p>{search.trim() ? 'No partner or rider accounts match that search.' : `No ${filter === 'all' ? 'approved or suspended' : filter} partner or rider accounts.`}</p>}
+      ) : <p>{search.trim() ? 'No accounts match that search.' : 'No accounts match the selected filters.'}</p>}
     </section>
   );
 }

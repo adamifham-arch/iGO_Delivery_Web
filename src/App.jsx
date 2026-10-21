@@ -3089,11 +3089,11 @@ function AdminOperations({ packages, onUpdate, liveMode = false }) {
     <div className="operations-dashboard">
       <div className="stats-grid overview-summary">
         {[
-          ['Active deliveries', 'Active', 'Picked up or on the way'],
-          ['Needs assignment', 'Unassigned', 'Unassigned'],
-          ['Out for delivery', 'Out for Delivery', 'On the way'], ['Pending pickup', 'Pending Pickup', 'Assigned and awaiting collection'],
-          ['Failed deliveries', 'Failed Delivery', 'Needs review'],
+          ['Needs assignment', 'Unassigned', 'Waiting for a driver'],
+          ['Pending pickup', 'Pending Pickup', 'Assigned and awaiting collection'],
+          ['Ongoing deliveries', 'Active', 'Picked up or on the way'],
           ['Delivered', 'Delivered', 'Delivered'],
+          ['Failed deliveries', 'Failed Delivery', 'Needs review'],
           ['Total packages', 'All', 'All packages'],
         ].map(([label, value, detail]) => (
           <Stat

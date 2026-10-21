@@ -5814,10 +5814,11 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <h3>Payments awaiting review</h3>
         {pendingPayments.length ? (
           pendingPayments.map((payment) => {
-            const invoiceDues = payment.invoiceDues?.map((invoice) => invoice.invoiceId).filter(Boolean) || [];
+            const invoiceDues = (payment.invoiceDues || []).filter((invoice) => invoice?.invoiceId);
             const invoiceLabels = invoiceDues.length
-              ? invoiceDues
+              ? invoiceDues.map((invoice) => invoice.invoiceId)
               : String(payment.invoiceId || '').split(',').map((invoiceId) => invoiceId.trim()).filter(Boolean);
+            const invoiceBalanceTotal = invoiceDues.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
             const compactInvoiceId = (invoiceId) => (
               invoiceId.length <= 24
                 ? invoiceId
@@ -5839,11 +5840,44 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
                   <strong className="payment-review-amount">{money(payment.amount)}</strong>
                 </header>
                 {invoiceLabels.length > 0 && (
-                  <details className="payment-review-full-invoices">
-                    <summary>View full invoice numbers</summary>
-                    <ul>
-                      {invoiceLabels.map((invoiceId) => <li key={invoiceId}><code>{invoiceId}</code></li>)}
-                    </ul>
+                  <details className="payment-review-receipt">
+                    <summary>View payment receipt</summary>
+                    <div className="payment-receipt">
+                      <header className="payment-receipt-heading">
+                        <div><span>Payment receipt</span><strong>{payment.partner || 'Partner'}</strong></div>
+                        <strong className="payment-receipt-total">{money(payment.amount)}</strong>
+                      </header>
+                      <div className="payment-receipt-summary">
+                        <div><span>Invoices included</span><strong>{invoiceLabels.length}</strong></div>
+                        <div><span>Invoice balance total</span><strong>{invoiceDues.length ? money(invoiceBalanceTotal) : 'Unavailable'}</strong></div>
+                        <div><span>Reference</span><strong>{payment.reference || '—'}</strong></div>
+                        <div><span>Transfer date</span><strong>{payment.transferDate || '—'}</strong></div>
+                      </div>
+                      <ol className="payment-receipt-invoices">
+                        {invoiceLabels.map((invoiceId, index) => {
+                          const invoice = invoiceDues.find((item) => item.invoiceId === invoiceId);
+                          return (
+                            <li key={invoiceId}>
+                              <div className="payment-receipt-invoice-heading">
+                                <code>{invoiceId}</code>
+                                <strong>{invoice ? money(invoice.amount) : 'Amount unavailable'}</strong>
+                              </div>
+                              {invoice?.lines?.length > 0 && (
+                                <ul>
+                                  {invoice.lines.map((line, lineIndex) => (
+                                    <li key={line.id || lineIndex}>
+                                      <span>{line.description || line.packageId || 'Invoice item'}</span>
+                                      <span>{money(line.amount)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ol>
+                      <p>Invoice amounts show the outstanding balance available when this payment was submitted. Compare the itemized invoices with the payment slip above.</p>
+                    </div>
                   </details>
                 )}
                 <div className="payment-review-metadata">

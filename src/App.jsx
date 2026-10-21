@@ -2853,7 +2853,7 @@ function AdminOperations({ packages, onUpdate, liveMode = false }) {
                   }}
                 >
                   <label>
-                    Driver name <input value={draft.driver} onChange={(e) => change(p, 'driver', e.target.value)} required={['Picked Up', 'Out for Delivery'].includes(draft.status)} list={`admin-driver-roster-${p.id}`} placeholder={driverNames.length ? 'Type to search drivers' : 'No drivers found'} aria-label={`Driver for ${p.id}`} />{driverNames.length > 0 && <datalist id={`admin-driver-roster-${p.id}`}>{driverNames.map((name) => <option key={name} value={name} />)}</datalist>
+                    Driver name <input value={draft.driver} onChange={(e) => change(p, 'driver', e.target.value)} required={['Picked Up', 'Out for Delivery'].includes(draft.status)} list={`admin-driver-roster-${p.id}`} placeholder={driverNames.length ? 'Type to search drivers' : 'No drivers found'} aria-label={`Driver for ${p.id}`} />{driverNames.length > 0 && <datalist id={`admin-driver-roster-${p.id}`}>{driverNames.map((name) => <option key={name} value={name} />)}</datalist>}
                   </label>
                   <label>
                     Delivery status

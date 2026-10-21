@@ -6475,3 +6475,61 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   color: #fecaca !important;
   background: #512b34 !important;
 }
+
+  
+
+/* Admin dispatch cards in the signed-in night theme */
+.app[data-theme="night"] .main .ops-queue {
+  background: #172235 !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .main .ops-package + .ops-package {
+  border-color: #475569 !important;
+}
+.app[data-theme="night"] .main .ops-package > summary {
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .main .ops-package > summary:hover,
+.app[data-theme="night"] .main .ops-package[open] > summary {
+  background: #243247 !important;
+}
+.app[data-theme="night"] .main .ops-package > summary strong,
+.app[data-theme="night"] .main .ops-package-body,
+.app[data-theme="night"] .main .ops-package-body dd {
+  color: #f1f5f9 !important;
+}
+.app[data-theme="night"] .main .ops-package > summary span,
+.app[data-theme="night"] .main .ops-package .ops-driver,
+.app[data-theme="night"] .main .ops-delivery-details dt {
+  color: #cbd5e1 !important;
+}
+.app[data-theme="night"] .main .ops-package .ops-manage {
+  color: #facc15 !important;
+}
+.app[data-theme="night"] .main .ops-package-body {
+  border-color: #334155 !important;
+}
+.app[data-theme="night"] .main .ops-package-body a {
+  color: #93c5fd !important;
+}
+.app[data-theme="night"] .main .ops-package .status-delivered {
+  background: #14532d !important;
+  border: 1px solid #22c55e !important;
+  color: #dcfce7 !important;
+}
+.app[data-theme="night"] .main .ops-package .status-pending {
+  background: #713f12 !important;
+  border: 1px solid #eab308 !important;
+  color: #fef3c7 !important;
+}
+.app[data-theme="night"] .main .ops-package .status-picked-up {
+  background: #1e3a5f !important;
+  border: 1px solid #60a5fa !important;
+  color: #dbeafe !important;
+}
+.app[data-theme="night"] .main .ops-package .status-out-for-delivery {
+  background: #4c1d95 !important;
+  border: 1px solid #a78bfa !important;
+  color: #ede9fe !important;
+}

@@ -508,6 +508,10 @@ export default function App() {
         setDatabaseLoading(false);
         return;
       }
+      // Initial session and token refreshes do not change the signed-in account.
+      // Re-running activateSession for those events would reset a superadmin's
+      // selected linked workspace back to the account's default Admin workspace.
+      if (!['SIGNED_IN', 'SIGNED_OUT', 'USER_UPDATED', 'USER_DELETED'].includes(event)) return;
       void activateSession(session);
     });
     return () => {

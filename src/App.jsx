@@ -3204,7 +3204,7 @@ function DriverWorkflowDashboard({
     }
   });
   const [selected, setSelected] = useState([]);
-  const [activePartner, setActivePartner] = useState('');
+  const [activePartner, setActivePartner] = useState(''); const [routeTab, setRouteTab] = useState('active');
   const [proofs, setProofs] = useState({});
   const [reasons, setReasons] = useState({});
   const [rate, setRate] = useState(() => {
@@ -3265,7 +3265,7 @@ function DriverWorkflowDashboard({
   const active = assigned.filter(
     (p) => !['Delivered', 'Cancelled'].includes(p.status)
   );
-  const delivered = assigned.filter((p) => p.status === 'Delivered');
+  const delivered = assigned.filter((p) => p.status === 'Delivered'); const routePackages = routeTab === 'delivered' ? delivered : active;
   const earned = delivered.reduce(
     (total, p) => total + ((Number(p.fee) || 0) * rate) / 100,
     0
@@ -3534,9 +3534,9 @@ function DriverWorkflowDashboard({
           </div>
           <span className="driver-count">{active.length} active</span>
         </div>
-        {assigned.length ? (
+        <div role="tablist" aria-label="Assigned package status" style={{ display: 'flex', gap: 8, margin: '12px 0' }}><button type="button" role="tab" aria-selected={routeTab === 'active'} className="secondary-btn" onClick={() => setRouteTab('active')}>Pending &amp; active ({active.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivered'} className="secondary-btn" onClick={() => setRouteTab('delivered')}>Delivered ({delivered.length})</button></div>{routePackages.length ? (
           <div className="driver-delivery-list">
-            {assigned.map((p) => (
+            {routePackages.map((p) => (
               <article className="driver-delivery-card" key={p.id}>
                 <div className="driver-delivery-top">
                   <div>
@@ -3719,7 +3719,7 @@ function DriverWorkflowDashboard({
             ))}
           </div>
         ) : (
-          <p>No packages assigned yet.</p>
+          <p>{routeTab === 'delivered' ? 'No delivered packages yet.' : 'No pending pickups or deliveries.'}</p>
         )}
       </section>
       <section id="driver-earnings" className="driver-section">

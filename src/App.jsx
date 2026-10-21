@@ -4226,11 +4226,14 @@ function SuperadminUserManagementPanel() {
           onClick={() => setShowInviteForm((visible) => !visible)}
           aria-expanded={showInviteForm}
           aria-controls="superadmin-invite-form"
-        >{showInviteForm ? 'Close form' : 'Create account'}</button>
+        >{showInviteForm ? 'Close form' : 'Add user manually'}</button>
       </div>
+      <p style={{ margin: '0.5rem 0 0', color: '#64748b' }}>
+        Use manual invites mainly to create admin accounts or handle exceptions. Partners and riders should normally apply through the usual application process.
+      </p>
       {showInviteForm && (
         <div style={{ marginTop: '0.75rem' }}>
-          <p>Create an account and send an invitation. Every account needs a registered phone number. Partner and driver accounts wait for admin approval.</p>
+          <p>Create an account and send an invitation. Partner and rider accounts still need admin approval.</p>
           <form id="superadmin-invite-form" onSubmit={inviteUser} style={{ display: 'grid', gap: '0.75rem', maxWidth: '36rem' }}>
             <label>Full name<input name="full_name" required /></label>
             <label>Email<input name="email" type="email" required /></label>

@@ -3998,7 +3998,7 @@ function DriverWorkflowDashboard({
                     {p.status}
                   </span>
                 </div>
-                {p.status === 'Pending' ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#fff7d6', color: '#664f00', fontWeight: 700 }}><strong>Next step:</strong> Go to {p.partnerName || p.partner || 'the partner'} to collect this package.</p> : ['Picked Up', 'Out for Delivery'].includes(p.status) ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#eaf6ef', color: '#155b43', fontWeight: 700 }}><strong>Next step:</strong> Deliver to {p.area === 'Boat' ? p.boatName || p.address || 'the boat' : p.address || p.area || 'the customer address'}.</p> : null}<div className="driver-delivery-details">
+                {p.status === 'Pending' ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#fff7d6', color: '#664f00', fontWeight: 700 }}><strong>Next step:</strong> Go to {p.partnerName || p.partner || 'the partner'} to collect this package.</p> : ['Picked Up', 'Out for Delivery'].includes(p.status) ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#eaf6ef', color: '#155b43', fontWeight: 700 }}><strong>Next step:</strong> Deliver to {p.area === 'Boat' ? p.boatName || p.address || 'the boat' : p.address || p.area || 'the customer address'}.</p> : null}<details className="driver-route-details"><summary>Partner &amp; delivery details</summary><div className="driver-delivery-details">
                   <section className="driver-stop-group" aria-label="Partner pickup">
                     <strong>Partner pickup</strong>
                     <span>{p.partnerName || p.partner || 'Partner'}{p.partnerPhone ? ' · ' + p.partnerPhone : ''}</span>
@@ -4037,7 +4037,7 @@ function DriverWorkflowDashboard({
                       )}
                     </div>
                   </section>
-                </div>
+                </div></details>
                 <div className="driver-delivery-footer">
                   <span>
                     Driver pay{' '}

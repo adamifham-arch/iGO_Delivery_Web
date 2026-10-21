@@ -346,6 +346,31 @@ export default function App() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showGoToTop, setShowGoToTop] = useState(false);
   useEffect(() => {
+    if (!showMobileNav && !showProfileMenu) return undefined;
+    const closeOnOutsidePointer = (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (showMobileNav && !target.closest('.mobile-nav-dropdown') && !target.closest('.mobile-nav-toggle')) {
+        setShowMobileNav(false);
+      }
+      if (showProfileMenu && !target.closest('.profile-menu-container')) {
+        setShowProfileMenu(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowMobileNav(false);
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [showMobileNav, showProfileMenu]);
+  useEffect(() => {
     const handleScroll = () => setShowGoToTop(window.scrollY > 120);
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -1630,14 +1655,17 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             />
           </button>
           <button
+            type="button"
             className="mobile-nav-toggle"
-            onClick={() => setShowMobileNav(!showMobileNav)}
+            aria-expanded={showMobileNav}
+            aria-controls="mobile-primary-navigation"
+            onClick={() => setShowMobileNav((open) => !open)}
           >
             ☰ Menu
           </button>
 
           {showMobileNav && (
-            <div className="mobile-nav-dropdown">
+            <div className="mobile-nav-dropdown" id="mobile-primary-navigation">
               {navItems.map(([name, icon, displayLabel = name]) => (
                 <button
                   key={name}

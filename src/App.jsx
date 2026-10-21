@@ -328,7 +328,10 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
-  const [authMode, setAuthMode] = useState('landing');
+  const [authMode, setAuthMode] = useState(() => {
+    const recoveryParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    return recoveryParams.get('type') === 'recovery' ? 'reset-password' : 'landing';
+  });
   const [authNotice, setAuthNotice] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -1452,6 +1455,10 @@ export default function App() {
   const viewedProfileName = activeLinkedProfile?.name || databaseProfile?.full_name || (workspace === 'Admin' ? 'Operations' : workspace === 'Driver' ? 'Ahmed Rasheed' : 'Style Hub');
   const viewedProfileType = activeLinkedProfile ? workspace.toLowerCase() : databaseProfile?.role || workspace + ' preview';
 
+  if (supabaseConfigured && authMode === 'reset-password') {
+    return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Choose a new password</h1><p>Use at least 8 characters for your new password.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}{authNotice && <p className="notice" role="status">{authNotice}</p>}<form onSubmit={saveRecoveredPassword}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Saving…' : 'Save new password'}</button></form></section></main>;
+  }
+
   if (supabaseConfigured && (databaseLoading || !databaseProfile)) {
     if (databaseLoading) {
       return <main className="public-loading"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY</p><h1>Connecting to iGO</h1><p>Loading your account…</p></section></main>;
@@ -1484,11 +1491,7 @@ export default function App() {
       );
     }
 
-    if (authMode === 'reset-password') {
-      return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Choose a new password</h1><p>Use at least 8 characters for your new password.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<form onSubmit={saveRecoveredPassword}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Saving…' : 'Save new password'}</button></form></section></main>;
-    }
-
-    if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Set up your password</h1><p>Your account is ready. Choose a password to enter your workspace.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<form onSubmit={completeInvitedPasswordSetup}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>Confirm password<input type="password" autoComplete="new-password" minLength={8} required value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Setting up…' : 'Set password and continue'}</button></form></section></main>; }
+if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Set up your password</h1><p>Your account is ready. Choose a password to enter your workspace.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<form onSubmit={completeInvitedPasswordSetup}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>Confirm password<input type="password" autoComplete="new-password" minLength={8} required value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Setting up…' : 'Set password and continue'}</button></form></section></main>; }
 
   if (authMode === 'forgot-password') {
       return <main className="public-auth-page"><section className="public-auth-card"><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('signin'); }}>← Back to sign in</button><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Reset your password</h1><p>Enter the email address on your iGO account and we’ll send a reset link.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}{authNotice && <p className="notice" role="status">{authNotice}</p>}<form onSubmit={requestPasswordReset}><label>Email<input type="email" autoComplete="email" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending link…' : 'Send reset link'}</button></form></section></main>;
@@ -2457,8 +2460,7 @@ export default function App() {
                           marginTop: 12,
                         }}
                       >
-                        <h3 style={{ display: 'inline-block', margin: '0 0 8px', fontSize: 15 }}>
-                          {partner}</h3>{partnerPackages.some((p) => p.status === 'Delivered') && <button type="button" className="secondary-btn" style={{ marginLeft: 10, marginBottom: 8 }} onClick={() => window.dispatchEvent(new CustomEvent('igo-generate-partner-invoice', { detail: { partnerId: partnerPackages[0]?.partnerId || partnerPackages[0]?.partner_id || null, partnerName: partner } }))}>Generate invoice now</button>}
+                        <h3 style={{ display: 'inline-block', margin: '0 0 8px', fontSize: 15 }}>{partner}</h3>
                         {partnerPackages.map((p) => (
                           <article
                             key={p.id}
@@ -4401,6 +4403,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     setWithdrawalRequests(next);
   };
   const [viewingInvoice, setViewingInvoice] = useState(null);
+  const [selectedPaymentInvoiceId, setSelectedPaymentInvoiceId] = useState('');
   const [drafts, setDrafts] = useState({});
   const [notice, setNotice] = useState('');
   const [expenseDraft, setExpenseDraft] = useState(() => ({
@@ -4575,12 +4578,22 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       ...current,
     ].slice(0, 20);
   const generateInvoices = async (partnerId = null, partnerName = null) => {
-    if (liveMode) {
-      await generateLiveInvoices(partnerId || null);
+    const packagesToInvoice = readyPackages.filter((p) => {
+      if (partnerId) return String(p.partnerId || p.partner_id || '') === String(partnerId);
+      if (partnerName) return (p.partnerName || p.partner || 'Style Hub') === partnerName;
+      return true;
+    });
+    if (!packagesToInvoice.length) {
+      if (liveMode) {
+        setLiveError('');
+        setLiveMessage('No delivered, uninvoiced packages are ready to invoice.');
+      } else {
+        setNotice('There are no delivered, uninvoiced packages to bill.');
+      }
       return;
     }
-    const packagesToInvoice = readyPackages.filter((p) => { if (partnerId) return String(p.partnerId || p.partner_id || '') === String(partnerId); if (partnerName) return (p.partnerName || p.partner || 'Style Hub') === partnerName; return true; }); if (!packagesToInvoice.length) {
-      setNotice('There are no delivered, uninvoiced packages to bill.');
+    if (liveMode) {
+      await generateLiveInvoices(partnerId || null);
       return;
     }
     const grouped = packagesToInvoice.reduce((groups, p) => {
@@ -4637,7 +4650,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         ' demo invoice(s) from delivered packages.'
     );
   };
-  useEffect(() => { const handlePartnerInvoice = (event) => { const detail = event.detail || {}; void generateInvoices(detail.partnerId || null, detail.partnerName || null); }; window.addEventListener('igo-generate-partner-invoice', handlePartnerInvoice); return () => window.removeEventListener('igo-generate-partner-invoice', handlePartnerInvoice); }, [readyPackages, liveMode, adminUser]); const submitPayment = async (event, invoice) => {
+  const submitPayment = async (event, invoice) => {
     event.preventDefault();
     const draft = drafts[invoice.id] || {};
     const amount = Number(draft.amount || invoice.amount - getPaid(invoice.id));
@@ -4839,6 +4852,9 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   };
   if (workspace === 'Partner') {
     const partnerInvoices = liveMode ? billing.invoices : billing.invoices.filter((invoice) => invoice.partner === 'Style Hub');
+    const payableInvoices = partnerInvoices.filter((invoice) => getInvoiceStatus(invoice) !== 'Paid');
+    const selectedPaymentInvoice = payableInvoices.find((invoice) => invoice.id === selectedPaymentInvoiceId) || payableInvoices[0] || null;
+    const totalOutstanding = partnerInvoices.reduce((total, invoice) => total + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
     return (
       <section style={{ paddingBottom: 28 }}>
         <p className="approval-kicker">PARTNER WORKSPACE · INVOICES</p>
@@ -4847,226 +4863,54 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         {!liveMode && <div className="notice">Demo only. Payments and slips aren't saved.</div>}
 
         <section id="partner-invoice-payment-options" style={panel}>
-          <h3>Pay an invoice</h3>
-          {partnerInvoices.map((invoice) => (
-            <div
-              key={invoice.id}
-              style={{ borderTop: '1px solid #e7e9e5', padding: '12px 0' }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: 8,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div>
-                  <strong>{invoice.id}</strong>
-                  <div>
-                    {getInvoiceStatus(invoice)} ·{' '}
-                    {money(Math.max(0, invoice.amount - getPaid(invoice.id)))}{' '}
-                    due
-                  </div>
-                </div>
-                <button
-                  style={buttonStyle}
-                  type="button"
-                  onClick={() => setViewingInvoice(invoice)}
-                >
-                  View invoice
-                </button>
-              </div>
-              <div hidden style={{ marginTop: 12 }}>
-                <h4>Invoice details</h4>
-                <ul>
-                  {invoice.lines.map((line) => (
-                    <li key={line.packageId}>
-                      {line.packageId} · {line.customer} · {line.area} ·{' '}
-                      {line.description} · {money(line.amount)}
-                    </li>
-                  ))}
-                </ul>
-                <p>
-                  Invoice total: <strong>{money(invoice.amount)}</strong>
-                </p>
-              </div>
-              {getInvoiceStatus(invoice) !== 'Paid' ? (
-                <div>
-                  <h3>Submit payment · {invoice.id}</h3>
-                  <p>
-                    Balance due:{' '}
-                    <strong>
-                      {money(invoice.amount - getPaid(invoice.id))}
-                    </strong>
-                  </p>
-                  <div
-                    style={{
-                      border: '1px solid #e7e9e5',
-                      borderRadius: 10,
-                      padding: 12,
-                      marginBottom: 12,
-                    }}
-                  >
-                    <h4 style={{ margin: '0 0 10px', fontSize: 14 }}>
-                      Transfer to
-                    </h4>
-                    <div style={{ display: 'grid', gap: 10 }}>
-                      <div>
-                        <span
-                          style={{
-                            display: 'block',
-                            fontSize: 12,
-                            marginBottom: 4,
-                          }}
-                        >
-                          Account name
-                        </span>
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: 8,
-                            alignItems: 'center',
-                          }}
-                        >
-                          <input
-                            readOnly
-                            style={{ flex: 1, minWidth: 0 }}
-                            value={
-                              billing.transferAccountName || 'Not set by admin'
-                            }
-                          />
-                          <button
-                            style={buttonStyle}
-                            type="button"
-                            disabled={!billing.transferAccountName}
-                            onClick={() =>
-                              navigator.clipboard?.writeText(
-                                billing.transferAccountName
-                              )
-                            }
-                          >
-                            Copy
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            display: 'block',
-                            fontSize: 12,
-                            marginBottom: 4,
-                          }}
-                        >
-                          Account number
-                        </span>
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: 8,
-                            alignItems: 'center',
-                          }}
-                        >
-                          <input
-                            readOnly
-                            style={{ flex: 1, minWidth: 0 }}
-                            value={
-                              billing.transferAccountNumber ||
-                              'Not set by admin'
-                            }
-                          />
-                          <button
-                            style={buttonStyle}
-                            type="button"
-                            disabled={!billing.transferAccountNumber}
-                            onClick={() =>
-                              navigator.clipboard?.writeText(
-                                billing.transferAccountNumber
-                              )
-                            }
-                          >
-                            Copy
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <form
-                    onSubmit={(event) => submitPayment(event, invoice)}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))',
-                      gap: 12,
-                    }}
-                  >
-                    <label>
-                      Invoice / transfer reference
-                      <input
-                        required
-                        value={drafts[invoice.id]?.reference ?? invoice.id}
-                        onChange={(e) =>
-                          setDrafts((c) => ({
-                            ...c,
-                            [invoice.id]: {
-                              ...c[invoice.id],
-                              reference: e.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Amount (MVR)
-                      <input
-                        required
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        max={invoice.amount - getPaid(invoice.id)}
-                        value={
-                          drafts[invoice.id]?.amount ??
-                          invoice.amount - getPaid(invoice.id)
-                        }
-                        onChange={(e) =>
-                          setDrafts((c) => ({
-                            ...c,
-                            [invoice.id]: {
-                              ...c[invoice.id],
-                              amount: e.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Payment slip
-                      <input
-                        required
-                        type="file"
-                        accept="image/*,application/pdf"
-                        onChange={(e) =>
-                          setDrafts((c) => ({
-                            ...c,
-                            [invoice.id]: {
-                              ...c[invoice.id],
-                              slipName: e.target.files?.[0]?.name || '',
-                              file: e.target.files?.[0] || null,
-                            },
-                          }))
-                        }
-                      />
-                    </label>
-                    <button style={buttonStyle} type="submit">
-                      Submit for admin approval
-                    </button>
-                  </form>
-                </div>
-              ) : (
-                <p>Payment confirmed.</p>
-              )}
+          <h3>Invoices</h3>
+          {partnerInvoices.length ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                <thead><tr>{['Pay', 'Invoice', 'Status', 'Amount due', ''].map((label, index) => <th key={label || index} style={{ padding: '9px 8px', borderBottom: '1px solid #dfe7e2', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
+                <tbody>
+                  {partnerInvoices.map((invoice) => {
+                    const due = Math.max(0, invoice.amount - getPaid(invoice.id));
+                    return <tr key={invoice.id} style={{ borderBottom: '1px solid #e7e9e5' }}>
+                      <td style={{ padding: '9px 8px' }}><input type="radio" name="partner-payment-invoice" aria-label={`Pay invoice ${invoice.id}`} checked={selectedPaymentInvoice?.id === invoice.id} disabled={due === 0} onChange={() => setSelectedPaymentInvoiceId(invoice.id)} /></td>
+                      <td style={{ padding: '9px 8px', whiteSpace: 'nowrap' }}><strong>{invoice.id}</strong></td>
+                      <td style={{ padding: '9px 8px', whiteSpace: 'nowrap' }}>{getInvoiceStatus(invoice)}</td>
+                      <td style={{ padding: '9px 8px', whiteSpace: 'nowrap' }}>{money(due)}</td>
+                      <td style={{ padding: '9px 8px' }}><button type="button" style={{ ...buttonStyle, padding: '7px 10px', whiteSpace: 'nowrap' }} onClick={() => setViewingInvoice(invoice)}>View</button></td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
+          ) : <p>No invoices yet.</p>}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, margin: '12px 0', padding: '12px 0', borderTop: '1px solid #dfe7e2', borderBottom: '1px solid #dfe7e2' }}>
+            <strong>Total due across invoices</strong><strong>{money(totalOutstanding)}</strong>
+          </div>
+
+          <div style={{ border: '1px solid #dfe7e2', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+            <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>iGO account details</h4>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {[['Account name', billing.transferAccountName], ['Account number', billing.transferAccountNumber]].map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}><span style={{ color: '#64748b' }}>{label}: </span><strong>{value || 'Not set by admin'}</strong></span>
+                  <button type="button" style={{ ...buttonStyle, padding: '6px 9px' }} disabled={!value} onClick={() => navigator.clipboard?.writeText(value)}>Copy</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {selectedPaymentInvoice ? (
+            <>
+              <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px' }}>Payment will be submitted for {selectedPaymentInvoice.id}. Select another invoice in the table to change it.</p>
+              <form onSubmit={(event) => submitPayment(event, selectedPaymentInvoice)} style={{ display: 'grid', gap: 10 }}>
+                <label>Payment amount (MVR)<input required type="number" min="0.01" step="0.01" max={selectedPaymentInvoice.amount - getPaid(selectedPaymentInvoice.id)} value={drafts[selectedPaymentInvoice.id]?.amount ?? selectedPaymentInvoice.amount - getPaid(selectedPaymentInvoice.id)} onChange={(event) => setDrafts((current) => ({ ...current, [selectedPaymentInvoice.id]: { ...current[selectedPaymentInvoice.id], amount: event.target.value } }))} /></label>
+                <label>Payment slip<input required type="file" accept="image/*,application/pdf" onChange={(event) => setDrafts((current) => ({ ...current, [selectedPaymentInvoice.id]: { ...current[selectedPaymentInvoice.id], slipName: event.target.files?.[0]?.name || '', file: event.target.files?.[0] || null } }))} /></label>
+                <button style={buttonStyle} type="submit">Submit payment for review</button>
+              </form>
+            </>
+          ) : <p>There are no outstanding invoices to pay.</p>}
+
           {viewingInvoice && (
             <div
               role="dialog"
@@ -5621,7 +5465,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       <h2>Invoices &amp; collections</h2>
       {!liveMode && <div className="notice">Demo mode.</div>}
       <section style={panel}>
-        <h3>Invoices</h3><div style={{display:"flex",flexWrap:"wrap",alignItems:"end",gap:10,marginBottom:14}}><label>Daily cutoff <input type="time" value={billing.cutoff} onChange={(e)=>setBilling((current)=>({...current,cutoff:e.target.value}))}/></label><button type="button" style={buttonStyle} onClick={persistInvoiceCutoff}>Save cutoff</button><span>Ready to invoice: <strong>{readyPackages.length}</strong> · {money(readyPackages.reduce((sum,p)=>sum+Number(p.fee??p.delivery_fee??0),0))}</span><button type="button" style={buttonStyle} onClick={generateInvoices} disabled={liveBusy||(liveMode&&!adminUser)}>{liveBusy?"Generating…":liveMode?"Generate invoice now":"Generate demo invoice now"}</button></div>{!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Signing in…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}
+        <h3>Invoices</h3><div style={{display:"flex",flexWrap:"wrap",alignItems:"end",gap:10,marginBottom:14}}><label>Daily cutoff <input type="time" value={billing.cutoff} onChange={(e)=>setBilling((current)=>({...current,cutoff:e.target.value}))}/></label><button type="button" style={buttonStyle} onClick={persistInvoiceCutoff}>Save cutoff</button><span>Ready to invoice: <strong>{readyPackages.length}</strong> · {money(readyPackages.reduce((sum,p)=>sum+Number(p.fee??p.delivery_fee??0),0))}</span><button type="button" style={buttonStyle} onClick={generateInvoices} disabled={liveBusy||(liveMode&&!adminUser)||readyPackages.length===0} title={readyPackages.length === 0 ? 'No delivered packages are ready to invoice' : undefined}>{liveBusy?"Generating…":liveMode?"Generate invoice now":"Generate demo invoice now"}</button>{readyPackages.length===0&&<span style={{fontSize:12,color:'#64748b'}}>No delivered packages ready to invoice.</span>}</div>{!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Signing in…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}
         {invoiceList(false)}
       </section>
       <section style={panel}>

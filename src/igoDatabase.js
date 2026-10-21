@@ -297,12 +297,17 @@ export async function loadDriverRoster() {
   const byUser = new Map((settings.data || []).map((row) => [row.user_id, row]));
   return (drivers.data || []).map((row) => {
     const setting = byUser.get(row.user_id);
-    return ({
-    ...row,
-    online: setting?.online || false,
-    onlineUpdatedAt: setting?.online_updated_at || null,
-    sharePercent: Number(setting?.share_percent || 0),
-  });
+    const onlineUpdatedAt = setting?.online_updated_at || null;
+    const heartbeatAt = onlineUpdatedAt ? Date.parse(onlineUpdatedAt) : NaN;
+    const hasRecentHeartbeat = Number.isFinite(heartbeatAt)
+      && heartbeatAt <= Date.now() + 30000
+      && Date.now() - heartbeatAt <= 120000;
+    return {
+      ...row,
+      online: Boolean(setting?.online && hasRecentHeartbeat),
+      onlineUpdatedAt,
+      sharePercent: Number(setting?.share_percent || 0),
+    };
   });
 }
 

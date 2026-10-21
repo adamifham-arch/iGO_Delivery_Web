@@ -2597,7 +2597,7 @@ function AdminOperations({ packages, onUpdate, liveMode = false }) {
     value === 'All' ||
     (value === 'Active'
       ? ['Picked Up', 'Out for Delivery'].includes(p.status)
-      : value === 'Unassigned'
+      : value === 'Pending Pickup' ? p.status === 'Pending' && Boolean(p.driver?.trim()) : value === 'Unassigned'
       ? active(p) && !p.driver?.trim()
       : value === 'Boat'
       ? active(p) && p.area === 'Boat'
@@ -2652,7 +2652,7 @@ function AdminOperations({ packages, onUpdate, liveMode = false }) {
         {[
           ['Active deliveries', 'Active', 'Picked up or on the way'],
           ['Needs assignment', 'Unassigned', 'Unassigned'],
-          ['Out for delivery', 'Out for Delivery', 'On the way'],
+          ['Out for delivery', 'Out for Delivery', 'On the way'], ['Pending pickup', 'Pending Pickup', 'Assigned and awaiting collection'],
           ['Failed deliveries', 'Failed Delivery', 'Needs review'],
           ['Delivered', 'Delivered', 'Delivered'],
           ['Total packages', 'All', 'All packages'],

@@ -482,6 +482,9 @@ export default function App() {
   }, [partnerSpendPeriod, databaseProfile]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [partnerFilter, setPartnerFilter] = useState('All');
+  const [driverFilter, setDriverFilter] = useState('All');
+  const [areaFilter, setAreaFilter] = useState('All');
   const [showForm, setShowForm] = useState(false);
   const [notice, setNotice] = useState('');
   const [bulkNotice, setBulkNotice] = useState('');
@@ -1558,6 +1561,9 @@ export default function App() {
   const openPackageSummary = (status = 'All') => {
     setSearch('');
     setStatusFilter(status);
+    setPartnerFilter('All');
+    setDriverFilter('All');
+    setAreaFilter('All');
     setShowForm(false);
     setShowMobileNav(false);
     setPage('Packages');
@@ -1568,16 +1574,22 @@ export default function App() {
       });
     }, 700);
   };
-  const filtered = newestPackages.filter(
-    (p) =>
+  const filtered = newestPackages.filter((p) => {
+    const partnerKey = String(p.partnerId || p.partnerName || p.partner || 'Unknown partner');
+    const driverName = p.driver || '';
+    const searchable = `${p.id} ${p.customer} ${p.phone} ${p.area} ${p.address} ${p.status} ${p.partnerName || p.partner || ''} ${driverName}`;
+    return (
       (statusFilter === 'All' ||
         (statusFilter === 'Active'
           ? !['Delivered', 'Cancelled'].includes(p.status)
           : p.status === statusFilter)) &&
-      `${p.id} ${p.customer} ${p.phone} ${p.area} ${p.status}`
-        .toLowerCase()
-        .includes(search.toLowerCase())
-  );
+      (partnerFilter === 'All' || partnerKey === partnerFilter) &&
+      (driverFilter === 'All' ||
+        (driverFilter === '__unassigned__' ? !driverName : driverName === driverFilter)) &&
+      (areaFilter === 'All' || p.area === areaFilter) &&
+      searchable.toLowerCase().includes(search.trim().toLowerCase())
+    );
+  });
 
   const total = packages.length;
   const delivered = packages.filter((p) => p.status === 'Delivered').length;
@@ -2510,7 +2522,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by ID, customer, phone or area..."
+                  placeholder="Search ID, customer, phone, partner or area..."
                 />
                 <button
                   className="primary-btn"
@@ -2535,6 +2547,43 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                     <option key={status} value={status}>
                       {status}
                     </option>
+                  ))}
+                </select>
+                <label htmlFor="package-partner-filter">Partner</label>
+                <select
+                  id="package-partner-filter"
+                  value={partnerFilter}
+                  onChange={(event) => setPartnerFilter(event.target.value)}
+                >
+                  <option value="All">All partners</option>
+                  {[...new Map(packages.map((p) => [
+                    String(p.partnerId || p.partnerName || p.partner || 'Unknown partner'),
+                    p.partnerName || p.partner || 'Unknown partner',
+                  ])).entries()].map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <label htmlFor="package-driver-filter">Driver</label>
+                <select
+                  id="package-driver-filter"
+                  value={driverFilter}
+                  onChange={(event) => setDriverFilter(event.target.value)}
+                >
+                  <option value="All">All drivers</option>
+                  <option value="__unassigned__">Unassigned</option>
+                  {[...new Set(packages.map((p) => p.driver).filter(Boolean))].sort().map((driver) => (
+                    <option key={driver} value={driver}>{driver}</option>
+                  ))}
+                </select>
+                <label htmlFor="package-area-filter">Area</label>
+                <select
+                  id="package-area-filter"
+                  value={areaFilter}
+                  onChange={(event) => setAreaFilter(event.target.value)}
+                >
+                  <option value="All">All areas</option>
+                  {[...new Set(packages.map((p) => p.area).filter(Boolean))].sort().map((area) => (
+                    <option key={area} value={area}>{area}</option>
                   ))}
                 </select>
                 <span aria-live="polite">{filtered.length} package(s)</span>
@@ -3371,6 +3420,7 @@ function PackageTable({ packages }) {
           <tr>
             <th>Package ID</th>
             <th>Customer</th>
+            <th>Partner</th>
             <th>Phone</th>
             <th>Area</th>
             <th>Fee</th>
@@ -3384,6 +3434,7 @@ function PackageTable({ packages }) {
                 <strong>{p.id}</strong>
               </td>
               <td>{p.customer}</td>
+              <td>{p.partnerName || p.partner || 'Partner not linked'}</td>
               <td>{p.phone}</td>
               <td>{p.area}</td>
               <td>MVR {p.fee}</td>
@@ -3413,6 +3464,9 @@ function PackageTable({ packages }) {
               <div className="package-mobile-details">
                 <strong>{p.customer}</strong>
                 <span>MVR {p.fee}</span>
+              </div>
+              <div className="package-mobile-contact">
+                <span>Partner · {p.partnerName || p.partner || 'Partner not linked'}</span>
               </div>
               <div className="package-mobile-contact">
                 <a href={`tel:${p.phone}`}>{p.phone}</a>

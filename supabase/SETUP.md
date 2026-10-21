@@ -16,12 +16,20 @@ Run each SQL file separately in Supabase SQL Editor, in this order:
 1. `migrations/202610190001_add_operational_statuses.sql`
 2. `migrations/202610190002_persistent_workflows.sql`
 3. `migrations/202610190003_invoice_cutoff_scheduler.sql`
+4. `migrations/202610210001_partner_payment_review_and_credits.sql`
+5. `migrations/202610210002_payment_receipt_email_log.sql`
 
 The first file adds enum values, which must commit before the next migration refers to them. The third file enables Supabase Cron (`pg_cron`) and schedules a once-per-minute check; invoices are generated once the configured Maldives-local cutoff passes. If Supabase says the extension is unavailable or cannot be enabled through SQL, enable **pg_cron** in the project dashboard under Integrations → Cron, then run migration 3 again. Manual invoice generation works independently of the scheduler.
+
+Partner-payment migrations allow one submission to cover every outstanding invoice, record the admin-verified amount, leave unpaid balances due, and apply overpayment as credit to future invoices. Rejection requires a reason. Run migrations 4 and 5 before using the updated payment UI.
 
 ## 3. Sign in with an existing iGO account
 
 The app looks up the signed-in user's `profiles.role`. Admin, partner, and driver screens are selected from that role. Pending, rejected, or suspended partners and drivers cannot use the approved operational functions because the database role helpers and RLS policies gate those operations.
+
+## Email itemized partner receipts
+
+Deploy the `send-payment-receipt` Edge Function after applying migrations 4 and 5. Configure the project secrets `RESEND_API_KEY` and `RESEND_FROM_EMAIL` with a verified sender address in Resend, then deploy with `supabase functions deploy send-payment-receipt`. The function emails an itemized PDF receipt to the partner email saved on their account. The payment decision and in-app notification are saved even if email delivery is unavailable; the admin gets an error so delivery can be retried.
 
 ## What is stored in Supabase
 

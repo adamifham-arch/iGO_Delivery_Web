@@ -5618,6 +5618,19 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         )}
       </section>
       <section style={panel}>
+        <h3>Record business expense</h3>
+        <p>Record paid costs such as petrol, maintenance, or supplies.</p>
+        <form onSubmit={recordExpense} className="finance-expense-form">
+          <label>Date<input type="date" required value={expenseDraft.date} onChange={(event) => setExpenseDraft((current) => ({ ...current, date: event.target.value }))} /></label>
+          <label>Category<select value={expenseDraft.category} onChange={(event) => setExpenseDraft((current) => ({ ...current, category: event.target.value }))}>{['Fuel / petrol', 'Vehicle maintenance', 'Supplies', 'Rent', 'Utilities', 'Other'].map((category) => <option key={category}>{category}</option>)}</select></label>
+          <label>Description<input required placeholder="Petrol for delivery van" value={expenseDraft.description} onChange={(event) => setExpenseDraft((current) => ({ ...current, description: event.target.value }))} /></label>
+          <label>Paid to<input required placeholder="Supplier or recipient" value={expenseDraft.paidTo} onChange={(event) => setExpenseDraft((current) => ({ ...current, paidTo: event.target.value }))} /></label>
+          <label>Amount (MVR)<input type="number" min="0.01" step="0.01" required value={expenseDraft.amount} onChange={(event) => setExpenseDraft((current) => ({ ...current, amount: event.target.value }))} /></label>
+          <label>Receipt / reference (optional)<input value={expenseDraft.reference} onChange={(event) => setExpenseDraft((current) => ({ ...current, reference: event.target.value }))} /></label>
+          <button style={buttonStyle} type="submit">Record paid expense</button>
+        </form>
+      </section>
+      <section style={panel}>
         <h3>Daily sales report</h3>
         <form onSubmit={generateDailySalesReport} className="finance-report-controls no-print">
           <label>Date<input type="date" required value={dailySalesDate} onChange={(event) => setDailySalesDate(event.target.value)} /></label>
@@ -5653,33 +5666,6 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             </details>
           </>
         )}
-      </section>
-      
-      <section style={panel}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 12,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div>
-            </div></div>
-      </section>
-      <section style={panel}>
-        <h3>Record business expense</h3>
-        <p>Record paid costs such as petrol, maintenance, or supplies.</p>
-        <form onSubmit={recordExpense} className="finance-expense-form">
-          <label>Date<input type="date" required value={expenseDraft.date} onChange={(event) => setExpenseDraft((current) => ({ ...current, date: event.target.value }))} /></label>
-          <label>Category<select value={expenseDraft.category} onChange={(event) => setExpenseDraft((current) => ({ ...current, category: event.target.value }))}>{['Fuel / petrol', 'Vehicle maintenance', 'Supplies', 'Rent', 'Utilities', 'Other'].map((category) => <option key={category}>{category}</option>)}</select></label>
-          <label>Description<input required placeholder="Petrol for delivery van" value={expenseDraft.description} onChange={(event) => setExpenseDraft((current) => ({ ...current, description: event.target.value }))} /></label>
-          <label>Paid to<input required placeholder="Supplier or recipient" value={expenseDraft.paidTo} onChange={(event) => setExpenseDraft((current) => ({ ...current, paidTo: event.target.value }))} /></label>
-          <label>Amount (MVR)<input type="number" min="0.01" step="0.01" required value={expenseDraft.amount} onChange={(event) => setExpenseDraft((current) => ({ ...current, amount: event.target.value }))} /></label>
-          <label>Receipt / reference (optional)<input value={expenseDraft.reference} onChange={(event) => setExpenseDraft((current) => ({ ...current, reference: event.target.value }))} /></label>
-          <button style={buttonStyle} type="submit">Record paid expense</button>
-        </form>
       </section>
       <section className="finance-report-print" style={panel}>
         <div className="finance-report-heading">

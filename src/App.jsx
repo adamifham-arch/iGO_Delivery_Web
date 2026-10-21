@@ -2597,7 +2597,7 @@ function ManagedIgoAccounts() {
   const visible = managed.filter((account) => filter === 'all' || account.status === filter);
 
   return (
-    <section className="card" style={{ marginBottom: '1.25rem', padding: 20 }}>
+    <section className="card managed-account-panel" style={{ marginBottom: '1.25rem', padding: 20 }}>
       <div className="ops-heading">
         <div>
           <h2>Partner and rider accounts</h2>
@@ -2612,25 +2612,40 @@ function ManagedIgoAccounts() {
       </select></label>
       {message && <p role="status" className="notice">{message}</p>}
       {error && <p role="alert" className="notice">{error}</p>}
-      {loading ? <p>Loading accounts…</p> : visible.length ? visible.map((account) => (
-        <article className="application-card" key={`managed-${account.type}-${account.accountId}`} style={{ padding: 16, marginTop: 12 }}>
-          <div>
-            <strong>{account.name || account.contact_name || 'Unnamed account'}</strong>
-            <p>{account.type === 'Driver' ? 'Rider' : 'Partner'} · {account.email || account.phone || 'No contact details'}</p>
-            <span className={`status status-${statusClass(account.status)}`}>{account.status}</span>
-          </div>
-          <div className="finance-report-actions">
-            <button
-              type="button"
-              className={account.status === 'approved' ? 'secondary-btn' : 'primary-btn'}
-              disabled={busyId === account.accountId}
-              onClick={() => changeStatus(account)}
-            >
-              {busyId === account.accountId ? 'Saving…' : account.status === 'approved' ? 'Suspend account' : 'Reactivate account'}
-            </button>
-          </div>
-        </article>
-      )) : <p>No {filter === 'all' ? 'approved or suspended' : filter} partner or rider accounts.</p>}
+      {loading ? <p>Loading accounts…</p> : visible.length ? (
+        <div className="managed-account-list">
+          {visible.map((account) => {
+            const approved = account.status === 'approved';
+            return (
+              <article key={`managed-${account.type}-${account.accountId}`} className="managed-account-row">
+                <div className="managed-account-info">
+                  <strong>{account.name || account.contact_name || 'Unnamed account'}</strong>
+                  <p>{account.type === 'Driver' ? 'Rider' : 'Partner'} · Phone: {account.phone || 'Not provided'}{account.email ? ` · ${account.email}` : ''}</p>
+                </div>
+                <span
+                  className={`status status-${statusClass(account.status)}`}
+                  style={{
+                    flex: '0 0 auto',
+                    background: approved ? '#166534' : '#9a3412',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    padding: '5px 10px',
+                  }}
+                >{account.status}</span>
+                <button
+                  type="button"
+                  className={approved ? 'secondary-btn' : 'primary-btn'}
+                  disabled={busyId === account.accountId}
+                  onClick={() => changeStatus(account)}
+                >
+                  {busyId === account.accountId ? 'Saving…' : approved ? 'Suspend' : 'Reactivate'}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      ) : <p>No {filter === 'all' ? 'approved or suspended' : filter} partner or rider accounts.</p>}
     </section>
   );
 }

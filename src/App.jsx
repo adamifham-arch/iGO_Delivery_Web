@@ -516,6 +516,29 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (databaseProfile?.role !== 'driver' || !databaseUser?.id) return undefined;
+    let active = true;
+    const heartbeat = async () => {
+      try {
+        const settings = await loadDriverSettings();
+        if (!active || !settings.online) return;
+        await saveDriverSettings({
+          online: true,
+          online_updated_at: new Date().toISOString(),
+        });
+      } catch {
+        // A missed heartbeat naturally expires the driver's online status.
+      }
+    };
+    void heartbeat();
+    const timer = window.setInterval(() => void heartbeat(), 30000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [databaseProfile?.role, databaseUser?.id]);
+
   const savePartnerLogoFromProfile = async (event) => {
     event.preventDefault();
     setNotice('');

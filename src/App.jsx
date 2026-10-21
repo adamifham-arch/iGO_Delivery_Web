@@ -5813,41 +5813,83 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       <section style={panel}>
         <h3>Payments awaiting review</h3>
         {pendingPayments.length ? (
-          pendingPayments.map((payment) => (
-            <div
-              key={payment.id}
-              style={{ borderTop: '1px solid #eceef1', padding: '12px 0' }}
-            >
-              <strong>
-                {payment.partner} · {payment.invoiceId} ·{' '}
-                {money(payment.amount)}
-              </strong>
-              <p>
-                Reference {payment.reference} · {payment.transferDate} · Slip:{' '}
-                <PaymentSlipLink path={payment.slipPath} name={payment.slipName} />
-              </p>
-              <label>Amount verified received (MVR)
-                <input type="number" min="0.01" max={payment.amount} step="0.01" value={paymentReviewDrafts[payment.id]?.amount ?? payment.amount} onChange={(event) => setPaymentReviewDrafts((current) => ({ ...current, [payment.id]: { ...current[payment.id], amount: event.target.value } }))} />
-              </label>
-              <small>Any verified amount above the included invoice balances becomes usable partner credit.</small>
-              <label>Rejection reason
-                <textarea value={paymentReviewDrafts[payment.id]?.reason || ''} onChange={(event) => setPaymentReviewDrafts((current) => ({ ...current, [payment.id]: { ...current[payment.id], reason: event.target.value } }))} placeholder="Explain what needs to be corrected" />
-              </label>
-              <button
-                style={buttonStyle}
-                onClick={() => decidePayment(payment, 'confirmed')}
-              >
-                Approve verified amount
-              </button>{' '}
-              <button
-                style={{ ...buttonStyle, background: '#8a2d2d', opacity: paymentReviewDrafts[payment.id]?.reason?.trim() ? 1 : 0.55 }}
-                disabled={!paymentReviewDrafts[payment.id]?.reason?.trim()}
-                onClick={() => decidePayment(payment, 'rejected')}
-              >
-                Reject with reason
-              </button>
-            </div>
-          ))
+          pendingPayments.map((payment) => {
+            const invoiceLabels = payment.invoiceDues?.map((invoice) => invoice.invoiceId).filter(Boolean)
+              || String(payment.invoiceId || '').split(',').map((invoiceId) => invoiceId.trim()).filter(Boolean);
+            const compactInvoiceId = (invoiceId) => {
+              if (invoiceId.length <= 24) return invoiceId;
+              const invoiceNumber = invoiceId.match(/^(INV-\\d{8})-(.+)$/);
+              return invoiceNumber
+                ? invoiceNumber[1] + '-…' + invoiceNumber[2].slice(-6)
+                : invoiceId.slice(0, 12) + '…' + invoiceId.slice(-6);
+            };
+            return (
+              <article className="payment-review-card" key={payment.id}>
+                <header className="payment-review-header">
+                  <div className="payment-review-title">
+                    <strong className="payment-review-partner">{payment.partner || 'Partner'}</strong>
+                    <div className="payment-review-invoices" aria-label="Invoices included in this payment">
+                      <span className="payment-review-count">{invoiceLabels.length} invoice{invoiceLabels.length === 1 ? '' : 's'}</span>
+                      {invoiceLabels.slice(0, 2).map((invoiceId) => (
+                        <code key={invoiceId} title={invoiceId}>{compactInvoiceId(invoiceId)}</code>
+                      ))}
+                      {invoiceLabels.length > 2 && <span className="payment-review-more">+{invoiceLabels.length - 2} more</span>}
+                    </div>
+                  </div>
+                  <strong className="payment-review-amount">{money(payment.amount)}</strong>
+                </header>
+                {invoiceLabels.length > 0 && (
+                  <details className="payment-review-full-invoices">
+                    <summary>View full invoice numbers</summary>
+                    <ul>
+                      {invoiceLabels.map((invoiceId) => <li key={invoiceId}><code>{invoiceId}</code></li>)}
+                    </ul>
+                  </details>
+                )}
+                <div className="payment-review-metadata">
+                  <div><span>Reference</span><strong>{payment.reference || '—'}</strong></div>
+                  <div><span>Transfer date</span><strong>{payment.transferDate || '—'}</strong></div>
+                  <div><span>Payment slip</span><PaymentSlipLink path={payment.slipPath} name={payment.slipName} /></div>
+                </div>
+                <div className="payment-review-fields">
+                  <label>
+                    Amount verified received (MVR)
+                    <input
+                      type="number"
+                      min="0.01"
+                      max={payment.amount}
+                      step="0.01"
+                      value={paymentReviewDrafts[payment.id]?.amount ?? payment.amount}
+                      onChange={(event) => setPaymentReviewDrafts((current) => ({ ...current, [payment.id]: { ...current[payment.id], amount: event.target.value } }))}
+                    />
+                  </label>
+                  <label>
+                    Rejection reason
+                    <textarea
+                      rows={2}
+                      value={paymentReviewDrafts[payment.id]?.reason || ''}
+                      onChange={(event) => setPaymentReviewDrafts((current) => ({ ...current, [payment.id]: { ...current[payment.id], reason: event.target.value } }))}
+                      placeholder="Explain what needs to be corrected"
+                    />
+                  </label>
+                </div>
+                <p className="payment-review-hint">Any amount above the included invoice balances becomes usable partner credit.</p>
+                <div className="payment-review-actions">
+                  <button type="button" style={buttonStyle} onClick={() => decidePayment(payment, 'confirmed')}>
+                    Approve verified amount
+                  </button>
+                  <button
+                    type="button"
+                    style={{ ...buttonStyle, background: '#8a2d2d', opacity: paymentReviewDrafts[payment.id]?.reason?.trim() ? 1 : 0.55 }}
+                    disabled={!paymentReviewDrafts[payment.id]?.reason?.trim()}
+                    onClick={() => decidePayment(payment, 'rejected')}
+                  >
+                    Reject with reason
+                  </button>
+                </div>
+              </article>
+            );
+          })
         ) : (
           <p>None pending.</p>
         )}

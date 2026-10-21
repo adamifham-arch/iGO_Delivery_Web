@@ -2556,6 +2556,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 function ManagedIgoAccounts() {
   const [accounts, setAccounts] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -2594,7 +2595,13 @@ function ManagedIgoAccounts() {
   const managed = accounts.filter((account) =>
     account.status === 'approved' || account.status === 'suspended'
   );
-  const visible = managed.filter((account) => filter === 'all' || account.status === filter);
+  const visible = managed.filter((account) => {
+    const matchesFilter = filter === 'all' || account.status === filter;
+    const query = search.trim().toLowerCase();
+    const searchable = [account.name, account.contact_name, account.phone, account.email, account.type === 'Driver' ? 'Rider' : 'Partner']
+      .filter(Boolean).join(' ').toLowerCase();
+    return matchesFilter && (!query || searchable.includes(query));
+  });
 
   return (
     <section className="card managed-account-panel" style={{ marginBottom: '1.25rem', padding: 20 }}>
@@ -2605,11 +2612,22 @@ function ManagedIgoAccounts() {
         </div>
         <button type="button" className="secondary-btn" onClick={refresh} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
       </div>
-      <label>Show accounts<select value={filter} onChange={(event) => setFilter(event.target.value)}>
-        <option value="all">Approved and suspended</option>
-        <option value="approved">Approved</option>
-        <option value="suspended">Suspended</option>
-      </select></label>
+      <div style={{ display: 'flex', alignItems: 'end', gap: 12, flexWrap: 'wrap', margin: '12px 0' }}>
+        <label style={{ flex: '1 1 220px' }}>Search accounts
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Name, phone, or email"
+            aria-label="Search partner and rider accounts by name, phone, or email"
+          />
+        </label>
+        <label>Show accounts<select value={filter} onChange={(event) => setFilter(event.target.value)}>
+          <option value="all">Approved and suspended</option>
+          <option value="approved">Approved</option>
+          <option value="suspended">Suspended</option>
+        </select></label>
+      </div>
       {message && <p role="status" className="notice">{message}</p>}
       {error && <p role="alert" className="notice">{error}</p>}
       {loading ? <p>Loading accounts…</p> : visible.length ? (
@@ -2649,7 +2667,7 @@ function ManagedIgoAccounts() {
             );
           })}
         </div>
-      ) : <p>No {filter === 'all' ? 'approved or suspended' : filter} partner or rider accounts.</p>}
+      ) : <p>{search.trim() ? 'No partner or rider accounts match that search.' : `No ${filter === 'all' ? 'approved or suspended' : filter} partner or rider accounts.`}</p>}
     </section>
   );
 }

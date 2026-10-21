@@ -4637,6 +4637,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   const [withdrawalRequests, setWithdrawalRequests] = useState(() =>
     liveMode ? [] : readDriverWithdrawalRequests()
   );
+  const [paymentReviewDrafts, setPaymentReviewDrafts] = useState({});
   const refreshDatabaseFinance = async (notifyRoot = false) => {
     if (!liveMode) return;
     try {

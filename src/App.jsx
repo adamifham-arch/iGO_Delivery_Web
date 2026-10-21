@@ -3548,33 +3548,44 @@ function DriverWorkflowDashboard({
                   </span>
                 </div>
                 <div className="driver-delivery-details">
-                  <span>
-                    {p.area === 'Boat'
-                      ? p.boatName || p.address || 'Boat address not recorded'
-                      : p.address || p.area || 'Customer address not recorded'}
-                  </span>
-                  {p.phone && <a href={'tel:' + p.phone}>Call customer</a>}
-                  {(p.address || p.area || p.boatName) && (
-                    <a
-                      target="_blank"
-                      rel="noreferrer"
-                      href={mapLink(p.address || p.boatName || p.area)}
-                    >
-                      Navigate to customer
-                    </a>
-                  )}
-                  {p.partnerPhone && (
-                    <a href={'tel:' + p.partnerPhone}>Call partner</a>
-                  )}
-                  {p.partnerAddress && (
-                    <a
-                      target="_blank"
-                      rel="noreferrer"
-                      href={mapLink(p.partnerAddress)}
-                    >
-                      Navigate to pickup
-                    </a>
-                  )}
+                  <section className="driver-stop-group" aria-label="Partner pickup">
+                    <strong>Partner pickup</strong>
+                    <span>{p.partnerName || p.partner || 'Partner'}</span>
+                    {p.partnerAddress && <span>{p.partnerAddress}</span>}
+                    <div className="driver-stop-actions">
+                      {p.partnerPhone && <a href={'tel:' + p.partnerPhone}>Call partner</a>}
+                      {p.partnerAddress && (
+                        <a
+                          target="_blank"
+                          rel="noreferrer"
+                          href={mapLink(p.partnerAddress)}
+                        >
+                          Navigate to pickup
+                        </a>
+                      )}
+                    </div>
+                  </section>
+                  <section className="driver-stop-group" aria-label="Customer delivery">
+                    <strong>Customer delivery</strong>
+                    <span>{p.customer || 'Customer'}</span>
+                    <span>
+                      {p.area === 'Boat'
+                        ? p.boatName || p.address || 'Boat address not recorded'
+                        : p.address || p.area || 'Customer address not recorded'}
+                    </span>
+                    <div className="driver-stop-actions">
+                      {p.phone && <a href={'tel:' + p.phone}>Call customer</a>}
+                      {(p.address || p.area || p.boatName) && (
+                        <a
+                          target="_blank"
+                          rel="noreferrer"
+                          href={mapLink(p.address || p.boatName || p.area)}
+                        >
+                          Navigate to customer
+                        </a>
+                      )}
+                    </div>
+                  </section>
                 </div>
                 <div className="driver-delivery-footer">
                   <span>

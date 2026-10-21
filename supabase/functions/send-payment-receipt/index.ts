@@ -100,7 +100,7 @@ Deno.serve(async (request) => {
     if (!partner.email) throw new Error("This partner has no email address on their account.");
 
     const { data: previous } = await admin.from("payment_receipt_emails")
-      .select("status").eq("payment_id", paymentId).maybeSingle();
+      .select("status,attempts").eq("payment_id", paymentId).maybeSingle();
     if (previous?.status === "sent") return json({ sent: true, alreadySent: true });
 
     const invoiceIds = Array.isArray(payment.invoice_ids) ? payment.invoice_ids : [];
@@ -126,29 +126,39 @@ Deno.serve(async (request) => {
         Number(applied).toFixed(2) + "</td><td>MVR " + remaining.toFixed(2) + "</td></tr>";
     }).join("");
     const amount = Number(payment.verified_amount || 0).toFixed(2);
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + resendKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [partner.email],
-        subject: "iGO payment receipt · MVR " + amount,
-        html: "<div style='font-family:Arial,sans-serif;color:#172033;max-width:640px'>" +
-          "<h1>iGO payment receipt</h1><p>Hello " + escapeHtml(partner.name) +
-          ", your payment of <strong>MVR " + amount + "</strong> has been approved.</p>" +
-          "<p>Reference: " + escapeHtml(payment.reference_number || "—") + "</p>" +
-          "<table style='border-collapse:collapse;width:100%'><thead><tr><th align='left'>Invoice</th><th align='left'>Applied</th><th align='left'>Still due</th></tr></thead><tbody>" +
-          invoiceRows + "</tbody></table><p>Available credit: <strong>MVR " +
-          creditBalance.toFixed(2) + "</strong></p><p>Your itemized receipt is attached as a PDF.</p></div>",
-        attachments: [{ filename: "iGO-payment-receipt.pdf", content: toBase64(receipt) }],
-      }),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result?.message || "Email provider rejected the receipt.");
+    try {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + resendKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: fromEmail,
+          to: [partner.email],
+          subject: "iGO payment receipt · MVR " + amount,
+          html: "<div style='font-family:Arial,sans-serif;color:#172033;max-width:640px'>" +
+            "<h1>iGO payment receipt</h1><p>Hello " + escapeHtml(partner.name) +
+            ", your payment of <strong>MVR " + amount + "</strong> has been approved.</p>" +
+            "<p>Reference: " + escapeHtml(payment.reference_number || "—") + "</p>" +
+            "<table style='border-collapse:collapse;width:100%'><thead><tr><th align='left'>Invoice</th><th align='left'>Applied</th><th align='left'>Still due</th></tr></thead><tbody>" +
+            invoiceRows + "</tbody></table><p>Available credit: <strong>MVR " +
+            creditBalance.toFixed(2) + "</strong></p><p>Your itemized receipt is attached as a PDF.</p></div>",
+          attachments: [{ filename: "iGO-payment-receipt.pdf", content: toBase64(receipt) }],
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result?.message || "Email provider rejected the receipt.");
+    } catch (emailError) {
+      const message = emailError instanceof Error ? emailError.message : "Email provider rejected the receipt.";
+      await admin.from("payment_receipt_emails").upsert({
+        payment_id: paymentId, recipient: partner.email, status: "failed",
+        attempts: Number(previous?.attempts || 0) + 1,
+        last_error: message.slice(0, 500), updated_at: new Date().toISOString(),
+      }, { onConflict: "payment_id" });
+      throw emailError;
+    }
 
     await admin.from("payment_receipt_emails").upsert({
       payment_id: paymentId, recipient: partner.email, status: "sent",
-      attempts: Number(previous?.status === "failed" ? 2 : 1),
+      attempts: Number(previous?.attempts || 0) + 1,
       last_error: null, sent_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }, { onConflict: "payment_id" });
     return json({ sent: true });

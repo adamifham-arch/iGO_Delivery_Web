@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Component, useEffect, useRef, useState } from 'react';
 import './index.css';
 import { supabase, supabaseConfigured } from './supabase';
 import {
@@ -306,7 +306,37 @@ async function loadSuperadminLinkedProfiles(user, profile) {
   return { isSuperadmin: true, partner: partnerResult.data, driver: driverResult.data };
 }
 
-export default function App() {
+export default class SectionErrorBoundary extends Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Finance workspace render failed:', error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <section className="card" role="alert">
+          <h2>Finance workspace could not load</h2>
+          <p>Please refresh and try again.</p>
+          <details>
+            <summary>Technical details</summary>
+            <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+              {String(this.state.error?.message || this.state.error)}
+            </pre>
+          </details>
+        </section>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function App() {
   const customerNameInputRef = useRef(null);
   const [navigation, setNavigation] = useState({
     page: 'Overview',
@@ -1866,7 +1896,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             page === 'Accounts & Finance' ||
             page === 'Accounts') &&
             workspace === 'Admin' && (
-              <FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} />
+              <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} /></SectionErrorBoundary>
             )}
 
           {page === 'Approvals' && workspace === 'Admin' && (
@@ -2576,7 +2606,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               <div className="simple-list">
                 <h2>Invoices and payments</h2>
                 <p>{databaseProfile ? 'Official invoices and payment status from your account.' : 'Official records appear after database setup.'}</p>
-                <FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} />
+                <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} /></SectionErrorBoundary>
               </div>
             </>
           )}

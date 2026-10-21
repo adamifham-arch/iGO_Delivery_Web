@@ -29,6 +29,7 @@ import {
   setAccountApproval,
   requestWithdrawal as requestDatabaseWithdrawal,
   submitInvoicePayment,
+  sendPaymentReceipt,
   uploadIgoFile,
   updatePackage,
 } from './igoDatabase';
@@ -2866,6 +2867,7 @@ function AdminOperations({ packages, onUpdate, liveMode = false }) {
   const [filter, setFilter] = useState('All');
   const [area, setArea] = useState('All');
   const [drafts, setDrafts] = useState({});
+  const [paymentReviewDrafts, setPaymentReviewDrafts] = useState({});
   const [feedback, setFeedback] = useState('');
   const statuses = [
     'Pending',
@@ -4614,6 +4616,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         cutoff: records.invoiceCutoff || current.cutoff,
         invoices: records.invoices,
         payments: records.payments,
+        partnerCredits: records.partnerCredits,
         expenses: records.expenses.map((row) => ({ id: row.id, date: row.expense_date, category: row.category, description: row.description, paidTo: row.paid_to, amount: Number(row.amount || 0), reference: row.reference || '', recordedAt: row.created_at })),
         transferAccountName: records.bankAccounts.find((row) => row.active)?.account_name || '',
         transferAccountNumber: records.bankAccounts.find((row) => row.active)?.account_number || '',
@@ -4919,16 +4922,18 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   const submitPayment = async (event, invoices) => {
     event.preventDefault();
     const payable = invoices.filter((invoice) => invoice.amount - getPaid(invoice.id) > 0);
-    const amount = payable.reduce((sum, invoice) => sum + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
-    const invoiceIds = payable.map((invoice) => invoice.id);
+    const dueTotal = payable.reduce((sum, invoice) => sum + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
     const paymentKey = 'all-outstanding-invoices';
     const draft = drafts[paymentKey] || {};
-    if (!draft.slipName || amount <= 0) {
-      setNotice(amount <= 0 ? 'There is no outstanding balance to pay.' : 'Attach the payment slip before submitting.');
+    const amount = Number(draft.amount ?? dueTotal);
+    if (!draft.slipName || dueTotal <= 0 || !Number.isFinite(amount) || amount <= 0) {
+      setNotice(dueTotal <= 0 ? 'There is no outstanding balance to pay.' : !draft.slipName ? 'Attach the payment slip before submitting.' : 'Enter the amount you transferred.');
       return;
     }
-    const reference = (draft.reference || 'Full invoice payment').trim();
-    const note = 'Full payment for invoices: ' + invoiceIds.join(', ');
+    const reference = (draft.reference || 'Payment for all outstanding invoices').trim();
+    const invoiceIds = payable.map((invoice) => invoice.id);
+    const invoiceLabels = payable.map((invoice) => invoice.id);
+    const note = 'Payment submitted · Invoices included: ' + invoiceLabels.join(', ');
     if (liveMode) {
       try {
         const partnerId = await getCurrentPartnerId();
@@ -4936,8 +4941,9 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           partnerId,
           invoices: payable.map((invoice) => ({
             invoiceId: invoice.dbId,
-            amount: Math.max(0, invoice.amount - getPaid(invoice.id)),
+            label: invoice.id,
           })),
+          amount,
           reference,
           transferDate: draft.transferDate || localDateKey(new Date()),
           note,
@@ -4945,7 +4951,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         });
         await refreshDatabaseFinance(true);
         setDrafts((current) => ({ ...current, [paymentKey]: {} }));
-        setNotice('Full outstanding balance submitted to admin for review.');
+        setNotice('Payment submitted for all listed invoices and sent to admin for review.');
       } catch (error) {
         setNotice(error.message || 'Could not submit the payment.');
       }
@@ -4954,10 +4960,11 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     const payment = {
       id: 'PAY-' + Date.now(),
       invoiceId: invoiceIds.join(', '),
-      allocations: payable.map((invoice) => ({
+      invoiceDues: payable.map((invoice) => ({
         invoiceId: invoice.id,
         amount: Math.max(0, invoice.amount - getPaid(invoice.id)),
       })),
+      allocations: [],
       partner: payable[0]?.partner || 'Style Hub',
       amount,
       reference,
@@ -4980,37 +4987,66 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     );
   };
   const decidePayment = async (payment, status) => {
+    const reviewDraft = paymentReviewDrafts[payment.id] || {};
+    const verifiedAmount = Number(reviewDraft.amount ?? payment.amount);
+    const rejectionReason = (reviewDraft.reason || '').trim();
+    if (status === 'rejected' && !rejectionReason) {
+      setNotice('Enter a reason before rejecting this payment.');
+      return;
+    }
+    if (status === 'confirmed' && (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0 || verifiedAmount > payment.amount)) {
+      setNotice('Enter the amount actually received, up to the amount reported by the partner.');
+      return;
+    }
     if (liveMode) {
       try {
-        await reviewPayment(payment.id, status);
+        await reviewPayment(payment.id, status, verifiedAmount, rejectionReason);
         await refreshDatabaseFinance(true);
-        setNotice(status === 'confirmed' ? 'Payment approved and allocated to the invoice.' : 'Payment rejected.');
+        if (status === 'confirmed') {
+          try {
+            await sendPaymentReceipt(payment.id);
+            setNotice('Payment approved. The partner has been notified and emailed an itemized receipt.');
+          } catch (emailError) {
+            setNotice('Payment approved and partner notified, but the receipt email failed: ' + (emailError.message || 'Email service unavailable.'));
+          }
+        } else {
+          setNotice('Payment rejected. The partner has been notified with the rejection reason.');
+        }
+        setPaymentReviewDrafts((current) => { const next = { ...current }; delete next[payment.id]; return next; });
       } catch (error) {
         setNotice(error.message || 'Could not update payment.');
       }
       return;
     }
+    let allocations = [];
+    let creditAmount = 0;
+    if (status === 'confirmed') {
+      let remaining = verifiedAmount;
+      allocations = (payment.invoiceDues || []).map((invoice) => {
+        const applied = Math.min(remaining, invoice.amount);
+        remaining -= applied;
+        return { invoiceId: invoice.invoiceId, amount: applied };
+      }).filter((allocation) => allocation.amount > 0);
+      creditAmount = remaining;
+    }
     setBilling((current) => ({
       ...current,
       payments: current.payments.map((item) =>
         item.id === payment.id
-          ? { ...item, status, verifiedAt: new Date().toISOString() }
+          ? { ...item, status, verifiedAmount: status === 'confirmed' ? verifiedAmount : 0, allocations, creditAmount, rejectionReason, verifiedAt: new Date().toISOString() }
           : item
       ),
       notifications: addNotification(
         current.notifications,
         status === 'confirmed' ? 'Payment approved' : 'Payment needs attention',
-        payment.invoiceId +
-          ' · ' +
-          payment.partner +
-          ' · ' +
-          money(payment.amount)
+        payment.invoiceId + ' · ' + payment.partner + ' · ' + money(verifiedAmount) + (rejectionReason ? ' · ' + rejectionReason : '')
       ),
     }));
+    setPaymentReviewDrafts((current) => { const next = { ...current }; delete next[payment.id]; return next; });
     setNotice(
       status === 'confirmed'
-        ? 'Demo payment approved. The invoice balance is updated in this browser.'
-        : 'Demo payment marked for partner follow-up.'
+        ? 'Demo payment approved. Invoice balances and any partner credit are updated in this browser.'
+        : 'Demo payment rejected. The reason is included in the partner notification.'
     );
   };
   const invoiceList = (partnerMode) => {
@@ -5128,6 +5164,9 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     const partnerInvoices = liveMode ? billing.invoices : billing.invoices.filter((invoice) => invoice.partner === 'Style Hub');
     const payableInvoices = partnerInvoices.filter((invoice) => getInvoiceStatus(invoice) !== 'Paid');
     const totalOutstanding = partnerInvoices.reduce((total, invoice) => total + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
+    const partnerCredit = liveMode
+      ? Number(billing.partnerCredits?.[partnerInvoices[0]?.partnerId] || 0)
+      : billing.payments.filter((payment) => payment.partner === 'Style Hub' && payment.status === 'confirmed').reduce((sum, payment) => sum + Number(payment.creditAmount || 0), 0);
     return (
       <section style={{ paddingBottom: 28 }}>
         <p className="approval-kicker">PARTNER WORKSPACE · INVOICES</p>
@@ -5175,11 +5214,13 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
 
           {totalOutstanding > 0 ? (
             <form onSubmit={(event) => submitPayment(event, payableInvoices)} style={{ display: 'grid', gap: 10 }}>
-              <p style={{ fontSize: 13, margin: 0 }}>Pay the full outstanding balance of <strong>{money(totalOutstanding)}</strong> for all listed invoices.</p>
+              <p style={{ fontSize: 13, margin: 0 }}>All outstanding invoices are included. Enter the total actually transferred; the admin will verify it against the payment slip.</p>
+              {partnerCredit > 0 && <p style={{ margin: 0 }}>Usable partner credit: <strong>{money(partnerCredit)}</strong>. Credit is applied automatically to new invoices.</p>}
+              <label>Amount transferred (MVR)<input required type="number" min="0.01" step="0.01" value={drafts['all-outstanding-invoices']?.amount ?? totalOutstanding} onChange={(event) => setDrafts((current) => ({ ...current, 'all-outstanding-invoices': { ...current['all-outstanding-invoices'], amount: event.target.value } }))} /></label>
               <label>Payment slip<input required type="file" accept="image/*,application/pdf" onChange={(event) => setDrafts((current) => ({ ...current, 'all-outstanding-invoices': { ...current['all-outstanding-invoices'], slipName: event.target.files?.[0]?.name || '', file: event.target.files?.[0] || null } }))} /></label>
-              <button style={buttonStyle} type="submit">Submit full payment for review</button>
+              <button style={buttonStyle} type="submit">Submit payment for review</button>
             </form>
-          ) : <p>There are no outstanding invoices to pay.</p>}
+          ) : <p>There are no outstanding invoices to pay.{partnerCredit > 0 ? ' Your usable credit will apply automatically to new invoices.' : ''}</p>}
 
           {viewingInvoice && (
             <div
@@ -5754,17 +5795,25 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
                 Reference {payment.reference} · {payment.transferDate} · Slip:{' '}
                 <PaymentSlipLink path={payment.slipPath} name={payment.slipName} />
               </p>
+              <label>Amount verified received (MVR)
+                <input type="number" min="0.01" max={payment.amount} step="0.01" value={paymentReviewDrafts[payment.id]?.amount ?? payment.amount} onChange={(event) => setPaymentReviewDrafts((current) => ({ ...current, [payment.id]: { ...current[payment.id], amount: event.target.value } }))} />
+              </label>
+              <small>Any verified amount above the included invoice balances becomes usable partner credit.</small>
+              <label>Rejection reason
+                <textarea value={paymentReviewDrafts[payment.id]?.reason || ''} onChange={(event) => setPaymentReviewDrafts((current) => ({ ...current, [payment.id]: { ...current[payment.id], reason: event.target.value } }))} placeholder="Explain what needs to be corrected" />
+              </label>
               <button
                 style={buttonStyle}
                 onClick={() => decidePayment(payment, 'confirmed')}
               >
-                Approve payment
+                Approve verified amount
               </button>{' '}
               <button
-                style={{ ...buttonStyle, background: '#8a2d2d' }}
+                style={{ ...buttonStyle, background: '#8a2d2d', opacity: paymentReviewDrafts[payment.id]?.reason?.trim() ? 1 : 0.55 }}
+                disabled={!paymentReviewDrafts[payment.id]?.reason?.trim()}
                 onClick={() => decidePayment(payment, 'rejected')}
               >
-                Reject for follow-up
+                Reject with reason
               </button>
             </div>
           ))

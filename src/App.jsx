@@ -5733,7 +5733,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         )}
       </section>
       <section style={panel}>
-        <h3>Monthly financial report · current month</h3>
+        <h3>Monthly financial overview</h3>
         <div className="stats-grid">
           <article className="stat-card">
             <span>Delivered package value</span>

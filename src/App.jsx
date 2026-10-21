@@ -3265,7 +3265,7 @@ function DriverWorkflowDashboard({
   const active = assigned.filter(
     (p) => !['Delivered', 'Cancelled'].includes(p.status)
   );
-  const delivered = assigned.filter((p) => p.status === 'Delivered'); const pendingPickups = active.filter((p) => p.status === 'Pending' && !deferredPickupIds.includes(p.id)); const inDelivery = active.filter((p) => p.status !== 'Pending'); const deferredPending = active.filter((p) => p.status === 'Pending' && deferredPickupIds.includes(p.id)); const routePackages = routeTab === 'delivered' ? delivered : routeTab === 'delivery' ? inDelivery : pendingPickups;
+  const delivered = assigned.filter((p) => p.status === 'Delivered'); const pendingPickups = active.filter((p) => p.status === 'Pending' && !deferredPickupIds.includes(p.id)); const inDelivery = active.filter((p) => p.status !== 'Pending'); const deferredPending = active.filter((p) => p.status === 'Pending' && deferredPickupIds.includes(p.id)); useEffect(() => { if (routeTab === 'pickup' && pendingPickups.length === 0 && inDelivery.length > 0) setRouteTab('delivery'); }, [routeTab, pendingPickups.length, inDelivery.length]); const routePackages = routeTab === 'delivered' ? delivered : routeTab === 'delivery' ? inDelivery : pendingPickups;
   const earned = delivered.reduce(
     (total, p) => total + ((Number(p.fee) || 0) * rate) / 100,
     0
@@ -3709,7 +3709,7 @@ function DriverWorkflowDashboard({
           <p>{routeTab === 'delivered' ? 'No delivered packages yet.' : routeTab === 'delivery' ? (pendingPickups.length || deferredPending.length ? 'No deliveries in this batch. Return to pickups when ready.' : 'No deliveries in progress.') : deferredPending.length ? 'No packages remain in this pickup run. Restore skipped packages to continue.' : 'No packages waiting for pickup.'}</p>
         )}
       </section>
-      <section id="driver-earnings" className="driver-section">
+      {inDelivery.length > 0 && <button type="button" className="driver-delivery-fab" aria-label={`Open deliveries, ${inDelivery.length} packages awaiting delivery`} title="Open pending deliveries" onClick={() => { setRouteTab('delivery'); document.getElementById('driver-my-route')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} style={{position:'fixed',right:16,bottom:82,zIndex:30,display:'flex',alignItems:'center',gap:9,padding:'10px 14px',border:'none',borderRadius:999,background:'#155b43',color:'#fff',boxShadow:'0 8px 24px rgba(0,0,0,.2)',fontWeight:700,cursor:'pointer'}}><span>Deliveries</span><span aria-hidden="true" style={{width:10,height:10,borderRadius:'50%',background:'#ef4444',boxShadow:'0 0 0 2px #155b43'}} /></button>}<section id="driver-earnings" className="driver-section">
         <div className="driver-section-heading">
           <div>
             <p className="driver-kicker">EARNINGS</p>

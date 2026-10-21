@@ -4171,23 +4171,10 @@ function SuperadminUserManagementAccess() {
 }
 
 function SuperadminUserManagementPanel() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [showInviteForm, setShowInviteForm] = useState(false);
-
-  const loadUsers = async () => {
-    setLoading(true);
-    setError('');
-    const { data, error: loadError } = await supabase.rpc('list_igo_user_accounts');
-    if (loadError) setError(loadError.message);
-    else setUsers(data || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { loadUsers(); }, []);
 
   const inviteUser = async (event) => {
     event.preventDefault();
@@ -4211,7 +4198,6 @@ function SuperadminUserManagementPanel() {
       setMessage('Invitation sent to ' + data.email + '. ' + (data.approval_status === 'pending' ? 'The account will need admin approval.' : 'The admin account is ready after the invite is accepted.'));
       form.reset();
       setShowInviteForm(false);
-      await loadUsers();
     }
     setBusy(false);
   };
@@ -4247,19 +4233,6 @@ function SuperadminUserManagementPanel() {
       )}
       {message && <p role="status" className="notice">{message}</p>}
       {error && <p role="alert" className="notice">{error}</p>}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem' }}>
-        <h4>Accounts</h4>
-        <button type="button" className="secondary-btn" onClick={loadUsers} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button>
-      </div>
-      {loading && <p>Loading accounts…</p>}
-      {!loading && !error && users.length === 0 && <p>No user accounts found.</p>}
-      {!loading && users.map((item) => (
-        <article key={item.user_id} style={{ padding: '0.85rem 0', borderBottom: '1px solid #e5e7eb' }}>
-          <strong>{item.full_name || 'Name not provided'}</strong>
-          <p style={{ margin: '0.3rem 0', color: '#64748b' }}>{item.email} · {item.role} · {item.approval_status}</p>
-          <p style={{ margin: '0.3rem 0', color: '#64748b' }}>{item.phone || 'No phone number'}{item.partner_name ? ' · ' + item.partner_name : ''}{item.address ? ' · ' + item.address : ''}</p>
-        </article>
-      ))}
     </section>
   );
 }

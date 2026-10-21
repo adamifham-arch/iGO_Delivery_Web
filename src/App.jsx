@@ -3204,7 +3204,7 @@ function DriverWorkflowDashboard({
     }
   });
   const [selected, setSelected] = useState([]);
-  const [activePartner, setActivePartner] = useState(''); const [routeTab, setRouteTab] = useState('active');
+  const [activePartner, setActivePartner] = useState(''); const [routeTab, setRouteTab] = useState('pickup'); const [deferredPickupIds, setDeferredPickupIds] = useState([]);
   const [proofs, setProofs] = useState({});
   const [reasons, setReasons] = useState({});
   const [rate, setRate] = useState(() => {
@@ -3265,7 +3265,7 @@ function DriverWorkflowDashboard({
   const active = assigned.filter(
     (p) => !['Delivered', 'Cancelled'].includes(p.status)
   );
-  const delivered = assigned.filter((p) => p.status === 'Delivered'); const routePackages = routeTab === 'delivered' ? delivered : active;
+  const delivered = assigned.filter((p) => p.status === 'Delivered'); const pendingPickups = active.filter((p) => p.status === 'Pending' && !deferredPickupIds.includes(p.id)); const inDelivery = active.filter((p) => p.status !== 'Pending'); const deferredPending = active.filter((p) => p.status === 'Pending' && deferredPickupIds.includes(p.id)); const routePackages = routeTab === 'delivered' ? delivered : routeTab === 'delivery' ? inDelivery : pendingPickups;
   const earned = delivered.reduce(
     (total, p) => total + ((Number(p.fee) || 0) * rate) / 100,
     0
@@ -3534,7 +3534,7 @@ function DriverWorkflowDashboard({
           </div>
           <span className="driver-count">{active.length} active</span>
         </div>
-        <div role="tablist" aria-label="Assigned package status" style={{ display: 'flex', gap: 8, margin: '12px 0' }}><button type="button" role="tab" aria-selected={routeTab === 'active'} className="secondary-btn" onClick={() => setRouteTab('active')}>Pending &amp; active ({active.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivered'} className="secondary-btn" onClick={() => setRouteTab('delivered')}>Delivered ({delivered.length})</button></div>{routePackages.length ? (
+        <div role="tablist" aria-label="Package trip stages" style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}><button type="button" role="tab" aria-selected={routeTab === 'pickup'} className="secondary-btn" onClick={() => setRouteTab('pickup')}>Pickups ({pendingPickups.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivery'} className="secondary-btn" onClick={() => setRouteTab('delivery')}>Deliveries ({inDelivery.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivered'} className="secondary-btn" onClick={() => setRouteTab('delivered')}>Delivered ({delivered.length})</button></div>{routeTab === 'delivery' && pendingPickups.length > 0 && <button type="button" className="secondary-btn" onClick={() => setRouteTab('pickup')}>Return to pickups ({pendingPickups.length})</button>}{routeTab === 'pickup' && inDelivery.length > 0 && <button type="button" className="driver-action" onClick={() => setRouteTab('delivery')}>Start delivery run ({inDelivery.length})</button>}{deferredPending.length > 0 && <button type="button" className="secondary-btn" onClick={() => setDeferredPickupIds([])}>Restore {deferredPending.length} skipped package(s)</button>}{routePackages.length ? (
           <div className="driver-delivery-list">
             {routePackages.map((p) => (
               <article className="driver-delivery-card" key={p.id}>
@@ -3597,20 +3597,7 @@ function DriverWorkflowDashboard({
                       ({rate}% of MVR {p.fee})
                     </small>
                   </span>
-                  {p.status === 'Pending' && (
-                    <button
-                      type="button"
-                      className="driver-action"
-                      onClick={() =>
-                        onUpdate(p.id, {
-                          status: 'Picked Up',
-                          pickedUpAt: new Date().toISOString(),
-                        })
-                      }
-                    >
-                      Confirm package collected
-                    </button>
-                  )}
+                  {p.status === 'Pending' && (<><button type="button" className="driver-action" onClick={() => onUpdate(p.id, { status: 'Picked Up', pickedUpAt: new Date().toISOString() })}>Confirm package collected</button><button type="button" className="secondary-btn" onClick={() => setDeferredPickupIds((ids) => ids.includes(p.id) ? ids : [...ids, p.id])}>Leave for next trip</button></>)}
                   {p.status === 'Picked Up' && (
                     <button
                       type="button"
@@ -3719,7 +3706,7 @@ function DriverWorkflowDashboard({
             ))}
           </div>
         ) : (
-          <p>{routeTab === 'delivered' ? 'No delivered packages yet.' : 'No pending pickups or deliveries.'}</p>
+          <p>{routeTab === 'delivered' ? 'No delivered packages yet.' : routeTab === 'delivery' ? (pendingPickups.length || deferredPending.length ? 'No deliveries in this batch. Return to pickups when ready.' : 'No deliveries in progress.') : deferredPending.length ? 'No packages remain in this pickup run. Restore skipped packages to continue.' : 'No packages waiting for pickup.'}</p>
         )}
       </section>
       <section id="driver-earnings" className="driver-section">

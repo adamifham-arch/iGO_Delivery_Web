@@ -2612,8 +2612,8 @@ function ManagedIgoAccounts() {
     <section className="card managed-account-panel" style={{ marginBottom: '1.25rem', padding: 20 }}>
       <div className="ops-heading">
         <div>
-          <h2>Partner and rider accounts</h2>
-          <p>Suspend approved accounts or restore access to suspended accounts.</p>
+          <h2>User accounts</h2>
+          <p>Find partners, riders, and admins. Suspend or restore partner and rider access.</p>
         </div>
         <button type="button" className="secondary-btn" onClick={refresh} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
       </div>

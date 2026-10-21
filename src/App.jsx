@@ -306,7 +306,7 @@ async function loadSuperadminLinkedProfiles(user, profile) {
   return { isSuperadmin: true, partner: partnerResult.data, driver: driverResult.data };
 }
 
-export default class SectionErrorBoundary extends Component {
+class SectionErrorBoundary extends Component {
   state = { error: null };
 
   static getDerivedStateFromError(error) {
@@ -336,7 +336,7 @@ export default class SectionErrorBoundary extends Component {
   }
 }
 
-function App() {
+export default function App() {
   const customerNameInputRef = useRef(null);
   const [navigation, setNavigation] = useState({
     page: 'Overview',

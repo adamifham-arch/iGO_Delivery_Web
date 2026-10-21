@@ -242,19 +242,24 @@ export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
   };
 }
 
-export async function submitInvoicePayment({ partnerId, invoiceId = null, amount, reference, transferDate, note, file }) {
+export async function submitInvoicePayment({ partnerId, invoices, reference, transferDate, note, file }) {
   const client = requireClient();
-  const path = await uploadIgoFile(file, 'receipts', invoiceId || 'full-balance');
-  const { data, error } = await client.from('payments').insert({
+  if (!Array.isArray(invoices) || invoices.length === 0 || invoices.some((invoice) => !invoice.invoiceId || Number(invoice.amount) <= 0)) {
+    throw new Error('No outstanding invoices were provided for payment.');
+  }
+  const batchReference = (reference || 'Full invoice payment').trim();
+  const path = await uploadIgoFile(file, 'receipts', 'full-balance-' + Date.now());
+  const paymentRows = invoices.map((invoice) => ({
     partner_id: partnerId,
-    target_invoice_id: invoiceId,
-    amount,
-    reference_number: reference,
+    target_invoice_id: invoice.invoiceId,
+    amount: Number(invoice.amount),
+    reference_number: batchReference,
     transfer_date: transferDate || new Date().toISOString().slice(0, 10),
-    note,
+    note: (note || 'Full balance payment') + ' · ' + invoice.invoiceId,
     receipt_path: path,
     status: 'pending_verification',
-  }).select().single();
+  }));
+  const { data, error } = await client.from('payments').insert(paymentRows).select();
   if (error) throw error;
   return data;
 }

@@ -6724,3 +6724,17 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   border-color: #475569 !important;
   color: #f8fafc !important;
 }
+
+  
+
+/* Keep the driver waiting count a compact circular badge. */
+.app[data-theme="night"] .main .driver-notification-badge {
+  display: inline-grid !important;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px !important;
+  line-height: 1;
+  vertical-align: middle;
+}

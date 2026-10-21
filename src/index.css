@@ -6331,3 +6331,56 @@ article.driver-delivery-card > a:hover { background: #e8f2ef; border-color: #b8d
 article.driver-delivery-card > button { min-height: 42px; margin-top: 12px; padding: 10px 16px; border-radius: 12px; }
 article.driver-delivery-card > details { margin-top: 8px; }
 article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 600; cursor: pointer; }
+
+
+/* Group driver route actions by pickup and delivery stop. */
+.driver-delivery-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.driver-stop-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e3e7ec;
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.driver-stop-group > strong {
+  color: #202124;
+}
+
+.driver-stop-group > span {
+  overflow-wrap: anywhere;
+}
+
+.driver-stop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.driver-stop-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #d8e0e8;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .driver-delivery-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

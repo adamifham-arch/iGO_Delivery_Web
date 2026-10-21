@@ -95,12 +95,12 @@ export function packageToDb(entry) {
   return result;
 }
 
-export async function loadPackages() {
+export async function loadPackages({ partnerId, driverId } = {}) {
   const client = requireClient();
-  const { data, error } = await client
-    .from('packages')
-    .select('*,partners(name,phone,address,logo_data_url),drivers(name,phone)')
-    .order('created_at', { ascending: false });
+  let query = client.from('packages').select('*,partners(name,phone,address,logo_data_url),drivers(name,phone)').order('created_at', { ascending: false });
+  if (partnerId) query = query.eq('partner_id', partnerId);
+  if (driverId) query = query.eq('assigned_driver_id', driverId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(packageFromDb);
 }
@@ -165,6 +165,12 @@ export async function getCurrentPartnerId() {
   if (!data) throw new Error('This account has no approved partner profile.');
   return data;
 }
+export async function getCurrentPartnerIdOptional() {
+  const { data, error } = await requireClient().rpc('current_partner_id');
+  if (error) throw error;
+  return data || null;
+}
+
 
 export async function getCurrentDriverId() {
   const { data, error } = await requireClient().rpc('current_driver_id');
@@ -172,6 +178,23 @@ export async function getCurrentDriverId() {
   if (!data) throw new Error('This account has no approved driver profile.');
   return data;
 }
+export async function ensureAdminDriverWorkspace() {
+  const { data, error } = await requireClient().rpc('ensure_admin_driver_workspace');
+  if (error) throw error;
+  if (!data) throw new Error('Could not prepare this admin driver workspace.');
+  return data;
+}
+
+export async function setupAdminPartnerWorkspace({ businessName, address }) {
+  const { data, error } = await requireClient().rpc('setup_admin_partner_workspace', {
+    p_business_name: businessName,
+    p_address: address,
+  });
+  if (error) throw error;
+  if (!data) throw new Error('Could not save partner workspace details.');
+  return data;
+}
+
 
 export async function getDriverIdByName(name) {
   const { data, error } = await requireClient().from('drivers').select('id').eq('name', name).maybeSingle();
@@ -180,17 +203,25 @@ export async function getDriverIdByName(name) {
   return data.id;
 }
 
-export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
+export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}) {
   const isAdmin = workspace === 'Admin';
   const client = requireClient();
+  let invoiceQuery = client.from('invoices').select('*,partners(name),invoice_items(id,package_id,amount,packages(package_number,customer_name,customer_phone,address,area,item_description,delivery_fee))').order('created_at', { ascending: false });
+  let paymentQuery = client.from('payments').select('*,partners(name),invoices!payments_target_invoice_id_fkey(invoice_number),payment_allocations(invoice_id,amount,invoices(invoice_number))').order('submitted_at', { ascending: false });
+  let creditQuery = client.from('partner_credit_ledger').select('partner_id,amount');
+  if (partnerId) {
+    invoiceQuery = invoiceQuery.eq('partner_id', partnerId);
+    paymentQuery = paymentQuery.eq('partner_id', partnerId);
+    creditQuery = creditQuery.eq('partner_id', partnerId);
+  }
   const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult] = await Promise.all([
-    client.from('invoices').select('*,partners(name),invoice_items(id,package_id,amount,packages(package_number,customer_name,customer_phone,address,area,item_description,delivery_fee))').order('created_at', { ascending: false }),
-    client.from('payments').select('*,partners(name),invoices!payments_target_invoice_id_fkey(invoice_number),payment_allocations(invoice_id,amount,invoices(invoice_number))').order('submitted_at', { ascending: false }),
+    invoiceQuery,
+    paymentQuery,
     isAdmin ? client.from('business_expenses').select('*').order('expense_date', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     isAdmin ? client.from('driver_withdrawal_requests').select('*,drivers(name)').order('requested_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     client.from('bank_accounts').select('*').order('created_at', { ascending: false }),
     client.from('partners').select('id,invoice_cutoff').order('created_at', { ascending: false }),
-    client.from('partner_credit_ledger').select('partner_id,amount'),
+    creditQuery,
   ]);
   for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult]) {
     if (result.error) throw result.error;

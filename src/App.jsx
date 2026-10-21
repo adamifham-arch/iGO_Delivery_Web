@@ -4671,8 +4671,10 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         const partnerId = await getCurrentPartnerId();
         await submitInvoicePayment({
           partnerId,
-          invoiceId: null,
-          amount,
+          invoices: payable.map((invoice) => ({
+            invoiceId: invoice.dbId,
+            amount: Math.max(0, invoice.amount - getPaid(invoice.id)),
+          })),
           reference,
           transferDate: draft.transferDate || localDateKey(new Date()),
           note,

@@ -6869,4 +6869,9 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     min-width: 42px;
     height: 42px;
   }
+
+  header.topbar > .dashboard-logo img {
+    width: 36px !important;
+    height: 36px;
+  }
 }

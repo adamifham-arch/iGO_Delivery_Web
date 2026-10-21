@@ -3550,7 +3550,7 @@ function DriverWorkflowDashboard({
                 <div className="driver-delivery-details">
                   <section className="driver-stop-group" aria-label="Partner pickup">
                     <strong>Partner pickup</strong>
-                    <span>{p.partnerName || p.partner || 'Partner'}</span>
+                    <span>{p.partnerName || p.partner || 'Partner'}{p.partnerPhone ? ' · ' + p.partnerPhone : ''}</span>
                     {p.partnerAddress && <span>{p.partnerAddress}</span>}
                     <div className="driver-stop-actions">
                       {p.partnerPhone && <a href={'tel:' + p.partnerPhone}>Call partner</a>}
@@ -3567,7 +3567,7 @@ function DriverWorkflowDashboard({
                   </section>
                   <section className="driver-stop-group" aria-label="Customer delivery">
                     <strong>Customer delivery</strong>
-                    <span>{p.customer || 'Customer'}</span>
+                    <span>{p.customer || 'Customer'}{p.phone ? ' · ' + p.phone : ''}</span>
                     <span>
                       {p.area === 'Boat'
                         ? p.boatName || p.address || 'Boat address not recorded'

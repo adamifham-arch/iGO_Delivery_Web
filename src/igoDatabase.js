@@ -99,7 +99,11 @@ export async function loadPackages({ partnerId, driverId } = {}) {
   const client = requireClient();
   let query = client.from('packages').select('*,partners(name,phone,address,logo_data_url),drivers(name,phone)').order('created_at', { ascending: false });
   if (partnerId) query = query.eq('partner_id', partnerId);
-  if (driverId) query = query.eq('assigned_driver_id', driverId);
+  if (driverId) {
+    query = query.or(
+      `assigned_driver_id.eq.${driverId},and(assigned_driver_id.is.null,status.eq.awaiting_collection)`
+    );
+  }
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(packageFromDb);

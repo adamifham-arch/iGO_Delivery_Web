@@ -2569,7 +2569,7 @@ function ManagedIgoAccounts() {
     try {
       setAccounts(await loadApprovalAccounts());
     } catch (loadError) {
-      setError(loadError.message || 'Could not load partner and rider accounts.');
+      setError(loadError.message || 'Could not load user accounts.');
     } finally {
       setLoading(false);
     }
@@ -2664,7 +2664,7 @@ function ManagedIgoAccounts() {
               >
                 <div className="managed-account-info" style={{ flex: '1 1 230px', minWidth: 0 }}>
                   <strong>{account.name || account.contact_name || 'Unnamed account'}</strong>
-                  <p style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>{account.type === 'Driver' ? 'Rider' : 'Partner'} · Phone: {account.phone || 'Not provided'}{account.email ? ` · ${account.email}` : ''}</p>
+                  <p style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>{account.type === 'Driver' ? 'Rider' : account.type} · Phone: {account.phone || 'Not provided'}{account.email ? ` · ${account.email}` : ''}</p>
                 </div>
                 <span
                   className={`status status-${statusClass(account.status)}`}

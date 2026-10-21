@@ -1593,21 +1593,21 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 
           {showMobileNav && (
             <div className="mobile-nav-dropdown">
-              {navItems.map(([label, icon]) => (
+              {navItems.map(([name, icon, displayLabel = name]) => (
                 <button
-                  key={label}
+                  key={name}
                   onClick={() => {
-                    setPage(label);
-                    if (label === 'Packages') {
+                    setPage(name);
+                    if (name === 'Packages') {
                       setStatusFilter('All');
                       setSearch('');
                     }
                     setNotice('');
-                    setShowForm(label === 'Register Package');
+                    setShowForm(name === 'Register Package');
                     setShowMobileNav(false);
                   }}
                 >
-                  {icon} {label}
+                  {icon} {displayLabel}
                 </button>
               ))}
             </div>

@@ -4299,6 +4299,10 @@ function NotificationCenter({ onNavigate }) {
 
 function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = false }) {
   const [activeFinanceTab, setActiveFinanceTab] = useState('Invoices');
+  const [overviewMonth, setOverviewMonth] = useState(() => {
+    const now = new Date();
+    return String(now.getFullYear()) + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  });
   const storageKey = 'igo-finance-workflow-demo-v1';
   const initialState = {
     cutoff: '18:00',
@@ -5202,12 +5206,44 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   const pendingPayments = billing.payments.filter(
     (payment) => payment.status === 'pending_verification'
   );
-  const confirmedIncome = billing.payments
-    .filter((payment) => payment.status === 'confirmed')
-    .reduce((sum, payment) => sum + payment.amount, 0);
-  const payoutTotal = withdrawalRequests
-    .filter((request) => request.status === 'paid')
-    .reduce((sum, request) => sum + Number(request.amount || 0), 0);
+  const monthKey = (value) => localDateKey(value).slice(0, 7);
+  const previousOverviewMonth = (() => {
+    const date = new Date(overviewMonth + '-01T00:00:00');
+    date.setMonth(date.getMonth() - 1);
+    return String(date.getFullYear()) + '-' + String(date.getMonth() + 1).padStart(2, '0');
+  })();
+  const overviewMonthLabel = (month) =>
+    new Date(month + '-01T00:00:00').toLocaleDateString(undefined, {
+      month: 'long',
+      year: 'numeric',
+    });
+  const overviewTotalsForMonth = (month) => {
+    const deliveredValue = deliveredPackages
+      .filter((delivery) => monthKey(delivery.deliveredAt || delivery.updatedAt || delivery.createdAt) === month)
+      .reduce((sum, delivery) => sum + Number(delivery.fee ?? delivery.delivery_fee ?? 0), 0);
+    const outstandingInvoices = billing.invoices
+      .filter((invoice) => monthKey(invoice.createdAt) === month)
+      .reduce((sum, invoice) => sum + Math.max(0, Number(invoice.amount || 0) - getPaid(invoice.id)), 0);
+    const payments = billing.payments
+      .filter((payment) => payment.status === 'confirmed' && monthKey(payment.verifiedAt || payment.transferDate || payment.submittedAt) === month)
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const withdrawals = withdrawalRequests
+      .filter((request) => request.status === 'paid' && monthKey(request.paid_at || request.reviewedAt || request.requestedAt) === month)
+      .reduce((sum, request) => sum + Number(request.amount || 0), 0);
+    return {
+      deliveredValue,
+      outstandingInvoices,
+      payments,
+      netAfterWithdrawals: payments - withdrawals,
+    };
+  };
+  const overviewTotals = overviewTotalsForMonth(overviewMonth);
+  const previousOverviewTotals = overviewTotalsForMonth(previousOverviewMonth);
+  const overviewComparison = (current, previous) => {
+    const difference = current - previous;
+    const sign = difference > 0 ? '+' : difference < 0 ? '−' : '';
+    return sign + money(Math.abs(difference)) + ' vs ' + overviewMonthLabel(previousOverviewMonth);
+  };
   const reportRows = [
     ...billing.payments
       .filter((payment) => payment.status === 'confirmed')
@@ -5733,46 +5769,47 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         )}
       </section>
       <section style={panel}>
-        <h3>Monthly financial overview</h3>
+        <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Monthly financial overview</h3>
+            <p style={{ margin: '6px 0 0', color: '#65736c' }}>
+              Showing {overviewMonthLabel(overviewMonth)} · compared with {overviewMonthLabel(previousOverviewMonth)}
+            </p>
+          </div>
+          <label style={{ display: 'grid', gap: 6, minWidth: 170 }}>
+            Month
+            <input
+              aria-label="Overview month"
+              type="month"
+              value={overviewMonth}
+              max={localDateKey(new Date()).slice(0, 7)}
+              onChange={(event) => setOverviewMonth(event.target.value)}
+            />
+          </label>
+        </header>
         <div className="stats-grid">
           <article className="stat-card">
             <span>Delivered package value</span>
-            <strong>
-              {money(
-                deliveredPackages.reduce(
-                  (sum, p) => sum + Number(p.fee ?? p.delivery_fee ?? 0),
-                  0
-                )
-              )}
-            </strong>
-            <small>Package rates</small>
+            <strong>{money(overviewTotals.deliveredValue)}</strong>
+            <small>{overviewComparison(overviewTotals.deliveredValue, previousOverviewTotals.deliveredValue)}</small>
           </article>
           <article className="stat-card">
             <span>Outstanding invoices</span>
-            <strong>
-              {money(
-                billing.invoices.reduce(
-                  (sum, invoice) =>
-                    sum + Math.max(0, invoice.amount - getPaid(invoice.id)),
-                  0
-                )
-              )}
-            </strong>
-            <small>Awaiting payment</small>
+            <strong>{money(overviewTotals.outstandingInvoices)}</strong>
+            <small>{overviewComparison(overviewTotals.outstandingInvoices, previousOverviewTotals.outstandingInvoices)}</small>
           </article>
           <article className="stat-card">
             <span>Payments confirmed</span>
-            <strong>{money(confirmedIncome)}</strong>
-            <small>Approved</small>
+            <strong>{money(overviewTotals.payments)}</strong>
+            <small>{overviewComparison(overviewTotals.payments, previousOverviewTotals.payments)}</small>
           </article>
           <article className="stat-card">
             <span>Net after driver withdrawals</span>
-            <strong>{money(confirmedIncome - payoutTotal)}</strong>
-            <small>After approved withdrawals</small>
+            <strong>{money(overviewTotals.netAfterWithdrawals)}</strong>
+            <small>{overviewComparison(overviewTotals.netAfterWithdrawals, previousOverviewTotals.netAfterWithdrawals)}</small>
           </article>
         </div>
       </section>
-
 
       <section style={panel}>
         <h3>Recorded driver outgoings</h3>

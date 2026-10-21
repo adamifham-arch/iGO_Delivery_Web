@@ -2437,9 +2437,8 @@ export default function App() {
                           marginTop: 12,
                         }}
                       >
-                        <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>
-                          {partner}
-                        </h3>
+                        <h3 style={{ display: 'inline-block', margin: '0 0 8px', fontSize: 15 }}>
+                          {partner}</h3>{partnerPackages.some((p) => p.status === 'Delivered') && <button type="button" className="secondary-btn" style={{ marginLeft: 10, marginBottom: 8 }} onClick={() => window.dispatchEvent(new CustomEvent('igo-generate-partner-invoice', { detail: { partnerId: partnerPackages[0]?.partnerId || partnerPackages[0]?.partner_id || null, partnerName: partner } }))}>Generate invoice now</button>}
                         {partnerPackages.map((p) => (
                           <article
                             key={p.id}
@@ -4561,16 +4560,16 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       },
       ...current,
     ].slice(0, 20);
-  const generateInvoices = async () => {
+  const generateInvoices = async (partnerId = null, partnerName = null) => {
     if (liveMode) {
-      await generateLiveInvoices();
+      await generateLiveInvoices(partnerId || null);
       return;
     }
-    if (!readyPackages.length) {
+    const packagesToInvoice = readyPackages.filter((p) => { if (partnerId) return String(p.partnerId || p.partner_id || '') === String(partnerId); if (partnerName) return (p.partnerName || p.partner || 'Style Hub') === partnerName; return true; }); if (!packagesToInvoice.length) {
       setNotice('There are no delivered, uninvoiced packages to bill.');
       return;
     }
-    const grouped = readyPackages.reduce((groups, p) => {
+    const grouped = packagesToInvoice.reduce((groups, p) => {
       const partner = p.partnerName || p.partner || 'Style Hub';
       (groups[partner] ||= []).push(p);
       return groups;
@@ -4624,7 +4623,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         ' demo invoice(s) from delivered packages.'
     );
   };
-  const submitPayment = async (event, invoice) => {
+  useEffect(() => { const handlePartnerInvoice = (event) => { const detail = event.detail || {}; void generateInvoices(detail.partnerId || null, detail.partnerName || null); }; window.addEventListener('igo-generate-partner-invoice', handlePartnerInvoice); return () => window.removeEventListener('igo-generate-partner-invoice', handlePartnerInvoice); }, [readyPackages, liveMode, adminUser]); const submitPayment = async (event, invoice) => {
     event.preventDefault();
     const draft = drafts[invoice.id] || {};
     const amount = Number(draft.amount || invoice.amount - getPaid(invoice.id));
@@ -5381,7 +5380,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     setLiveInvoices([]);
     setLiveMessage('');
   };
-  const generateLiveInvoices = async () => {
+  const generateLiveInvoices = async (partnerId = null) => {
     if (!supabase || !adminUser) {
       setLiveError(
         'Sign in with an iGO admin account to generate live invoices.'
@@ -5392,7 +5391,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     setLiveError('');
     setLiveMessage('');
     const { data, error } = await supabase.rpc('generate_delivered_invoices', {
-      p_partner_id: null,
+      p_partner_id: partnerId,
     });
     if (error) {
       setLiveError(error.message);

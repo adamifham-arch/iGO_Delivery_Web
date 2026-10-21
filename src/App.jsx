@@ -331,6 +331,8 @@ export default function App() {
   const [authMode, setAuthMode] = useState('landing');
   const [authNotice, setAuthNotice] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [invitePasswordSetupRequired, setInvitePasswordSetupRequired] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showGoToTop, setShowGoToTop] = useState(false);
@@ -433,6 +435,7 @@ export default function App() {
     let active = true;
     const activateSession = async (session) => {
       if (!session?.user) {
+        setInvitePasswordSetupRequired(false);
         if (!active) return;
         setDatabaseUser(null);
         setDatabaseProfile(null);
@@ -445,6 +448,7 @@ export default function App() {
         return;
       }
       try {
+        if (session.user.invited_at && session.user.user_metadata?.password_setup_complete !== true) { if (!active) return; setDatabaseUser(null); setDatabaseProfile(null); setIsSuperadmin(false); setLinkedPartnerProfile(null); setLinkedDriverProfile(null); setPartnerLogo(''); setPackages([]); setInvitePasswordSetupRequired(true); setAuthMode('invite-password-setup'); setDatabaseLoading(false); return; }
         const { user, profile } = await loadCurrentRole();
         const additionalProfiles = await loadSuperadminLinkedProfiles(user, profile);
         const rows = await loadPackages();
@@ -562,6 +566,7 @@ export default function App() {
       return;
     }
     setLoginPassword('');
+    if (data.user?.invited_at && data.user.user_metadata?.password_setup_complete !== true) { setInvitePasswordSetupRequired(true); setAuthMode('invite-password-setup'); setLoginBusy(false); return; }
     if (data.session) {
       try {
         const { profile } = await loadCurrentRole();
@@ -586,6 +591,19 @@ export default function App() {
       }
     }
     setLoginBusy(false);
+  };
+
+  const completeInvitedPasswordSetup = async (event) => {
+    event.preventDefault();
+    if (!supabase) return;
+    if (newPassword !== confirmNewPassword) { setDatabaseError('The passwords do not match.'); return; }
+    setLoginBusy(true); setDatabaseError('');
+    const { data: currentUserData, error: currentUserError } = await supabase.auth.getUser();
+    if (currentUserError || !currentUserData.user) { setDatabaseError(currentUserError?.message || 'Your invitation session expired. Open the invitation link again.'); setLoginBusy(false); return; }
+    const { data, error } = await supabase.auth.updateUser({ password: newPassword, data: { ...(currentUserData.user.user_metadata || {}), password_setup_complete: true } });
+    if (error) { setDatabaseError(error.message); setLoginBusy(false); return; }
+    if (data.user?.user_metadata?.password_setup_complete !== true) { setDatabaseError('Password saved, but account setup could not be confirmed. Please sign in again.'); setLoginBusy(false); return; }
+    window.location.reload();
   };
 
   const registerPublicAccount = async (event) => {
@@ -1470,7 +1488,9 @@ export default function App() {
       return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Choose a new password</h1><p>Use at least 8 characters for your new password.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<form onSubmit={saveRecoveredPassword}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Saving…' : 'Save new password'}</button></form></section></main>;
     }
 
-    if (authMode === 'forgot-password') {
+    if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Set up your password</h1><p>Your account is ready. Choose a password to enter your workspace.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<form onSubmit={completeInvitedPasswordSetup}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>Confirm password<input type="password" autoComplete="new-password" minLength={8} required value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Setting up…' : 'Set password and continue'}</button></form></section></main>; }
+
+  if (authMode === 'forgot-password') {
       return <main className="public-auth-page"><section className="public-auth-card"><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('signin'); }}>← Back to sign in</button><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Reset your password</h1><p>Enter the email address on your iGO account and we’ll send a reset link.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}{authNotice && <p className="notice" role="status">{authNotice}</p>}<form onSubmit={requestPasswordReset}><label>Email<input type="email" autoComplete="email" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending link…' : 'Send reset link'}</button></form></section></main>;
     }
 

@@ -6876,3 +6876,32 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     height: 36px;
   }
 }
+
+
+/* Let the logo artwork reach the rounded edges of its header tile. */
+@media (max-width: 768px) {
+  header.topbar > .dashboard-logo {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 12px;
+    box-shadow: none !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+
+  header.topbar > .dashboard-logo img {
+    display: block;
+    width: 48px !important;
+    height: 48px !important;
+    max-width: none !important;
+    object-fit: cover !important;
+    border-radius: 12px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  header.topbar > .dashboard-logo img {
+    width: 42px !important;
+    height: 42px !important;
+  }
+}

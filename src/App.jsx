@@ -93,6 +93,18 @@ const initialPackages = [
 ];
 
 const statusClass = (status) => status.toLowerCase().replaceAll(' ', '-');
+const formatPackageAddedAt = (value) => {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+};
 const driverWithdrawalStorageKey = 'igo-driver-withdrawal-requests-v1';
 const readDriverWithdrawalRequests = () => {
   try {
@@ -3419,6 +3431,7 @@ function PackageTable({ packages }) {
         <thead>
           <tr>
             <th>Package ID</th>
+            <th>Added</th>
             <th>Customer</th>
             <th>Partner</th>
             <th>Phone</th>
@@ -3433,6 +3446,7 @@ function PackageTable({ packages }) {
               <td>
                 <strong>{p.id}</strong>
               </td>
+              <td><time dateTime={p.createdAt || p.created_at || undefined}>{formatPackageAddedAt(p.createdAt || p.created_at)}</time></td>
               <td>{p.customer}</td>
               <td>{p.partnerName || p.partner || 'Partner not linked'}</td>
               <td>{p.phone}</td>
@@ -3460,6 +3474,9 @@ function PackageTable({ packages }) {
                 <span className={`status status-${statusClass(p.status)}`}>
                   {p.status}
                 </span>
+              </div>
+              <div className="package-mobile-contact">
+                <span>Added · {formatPackageAddedAt(p.createdAt || p.created_at)}</span>
               </div>
               <div className="package-mobile-details">
                 <strong>{p.customer}</strong>

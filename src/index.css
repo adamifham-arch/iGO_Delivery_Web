@@ -6432,3 +6432,46 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   padding: 6px 10px;
   margin-right: 10px;
 }
+
+  
+
+/* Match the account dropdown to the active night workspace theme. */
+.app[data-theme="night"] .profile-dropdown {
+  color: #e2e8f0 !important;
+  background: #1e293b !important;
+  border-color: #475569 !important;
+  box-shadow: 0 14px 36px #0008 !important;
+}
+
+.app[data-theme="night"] .profile-dropdown-heading {
+  border-color: #334155 !important;
+}
+
+.app[data-theme="night"] .profile-dropdown-heading strong {
+  color: #f8fafc !important;
+}
+
+.app[data-theme="night"] .profile-dropdown-heading span {
+  color: #aab8cc !important;
+}
+
+.app[data-theme="night"] .profile-dropdown button {
+  color: #f8fafc !important;
+  background: #243247 !important;
+  border-color: #475569 !important;
+}
+
+.app[data-theme="night"] .profile-dropdown button:hover {
+  color: #fff !important;
+  background: #334155 !important;
+  border-color: #64748b !important;
+}
+
+.app[data-theme="night"] .profile-dropdown .profile-signout {
+  color: #fca5a5 !important;
+}
+
+.app[data-theme="night"] .profile-dropdown .profile-signout:hover {
+  color: #fecaca !important;
+  background: #512b34 !important;
+}

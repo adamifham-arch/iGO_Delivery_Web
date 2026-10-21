@@ -2577,7 +2577,7 @@ function ApprovalDashboard() {
 }
 
 function AdminOperations({ packages, onUpdate, liveMode = false }) {
-  const [driverNames, setDriverNames] = useState([]); useEffect(() => { if (!liveMode) return undefined; let active = true; const refreshDrivers = async () => { try { const rows = await loadDriverRoster(); if (active) setDriverNames([...new Set(rows.map((driver) => driver.name).filter(Boolean))]); } catch {} }; void refreshDrivers(); const timer = window.setInterval(() => void refreshDrivers(), 30000); return () => { active = false; window.clearInterval(timer); }; }, [liveMode]); const [query, setQuery] = useState('');
+  const [driverNames, setDriverNames] = useState([]); const [activeDriverField, setActiveDriverField] = useState(''); useEffect(() => { if (!liveMode) return undefined; let active = true; const refreshDrivers = async () => { try { const rows = await loadDriverRoster(); if (active) setDriverNames([...new Set(rows.map((driver) => driver.name).filter(Boolean))]); } catch {} }; void refreshDrivers(); const timer = window.setInterval(() => void refreshDrivers(), 30000); return () => { active = false; window.clearInterval(timer); }; }, [liveMode]); const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [area, setArea] = useState('All');
   const [drafts, setDrafts] = useState({});
@@ -2853,7 +2853,7 @@ function AdminOperations({ packages, onUpdate, liveMode = false }) {
                   }}
                 >
                   <label>
-                    Driver name <input value={draft.driver} onChange={(e) => change(p, 'driver', e.target.value)} required={['Picked Up', 'Out for Delivery'].includes(draft.status)} list={`admin-driver-roster-${p.id}`} placeholder={driverNames.length ? 'Type to search drivers' : 'No drivers found'} aria-label={`Driver for ${p.id}`} />{driverNames.length > 0 && <datalist id={`admin-driver-roster-${p.id}`}>{driverNames.map((name) => <option key={name} value={name} />)}</datalist>}
+                    Driver name <div className="ops-driver-picker"><input autoComplete="off" value={draft.driver} onFocus={() => setActiveDriverField(p.id)} onChange={(e) => { change(p, 'driver', e.target.value); setActiveDriverField(p.id); }} required={['Picked Up', 'Out for Delivery'].includes(draft.status)} placeholder={driverNames.length ? 'Type to search drivers' : 'No drivers found'} aria-label={`Driver for ${p.id}`} />{activeDriverField === p.id && <div className="ops-driver-suggestions" role="listbox">{driverNames.filter((name) => name.toLowerCase().includes((draft.driver || '').trim().toLowerCase())).map((name) => <button key={name} type="button" className="secondary-btn" role="option" aria-selected={draft.driver === name} onMouseDown={(e) => e.preventDefault()} onClick={() => { change(p, 'driver', name); setActiveDriverField(''); }}>{name}</button>)}{!driverNames.some((name) => name.toLowerCase().includes((draft.driver || '').trim().toLowerCase())) && <span>No matching drivers</span>}</div>}</div>
                   </label>
                   <label>
                     Delivery status

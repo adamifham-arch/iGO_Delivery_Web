@@ -2563,12 +2563,24 @@ function ManagedIgoAccounts() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [canPromoteAdmins, setCanPromoteAdmins] = useState(false);
+  const [superadminIds, setSuperadminIds] = useState([]);
 
   const refresh = async () => {
     setLoading(true);
     setError('');
     try {
       setAccounts(await loadManagedUserAccounts());
+      const { data: isSuperadmin, error: roleError } = await supabase.rpc('is_igo_superadmin');
+      if (roleError) throw roleError;
+      setCanPromoteAdmins(isSuperadmin === true);
+      if (isSuperadmin === true) {
+        const { data: ids, error: idsError } = await supabase.rpc('list_igo_superadmin_user_ids');
+        if (idsError) throw idsError;
+        setSuperadminIds((ids || []).map((row) => row.user_id));
+      } else {
+        setSuperadminIds([]);
+      }
     } catch (loadError) {
       setError(loadError.message || 'Could not load user accounts.');
     } finally {
@@ -2589,6 +2601,24 @@ function ManagedIgoAccounts() {
       setMessage(`${account.type === 'Driver' ? 'Rider' : 'Partner'} account ${nextStatus === 'approved' ? 'reactivated' : 'suspended'}.`);
     } catch (changeError) {
       setError(changeError.message || 'Could not update this account.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const promoteAdmin = async (account) => {
+    setBusyId(account.accountId);
+    setMessage('');
+    setError('');
+    try {
+      const { error: promoteError } = await supabase.rpc('promote_igo_admin_to_superadmin', {
+        p_user_id: account.accountId,
+      });
+      if (promoteError) throw promoteError;
+      await refresh();
+      setMessage(`${account.name || 'Admin'} was promoted to superadmin.`);
+    } catch (promoteError) {
+      setError(promoteError.message || 'Could not promote this admin account.');
     } finally {
       setBusyId('');
     }
@@ -2677,7 +2707,16 @@ function ManagedIgoAccounts() {
                     fontSize: 12,
                     padding: '5px 10px',
                   }}
-                >{isAdmin ? 'Admin' : account.status}</span>
+                >{isAdmin && superadminIds.includes(account.accountId) ? 'Superadmin' : isAdmin ? 'Admin' : account.status}</span>
+                {isAdmin && canPromoteAdmins && !superadminIds.includes(account.accountId) && <button
+                  type="button"
+                  className="primary-btn"
+                  disabled={busyId === account.accountId}
+                  onClick={() => promoteAdmin(account)}
+                  title="Grant this admin superadmin access"
+                >
+                  {busyId === account.accountId ? 'Promoting…' : 'Promote to superadmin'}
+                </button>}
                 {!isAdmin && <button
                   type="button"
                   className={approved ? 'secondary-btn' : 'primary-btn'}

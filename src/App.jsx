@@ -1806,6 +1806,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
               <AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} />
+              <ManagedIgoAccounts />
               <PendingIgoUserApprovals />
               <SuperadminUserManagementAccess />
               <ProfileChangeRequests profile={databaseProfile} user={databaseUser} workspace={workspace} setNotice={setNotice} />
@@ -2552,6 +2553,88 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
   );
 }
 
+function ManagedIgoAccounts() {
+  const [accounts, setAccounts] = useState([]);
+  const [filter, setFilter] = useState('all');
+  const [busyId, setBusyId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const refresh = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setAccounts(await loadApprovalAccounts());
+    } catch (loadError) {
+      setError(loadError.message || 'Could not load partner and rider accounts.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void refresh(); }, []);
+
+  const changeStatus = async (account) => {
+    const nextStatus = account.status === 'approved' ? 'suspended' : 'approved';
+    setBusyId(account.accountId);
+    setMessage('');
+    setError('');
+    try {
+      await setAccountApproval(account.type, account.accountId, nextStatus);
+      await refresh();
+      setMessage(`${account.type === 'Driver' ? 'Rider' : 'Partner'} account ${nextStatus === 'approved' ? 'reactivated' : 'suspended'}.`);
+    } catch (changeError) {
+      setError(changeError.message || 'Could not update this account.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const managed = accounts.filter((account) =>
+    account.status === 'approved' || account.status === 'suspended'
+  );
+  const visible = managed.filter((account) => filter === 'all' || account.status === filter);
+
+  return (
+    <section className="card" style={{ marginBottom: '1.25rem', padding: 20 }}>
+      <div className="ops-heading">
+        <div>
+          <h2>Partner and rider accounts</h2>
+          <p>Suspend approved accounts or restore access to suspended accounts.</p>
+        </div>
+        <button type="button" className="secondary-btn" onClick={refresh} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
+      </div>
+      <label>Show accounts<select value={filter} onChange={(event) => setFilter(event.target.value)}>
+        <option value="all">Approved and suspended</option>
+        <option value="approved">Approved</option>
+        <option value="suspended">Suspended</option>
+      </select></label>
+      {message && <p role="status" className="notice">{message}</p>}
+      {error && <p role="alert" className="notice">{error}</p>}
+      {loading ? <p>Loading accounts…</p> : visible.length ? visible.map((account) => (
+        <article className="application-card" key={`managed-${account.type}-${account.accountId}`} style={{ padding: 16, marginTop: 12 }}>
+          <div>
+            <strong>{account.name || account.contact_name || 'Unnamed account'}</strong>
+            <p>{account.type === 'Driver' ? 'Rider' : 'Partner'} · {account.email || account.phone || 'No contact details'}</p>
+            <span className={`status status-${statusClass(account.status)}`}>{account.status}</span>
+          </div>
+          <div className="finance-report-actions">
+            <button
+              type="button"
+              className={account.status === 'approved' ? 'secondary-btn' : 'primary-btn'}
+              disabled={busyId === account.accountId}
+              onClick={() => changeStatus(account)}
+            >
+              {busyId === account.accountId ? 'Saving…' : account.status === 'approved' ? 'Suspend account' : 'Reactivate account'}
+            </button>
+          </div>
+        </article>
+      )) : <p>No {filter === 'all' ? 'approved or suspended' : filter} partner or rider accounts.</p>}
+    </section>
+  );
+}
+
 function ApprovalDashboard() {
   const [accounts, setAccounts] = useState([]);
   const [status, setStatus] = useState('pending');
@@ -2588,8 +2671,10 @@ function ApprovalDashboard() {
         <article className="application-card" key={`${account.type}-${account.accountId}`} style={{ padding: 16, marginTop: 12 }}>
           <div><strong>{account.name}</strong><p>{account.type} · {account.contact_name || account.email || account.phone || 'No contact details'}</p><span className={`status status-${statusClass(account.status)}`}>{account.status}</span></div>
           <div className="finance-report-actions">
-            {account.status !== 'approved' && <button className="primary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'approved')}>Approve</button>}
-            {account.status !== 'rejected' && <button className="secondary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'rejected')}>Reject</button>}
+            {account.status === 'suspended'
+              ? <button className="primary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'approved')}>Reactivate</button>
+              : account.status !== 'approved' && <button className="primary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'approved')}>Approve</button>}
+            {account.status !== 'rejected' && account.status !== 'suspended' && <button className="secondary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'rejected')}>Reject</button>}
             {account.status === 'approved' && <button className="secondary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'suspended')}>Suspend</button>}
           </div>
         </article>

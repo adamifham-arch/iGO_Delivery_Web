@@ -2122,7 +2122,7 @@ header.topbar {
 .profile-dropdown-heading {
   display: grid; gap: 4px; padding: 10px 10px 12px; border-bottom: 1px solid #eceef1;
 }
-.profile-dropdown-heading strong { font-size: 13px; }
+.profile-dropdown-heading strong { color: #202124 !important; font-size: 13px; } .profile-dropdown { color: #202124 !important; background: #fff !important; } .profile-dropdown button { color: #202124 !important; background: transparent !important; } .profile-dropdown button:hover { color: #202124 !important; background: #f3f4f6 !important; } .profile-dropdown .profile-signout { color: #9c342e !important; background: transparent !important; } .profile-dropdown .profile-signout:hover { color: #842923 !important; background: #fff1f0 !important; }
 .profile-dropdown-heading span {
   overflow: hidden; color: #777d86; font-size: 11px; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -6384,3 +6384,13 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+/* Keep the profile menu readable on dark workspaces. */
+.profile-dropdown { color: #202124 !important; background: #fff !important; }
+.profile-dropdown-heading strong { color: #202124 !important; }
+.profile-dropdown-heading span { color: #59636f !important; }
+.profile-dropdown button { color: #202124 !important; background: transparent !important; }
+.profile-dropdown button:hover { color: #202124 !important; background: #f3f4f6 !important; }
+.profile-dropdown .profile-signout { color: #9c342e !important; background: transparent !important; }
+.profile-dropdown .profile-signout:hover { color: #842923 !important; background: #fff1f0 !important; }

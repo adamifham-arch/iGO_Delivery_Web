@@ -1694,9 +1694,9 @@ header.topbar {
   font-size: 11px;
 }
 .driver-section {
-  padding: 22px;
+  padding: 14px;
   border: 1px solid #e8ebee;
-  border-radius: 18px;
+  border-radius: 14px;
   background: #fff;
 }
 .driver-section-heading,
@@ -1704,13 +1704,13 @@ header.topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 17px;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 .driver-section-heading h3,
 .approval-toolbar h3 {
   margin: 2px 0 0;
-  font-size: 19px;
+  font-size: 17px;
 }
 .driver-count {
   padding: 7px 10px;
@@ -1722,10 +1722,10 @@ header.topbar {
 }
 .driver-delivery-list {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 .driver-delivery-card {
-  padding: 18px;
+  padding: 10px 12px;
   border: 1px solid #edf0f2;
   border-radius: 15px;
   background: #fcfcfb;
@@ -1971,9 +1971,15 @@ header.topbar {
   }
 }
 @media (max-width: 560px) {
+  .driver-section-heading {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .driver-section-heading > span { margin-left: auto; }
   .driver-banner,
   .approval-heading,
-  .driver-section-heading,
   .approval-toolbar {
     align-items: flex-start;
     flex-direction: column;

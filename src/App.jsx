@@ -2699,7 +2699,7 @@ function ManagedIgoAccounts() {
                   {isAdmin && <small style={{ display: 'block', marginTop: 4, color: '#94a3b8' }}>
                     {account.addedByName
                       ? `Added by ${account.addedByName}${account.addedByEmail ? ` · ${account.addedByEmail}` : ''}`
-                      : 'Added before inviter tracking'}
+                      : 'Inviter not recorded'}
                     {account.invitedAt ? ` · ${new Date(account.invitedAt).toLocaleDateString()}` : ''}
                   </small>}
                 </div>

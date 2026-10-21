@@ -95,12 +95,15 @@ export function packageToDb(entry) {
   return result;
 }
 
-export async function loadPackages() {
+export async function loadPackages({ partnerId, driverId } = {}) {
   const client = requireClient();
-  const { data, error } = await client
+  let query = client
     .from('packages')
     .select('*,partners(name,phone,address,logo_data_url),drivers(name,phone)')
     .order('created_at', { ascending: false });
+  if (partnerId) query = query.eq('partner_id', partnerId);
+  if (driverId) query = query.eq('assigned_driver_id', driverId);
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(packageFromDb);
 }
@@ -166,10 +169,33 @@ export async function getCurrentPartnerId() {
   return data;
 }
 
+export async function getCurrentPartnerIdOptional() {
+  const { data, error } = await requireClient().rpc('current_partner_id');
+  if (error) throw error;
+  return data || null;
+}
+
 export async function getCurrentDriverId() {
   const { data, error } = await requireClient().rpc('current_driver_id');
   if (error) throw error;
   if (!data) throw new Error('This account has no approved driver profile.');
+  return data;
+}
+
+export async function ensureAdminDriverWorkspace() {
+  const { data, error } = await requireClient().rpc('ensure_admin_driver_workspace');
+  if (error) throw error;
+  if (!data) throw new Error('Could not prepare this admin driver workspace.');
+  return data;
+}
+
+export async function setupAdminPartnerWorkspace({ businessName, address }) {
+  const { data, error } = await requireClient().rpc('setup_admin_partner_workspace', {
+    p_business_name: businessName,
+    p_address: address,
+  });
+  if (error) throw error;
+  if (!data) throw new Error('Could not save partner workspace details.');
   return data;
 }
 
@@ -180,19 +206,26 @@ export async function getDriverIdByName(name) {
   return data.id;
 }
 
-export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
+export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}) {
   const isAdmin = workspace === 'Admin';
   const client = requireClient();
-  const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult] = await Promise.all([
-    client.from('invoices').select('*,partners(name),invoice_items(id,package_id,amount,packages(package_number,customer_name,customer_phone,address,area,item_description,delivery_fee))').order('created_at', { ascending: false }),
-    client.from('payments').select('*,partners(name),invoices!payments_target_invoice_id_fkey(invoice_number),payment_allocations(invoice_id,amount,invoices(invoice_number))').order('submitted_at', { ascending: false }),
+  let invoiceQuery = client.from('invoices').select('*,partners(name),invoice_items(id,package_id,amount,packages(package_number,customer_name,customer_phone,address,area,item_description,delivery_fee))').order('created_at', { ascending: false });
+  let paymentQuery = client.from('payments').select('*,partners(name),invoices!payments_target_invoice_id_fkey(invoice_number),payment_allocations(invoice_id,amount,invoices(invoice_number))').order('submitted_at', { ascending: false });
+  const accountQuery = client.from('bank_accounts').select('*').order('created_at', { ascending: false });
+  const partnerQuery = client.from('partners').select('id,invoice_cutoff').order('created_at', { ascending: false });
+  if (partnerId) {
+    invoiceQuery = invoiceQuery.eq('partner_id', partnerId);
+    paymentQuery = paymentQuery.eq('partner_id', partnerId);
+  }
+  const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult] = await Promise.all([
+    invoiceQuery,
+    paymentQuery,
     isAdmin ? client.from('business_expenses').select('*').order('expense_date', { ascending: false }) : Promise.resolve({ data: [], error: null }),
     isAdmin ? client.from('driver_withdrawal_requests').select('*,drivers(name)').order('requested_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
-    client.from('bank_accounts').select('*').order('created_at', { ascending: false }),
-    client.from('partners').select('id,invoice_cutoff').order('created_at', { ascending: false }),
-    client.from('partner_credit_ledger').select('partner_id,amount'),
+    accountQuery,
+    partnerQuery,
   ]);
-  for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult]) {
+  for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult]) {
     if (result.error) throw result.error;
   }
   return {
@@ -217,27 +250,10 @@ export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
     })),
     payments: (paymentResult.data || []).map((row) => ({
       id: row.id,
-      invoiceId: row.payment_allocations?.map((a) => a.invoices?.invoice_number).filter(Boolean).join(', ') || row.invoices?.invoice_number || row.note?.match(/Invoices included:\s*(.*)/i)?.[1] || row.note?.match(/Full payment for invoices:\s*(.*)/i)?.[1] || '',
-      invoiceIds: row.invoice_ids || (row.target_invoice_id ? [row.target_invoice_id] : []),
-      invoiceDues: (row.invoice_ids || (row.target_invoice_id ? [row.target_invoice_id] : [])).map((invoiceId) => {
-        const invoice = (invoiceResult.data || []).find((item) => item.id === invoiceId || item.invoice_number === invoiceId);
-        return invoice ? {
-          invoiceId: invoice.invoice_number,
-          amount: Math.max(0, Number(invoice.subtotal || 0) - Number(invoice.paid_amount || 0)),
-          lines: (invoice.invoice_items || []).map((line) => ({
-            id: line.id,
-            packageId: line.packages?.package_number ? `IGO-${line.packages.package_number}` : line.package_id,
-            description: line.packages?.item_description || '',
-            amount: Number(line.amount || 0),
-          })),
-        } : null;
-      }).filter(Boolean),
-      allocations: (row.payment_allocations || []).map((a) => ({ invoiceId: a.invoices?.invoice_number || a.invoice_id, amount: Number(a.amount || 0) })),
+      invoiceId: row.invoices?.invoice_number || row.payment_allocations?.map((a) => a.invoices?.invoice_number).filter(Boolean).join(', ') || '',
       partnerId: row.partner_id,
       partner: row.partners?.name || '',
-      amount: Number(row.status === 'confirmed' ? row.verified_amount ?? row.amount : row.amount || 0),
-      reportedAmount: Number(row.amount || 0),
-      verifiedAmount: Number(row.verified_amount || 0),
+      amount: Number(row.amount || 0),
       reference: row.reference_number || '',
       transferDate: row.transfer_date,
       slipPath: row.receipt_path,
@@ -256,32 +272,20 @@ export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
       bankDetails: row.bank_details_snapshot,
     })),
     bankAccounts: accountResult.data || [],
-    partnerCredits: (creditResult.data || []).reduce((totals, row) => {
-      totals[row.partner_id] = (totals[row.partner_id] || 0) + Number(row.amount || 0);
-      return totals;
-    }, {}),
     invoiceCutoff: partnerResult.data?.[0]?.invoice_cutoff || '18:00',
   };
 }
 
-export async function submitInvoicePayment({ partnerId, invoices, amount, reference, transferDate, note, file }) {
+export async function submitInvoicePayment({ partnerId, invoiceId, amount, reference, transferDate, note, file }) {
   const client = requireClient();
-  if (!Array.isArray(invoices) || invoices.length === 0 || invoices.some((invoice) => !invoice.invoiceId)) {
-    throw new Error('Choose at least one outstanding invoice.');
-  }
-  if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
-    throw new Error('Enter the amount you actually transferred.');
-  }
-  const path = await uploadIgoFile(file, 'receipts', 'payment-' + Date.now());
-  const displayInvoices = invoices.map((invoice) => invoice.label || invoice.invoiceId);
+  const path = await uploadIgoFile(file, 'receipts', invoiceId);
   const { data, error } = await client.from('payments').insert({
     partner_id: partnerId,
-    target_invoice_id: null,
-    invoice_ids: invoices.map((invoice) => invoice.invoiceId),
-    amount: Number(amount),
-    reference_number: (reference || 'Payment for invoices').trim(),
+    target_invoice_id: invoiceId,
+    amount,
+    reference_number: reference,
     transfer_date: transferDate || new Date().toISOString().slice(0, 10),
-    note: (note || 'Payment for invoices') + ' · Invoices included: ' + displayInvoices.join(', '),
+    note,
     receipt_path: path,
     status: 'pending_verification',
   }).select().single();
@@ -289,24 +293,17 @@ export async function submitInvoicePayment({ partnerId, invoices, amount, refere
   return data;
 }
 
-export async function reviewPayment(paymentId, status, verifiedAmount, reason = '') {
-  const { data, error } = await requireClient().rpc('review_partner_payment', {
-    p_payment_id: paymentId,
-    p_status: status,
-    p_verified_amount: status === 'confirmed' ? Number(verifiedAmount) : null,
-    p_rejection_reason: status === 'rejected' ? reason : null,
-  });
+export async function reviewPayment(paymentId, status, reason = '') {
+  const client = requireClient();
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) throw userError || new Error('Sign in first.');
+  const { error } = await client.from('payments').update({
+    status,
+    rejection_reason: status === 'rejected' ? reason : null,
+    verified_by: userData.user.id,
+    verified_at: new Date().toISOString(),
+  }).eq('id', paymentId);
   if (error) throw error;
-  return data;
-}
-
-export async function sendPaymentReceipt(paymentId) {
-  const { data, error } = await requireClient().functions.invoke('send-payment-receipt', {
-    body: { paymentId },
-  });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
 }
 
 export async function loadDriverSettings() {
@@ -329,17 +326,12 @@ export async function loadDriverRoster() {
   const byUser = new Map((settings.data || []).map((row) => [row.user_id, row]));
   return (drivers.data || []).map((row) => {
     const setting = byUser.get(row.user_id);
-    const onlineUpdatedAt = setting?.online_updated_at || null;
-    const heartbeatAt = onlineUpdatedAt ? Date.parse(onlineUpdatedAt) : NaN;
-    const hasRecentHeartbeat = Number.isFinite(heartbeatAt)
-      && heartbeatAt <= Date.now() + 30000
-      && Date.now() - heartbeatAt <= 120000;
-    return {
-      ...row,
-      online: Boolean(setting?.online && hasRecentHeartbeat),
-      onlineUpdatedAt,
-      sharePercent: Number(setting?.share_percent || 0),
-    };
+    return ({
+    ...row,
+    online: setting?.online || false,
+    onlineUpdatedAt: setting?.online_updated_at || null,
+    sharePercent: Number(setting?.share_percent || 0),
+  });
   });
 }
 
@@ -472,35 +464,7 @@ export async function loadApprovalAccounts() {
   return [
     ...(partners.data || []).map((row) => ({ ...row, type: 'Partner', accountId: row.id, status: row.approval_status })),
     ...(drivers.data || []).map((row) => ({ ...row, type: 'Driver', accountId: row.id, status: row.approval_status })),
-  ].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-}
-
-export async function loadManagedUserAccounts() {
-  const client = requireClient();
-  const [accounts, admins, audit] = await Promise.all([
-    loadApprovalAccounts(),
-    client.from('profiles').select('id,full_name,phone,role,created_at').eq('role', 'admin').order('created_at', { ascending: false }),
-    client.rpc('list_igo_admin_invite_audit'),
-  ]);
-  if (admins.error) throw admins.error;
-  if (audit.error) throw audit.error;
-  const auditByUserId = new Map((audit.data || []).map((row) => [row.invited_user_id, row]));
-  return [
-    ...accounts,
-    ...(admins.data || []).map((row) => {
-      const inviter = auditByUserId.get(row.id);
-      return {
-        ...row,
-        name: row.full_name,
-        type: 'Admin',
-        accountId: row.id,
-        status: 'admin',
-        addedByName: inviter?.invited_by_name || '',
-        addedByEmail: inviter?.invited_by_email || '',
-        invitedAt: inviter?.invited_at || '',
-      };
-    }),
-  ].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
 export async function setAccountApproval(type, id, status) {

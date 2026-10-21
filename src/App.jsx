@@ -517,7 +517,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (databaseProfile?.role !== 'driver' || !databaseUser?.id) return undefined;
+    const isDriverWorkspace =
+      databaseProfile?.role === 'driver'
+      || (isSuperadmin && workspace === 'Driver' && linkedDriverProfile?.approval_status === 'approved');
+    if (!isDriverWorkspace || !databaseUser?.id) return undefined;
     let active = true;
     const heartbeat = async () => {
       try {
@@ -537,7 +540,7 @@ export default function App() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [databaseProfile?.role, databaseUser?.id]);
+  }, [databaseProfile?.role, databaseUser?.id, isSuperadmin, workspace, linkedDriverProfile?.approval_status]);
 
   const savePartnerLogoFromProfile = async (event) => {
     event.preventDefault();

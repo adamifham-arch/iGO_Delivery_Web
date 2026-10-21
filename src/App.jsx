@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './index.css';
 import { supabase, supabaseConfigured } from './supabase';
 import {
@@ -6,9 +6,11 @@ import {
   getDriverIdByName,
   getCurrentDriverId,
   getCurrentPartnerId,
+  getCurrentPartnerIdOptional,
+  ensureAdminDriverWorkspace,
+  setupAdminPartnerWorkspace,
   getPrivateFileUrl,
   loadApprovalAccounts,
-  loadManagedUserAccounts,
   loadCurrentRole,
   loadFinanceRecords,
   loadDriverSettings,
@@ -29,7 +31,6 @@ import {
   setAccountApproval,
   requestWithdrawal as requestDatabaseWithdrawal,
   submitInvoicePayment,
-  sendPaymentReceipt,
   uploadIgoFile,
   updatePackage,
 } from './igoDatabase';
@@ -306,36 +307,6 @@ async function loadSuperadminLinkedProfiles(user, profile) {
   return { isSuperadmin: true, partner: partnerResult.data, driver: driverResult.data };
 }
 
-class SectionErrorBoundary extends Component {
-  state = { error: null };
-
-  static getDerivedStateFromError(error) {
-    return { error };
-  }
-
-  componentDidCatch(error, info) {
-    console.error('Finance workspace render failed:', error, info);
-  }
-
-  render() {
-    if (this.state.error) {
-      return (
-        <section className="card" role="alert">
-          <h2>Finance workspace could not load</h2>
-          <p>Please refresh and try again.</p>
-          <details>
-            <summary>Technical details</summary>
-            <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              {String(this.state.error?.message || this.state.error)}
-            </pre>
-          </details>
-        </section>
-      );
-    }
-    return this.props.children;
-  }
-}
-
 export default function App() {
   const customerNameInputRef = useRef(null);
   const [navigation, setNavigation] = useState({
@@ -344,11 +315,6 @@ export default function App() {
   });
   const page = navigation.page;
   const [workspace, setWorkspace] = useState('Partner');
-  const workspaceRef = useRef('Partner');
-  const activeUserIdRef = useRef(null);
-  useEffect(() => {
-    workspaceRef.current = workspace;
-  }, [workspace]);
   const [databaseUser, setDatabaseUser] = useState(null);
   const [databaseProfile, setDatabaseProfile] = useState(null);
   const [accountApprovalStatus, setAccountApprovalStatus] = useState(null);
@@ -357,6 +323,10 @@ export default function App() {
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
+  const [partnerSetupOpen, setPartnerSetupOpen] = useState(false);
+  const [partnerBusinessName, setPartnerBusinessName] = useState('');
+  const [partnerBusinessAddress, setPartnerBusinessAddress] = useState('');
+  const [partnerSetupBusy, setPartnerSetupBusy] = useState(false);
   const [partnerLogo, setPartnerLogo] = useState('');
   const [logoSaving, setLogoSaving] = useState(false);
   const [logoFileSelected, setLogoFileSelected] = useState(false);
@@ -376,31 +346,6 @@ export default function App() {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showGoToTop, setShowGoToTop] = useState(false);
-  useEffect(() => {
-    if (!showMobileNav && !showProfileMenu) return undefined;
-    const closeOnOutsidePointer = (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (showMobileNav && !target.closest('.mobile-nav-dropdown') && !target.closest('.mobile-nav-toggle')) {
-        setShowMobileNav(false);
-      }
-      if (showProfileMenu && !target.closest('.profile-menu-container')) {
-        setShowProfileMenu(false);
-      }
-    };
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') {
-        setShowMobileNav(false);
-        setShowProfileMenu(false);
-      }
-    };
-    document.addEventListener('pointerdown', closeOnOutsidePointer);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [showMobileNav, showProfileMenu]);
   useEffect(() => {
     const handleScroll = () => setShowGoToTop(window.scrollY > 120);
     handleScroll();
@@ -502,7 +447,6 @@ export default function App() {
       if (!session?.user) {
         setInvitePasswordSetupRequired(false);
         if (!active) return;
-        activeUserIdRef.current = null;
         setDatabaseUser(null);
         setDatabaseProfile(null);
         setIsSuperadmin(false);
@@ -541,19 +485,10 @@ export default function App() {
         setIsSuperadmin(additionalProfiles.isSuperadmin);
         setLinkedPartnerProfile(additionalProfiles.partner);
         setLinkedDriverProfile(additionalProfiles.driver);
-        const selectedWorkspace = workspaceRef.current;
-        const keepSelectedWorkspace = activeUserIdRef.current === user.id && (
-          selectedWorkspace === roleWorkspace
-          || (additionalProfiles.isSuperadmin && selectedWorkspace === 'Partner' && additionalProfiles.partner?.approval_status === 'approved')
-          || (additionalProfiles.isSuperadmin && selectedWorkspace === 'Driver' && additionalProfiles.driver?.approval_status === 'approved')
-        );
-        const nextWorkspace = keepSelectedWorkspace ? selectedWorkspace : roleWorkspace;
-        activeUserIdRef.current = user.id;
-        workspaceRef.current = nextWorkspace;
-        setWorkspace(nextWorkspace);
+        setWorkspace(roleWorkspace);
         setPackages(rows);
         if (finance) applyDatabaseFinanceSnapshot(finance);
-        if (!keepSelectedWorkspace) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
+        setNavigation({ page: roleWorkspace === 'Admin' ? 'Admin Operations' : roleWorkspace === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
         setDatabaseError('');
       } catch (error) {
         if (!active) return;
@@ -579,10 +514,6 @@ export default function App() {
         setDatabaseLoading(false);
         return;
       }
-      // Initial session and token refreshes do not change the signed-in account.
-      // Re-running activateSession for those events would reset a superadmin's
-      // selected linked workspace back to the account's default Admin workspace.
-      if (!['SIGNED_IN', 'SIGNED_OUT', 'USER_UPDATED', 'USER_DELETED'].includes(event)) return;
       void activateSession(session);
     });
     return () => {
@@ -590,32 +521,6 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    const isDriverWorkspace =
-      databaseProfile?.role === 'driver'
-      || (isSuperadmin && workspace === 'Driver' && linkedDriverProfile?.approval_status === 'approved');
-    if (!isDriverWorkspace || !databaseUser?.id) return undefined;
-    let active = true;
-    const heartbeat = async () => {
-      try {
-        const settings = await loadDriverSettings();
-        if (!active || !settings.online) return;
-        await saveDriverSettings({
-          online: true,
-          online_updated_at: new Date().toISOString(),
-        });
-      } catch {
-        // A missed heartbeat naturally expires the driver's online status.
-      }
-    };
-    void heartbeat();
-    const timer = window.setInterval(() => void heartbeat(), 30000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [databaseProfile?.role, databaseUser?.id, isSuperadmin, workspace, linkedDriverProfile?.approval_status]);
 
   const savePartnerLogoFromProfile = async (event) => {
     event.preventDefault();
@@ -696,6 +601,80 @@ export default function App() {
       }
     }
     setLoginBusy(false);
+  };
+
+  const switchWorkspace = async (next) => {
+    setNotice('');
+    setDatabaseError('');
+    setShowForm(false);
+    setShowMobileNav(false);
+    setStatusFilter('All');
+    setSearch('');
+    if (databaseProfile?.role === 'admin' && next === 'Partner') {
+      try {
+        const partnerId = await getCurrentPartnerIdOptional();
+        setWorkspace('Partner');
+        setNavigation({ page: 'Overview', history: [] });
+        if (!partnerId) {
+          setPackages([]);
+          setPartnerBusinessName('');
+          setPartnerBusinessAddress('');
+          setPartnerSetupOpen(true);
+        } else {
+          const { data: partner, error } = await supabase.from('partners').select('id,name,contact_name,phone,email,approval_status').eq('id', partnerId).single();
+          if (error) throw error;
+          setLinkedPartnerProfile(partner);
+          setPackages(await loadPackages({ partnerId }));
+          applyDatabaseFinanceSnapshot(await loadFinanceRecords({ workspace: 'Partner', partnerId }));
+        }
+      } catch (error) {
+        setNotice(error.message || 'Could not open the partner workspace.');
+      }
+      return;
+    }
+    if (databaseProfile?.role === 'admin' && next === 'Driver') {
+      try {
+        const driverId = await ensureAdminDriverWorkspace();
+        const { data: driver, error } = await supabase.from('drivers').select('id,name,phone,approval_status,active').eq('id', driverId).single();
+        if (error) throw error;
+        setLinkedDriverProfile(driver);
+        setPackages(await loadPackages({ driverId }));
+      } catch (error) {
+        setNotice(error.message || 'Could not open the driver workspace.');
+        return;
+      }
+    }
+    if (databaseProfile?.role === 'admin' && next === 'Admin') {
+      try {
+        setPackages(await loadPackages());
+        applyDatabaseFinanceSnapshot(await loadFinanceRecords({ workspace: 'Admin' }));
+      } catch (error) {
+        setNotice(error.message || 'Could not load admin operations.');
+      }
+    }
+    setWorkspace(next);
+    setNavigation({ page: next === 'Admin' ? 'Admin Operations' : next === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
+  };
+
+  const saveAdminPartnerSetup = async (event) => {
+    event.preventDefault();
+    if (!partnerBusinessName.trim() || !partnerBusinessAddress.trim()) return;
+    setPartnerSetupBusy(true);
+    setNotice('');
+    try {
+      const partnerId = await setupAdminPartnerWorkspace({ businessName: partnerBusinessName, address: partnerBusinessAddress });
+      const { data: partner, error } = await supabase.from('partners').select('id,name,contact_name,phone,email,approval_status').eq('id', partnerId).single();
+      if (error) throw error;
+      setLinkedPartnerProfile(partner);
+      setPackages(await loadPackages({ partnerId }));
+      applyDatabaseFinanceSnapshot(await loadFinanceRecords({ workspace: 'Partner', partnerId }));
+      setPartnerSetupOpen(false);
+      setNotice('Partner workspace is ready.');
+    } catch (error) {
+      setNotice(error.message || 'Could not save partner details.');
+    } finally {
+      setPartnerSetupBusy(false);
+    }
   };
 
   const completeInvitedPasswordSetup = async (event) => {
@@ -840,10 +819,14 @@ export default function App() {
     let active = true;
     const refresh = async () => {
       try {
-        const rows = await loadPackages();
+        const partnerId = databaseProfile?.role === 'admin' && workspace === 'Partner' ? await getCurrentPartnerIdOptional() : null;
+        const driverId = databaseProfile?.role === 'admin' && workspace === 'Driver' ? await getCurrentDriverId() : null;
+        const rows = databaseProfile?.role === 'admin' && workspace === 'Partner' && !partnerId
+          ? []
+          : await loadPackages({ partnerId: partnerId || undefined, driverId: driverId || undefined });
         if (active) setPackages(rows);
         try {
-          const finance = await loadFinanceRecords();
+          const finance = await loadFinanceRecords({ workspace, partnerId: partnerId || undefined });
           if (active) {
             applyDatabaseFinanceSnapshot(finance);
             window.dispatchEvent(new Event('igo-live-data-refreshed'));
@@ -860,7 +843,7 @@ export default function App() {
       window.clearInterval(interval);
       window.removeEventListener('igo-live-finance-updated', refresh);
     };
-  }, [databaseUser, partnerSpendPeriod]);
+  }, [databaseUser, databaseProfile, workspace, partnerSpendPeriod]);
 
   const updatePackageRecord = async (id, rawChanges) => {
     const current = packages.find((item) => item.id === id);
@@ -1012,7 +995,7 @@ export default function App() {
     };
 
     if (supabaseConfigured) {
-      if (!databaseUser || databaseProfile?.role !== 'partner' && !(isSuperadmin && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) {
+      if (!databaseUser || databaseProfile?.role !== 'partner' && !(databaseProfile?.role === 'admin' && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) {
         setNotice('Sign in to an approved partner account before registering packages.');
         return;
       }
@@ -1191,7 +1174,7 @@ export default function App() {
           status: 'Pending',
         }));
       if (supabaseConfigured) {
-        if (databaseProfile?.role !== 'partner' && !(isSuperadmin && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) throw new Error('Sign in to an approved partner account to add packages.');
+        if (databaseProfile?.role !== 'partner' && !(databaseProfile?.role === 'admin' && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) throw new Error('Sign in to an approved partner account to add packages.');
         const partnerId = await getCurrentPartnerId();
         const saved = await createPackages(added, partnerId);
         setPackages((current) => [...saved, ...current]);
@@ -1458,7 +1441,7 @@ export default function App() {
         status: 'Pending',
       }));
     if (supabaseConfigured) {
-      if (databaseProfile?.role !== 'partner' && !(isSuperadmin && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) {
+      if (databaseProfile?.role !== 'partner' && !(databaseProfile?.role === 'admin' && workspace === 'Partner' && linkedPartnerProfile?.approval_status === 'approved')) {
         setMessageNotice('Sign in to an approved partner account to add packages.');
         return;
       }
@@ -1529,7 +1512,7 @@ export default function App() {
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
           ['Finance Management', '♙'],
-          ['Approvals', '✓', 'Pending user approvals'],
+          ['Approvals', '✓'],
           ['User Management', '♙'],
         ]
       : [
@@ -1553,7 +1536,7 @@ export default function App() {
     );
   }
 
-  const activeLinkedProfile = isSuperadmin ? (workspace === 'Partner' ? linkedPartnerProfile : workspace === 'Driver' ? linkedDriverProfile : null) : null;
+  const activeLinkedProfile = databaseProfile?.role === 'admin' ? (workspace === 'Partner' ? linkedPartnerProfile : workspace === 'Driver' ? linkedDriverProfile : null) : null;
   const viewedProfileName = activeLinkedProfile?.name || databaseProfile?.full_name || (workspace === 'Admin' ? 'Operations' : workspace === 'Driver' ? 'Ahmed Rasheed' : 'Style Hub');
   const viewedProfileType = activeLinkedProfile ? workspace.toLowerCase() : databaseProfile?.role || workspace + ' preview';
 
@@ -1593,7 +1576,7 @@ export default function App() {
       );
     }
 
-if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Set up your password</h1><p>Your account is ready. Choose a password to enter your workspace.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<form onSubmit={completeInvitedPasswordSetup}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>Confirm password<input type="password" autoComplete="new-password" minLength={8} required value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Setting up…' : 'Set password and continue'}</button></form></section></main>; }
+    if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Set up your password</h1><p>Your account is ready. Choose a password to enter your workspace.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<form onSubmit={completeInvitedPasswordSetup}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>Confirm password<input type="password" autoComplete="new-password" minLength={8} required value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Setting up…' : 'Set password and continue'}</button></form></section></main>; }
 
   if (authMode === 'forgot-password') {
       return <main className="public-auth-page"><section className="public-auth-card"><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('signin'); }}>← Back to sign in</button><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Reset your password</h1><p>Enter the email address on your iGO account and we’ll send a reset link.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}{authNotice && <p className="notice" role="status">{authNotice}</p>}<form onSubmit={requestPasswordReset}><label>Email<input type="email" autoComplete="email" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending link…' : 'Send reset link'}</button></form></section></main>;
@@ -1630,7 +1613,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 
         <p className="nav-label">MY WORKSPACE</p>
 
-        {navItems.map(([name, icon, label = name]) => (
+        {navItems.map(([name, icon]) => (
           <button
             key={name}
             className={`nav-item ${page === name ? 'selected' : ''}`}
@@ -1646,7 +1629,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             }}
           >
             <span>{icon}</span>
-            {label}
+            {name}
             {workspace === 'Admin' && name === 'Finance Management' && pendingWithdrawalCount > 0 && (
               <span className="withdrawal-alert-badge" aria-label={pendingWithdrawalCount + ' pending driver withdrawals'}>
                 {pendingWithdrawalCount}
@@ -1686,32 +1669,29 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             />
           </button>
           <button
-            type="button"
             className="mobile-nav-toggle"
-            aria-expanded={showMobileNav}
-            aria-controls="mobile-primary-navigation"
-            onClick={() => setShowMobileNav((open) => !open)}
+            onClick={() => setShowMobileNav(!showMobileNav)}
           >
             ☰ Menu
           </button>
 
           {showMobileNav && (
-            <div className="mobile-nav-dropdown" id="mobile-primary-navigation">
-              {navItems.map(([name, icon, displayLabel = name]) => (
+            <div className="mobile-nav-dropdown">
+              {navItems.map(([label, icon]) => (
                 <button
-                  key={name}
+                  key={label}
                   onClick={() => {
-                    setPage(name);
-                    if (name === 'Packages') {
+                    setPage(label);
+                    if (label === 'Packages') {
                       setStatusFilter('All');
                       setSearch('');
                     }
                     setNotice('');
-                    setShowForm(name === 'Register Package');
+                    setShowForm(label === 'Register Package');
                     setShowMobileNav(false);
                   }}
                 >
-                  {icon} {displayLabel}
+                  {icon} {label}
                 </button>
               ))}
             </div>
@@ -1724,19 +1704,12 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   aria-label="View profile"
                   value={workspace}
                   onChange={(event) => {
-                    const next = event.target.value;
-                    setWorkspace(next);
-                    setNavigation({ page: next === 'Admin' ? 'Admin Operations' : next === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
-                    setShowForm(false);
-                    setShowMobileNav(false);
-                    setNotice('');
-                    setStatusFilter('All');
-                    setSearch('');
+                    void switchWorkspace(event.target.value);
                   }}
                 >
                   <option value="Admin">Admin profile</option>
-                  <option value="Partner">Partner profile{isSuperadmin && linkedPartnerProfile ? '' : ' · preview'}</option>
-                  <option value="Driver">Driver profile{isSuperadmin && linkedDriverProfile ? '' : ' · preview'}</option>
+                  <option value="Partner">Partner workspace</option>
+                  <option value="Driver">Driver workspace</option>
                 </select>
               </label>
             ) : (
@@ -1795,15 +1768,8 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                       aria-label="Switch workspace"
                       value={workspace}
                       onChange={(event) => {
-                        const next = event.target.value;
-                        setWorkspace(next);
-                        setNavigation({ page: next === 'Admin' ? 'Admin Operations' : next === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
-                        setShowForm(false);
                         setShowProfileMenu(false);
-                        setShowMobileNav(false);
-                        setNotice('');
-                        setStatusFilter('All');
-                        setSearch('');
+                        void switchWorkspace(event.target.value);
                       }}
                     >
                       <option value="Admin">Admin workspace</option>
@@ -1827,6 +1793,22 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
         </header>
 
         <section className="content">
+          {partnerSetupOpen && databaseProfile?.role === 'admin' && (
+            <div className="workspace-setup-backdrop">
+              <form className="workspace-setup-card" role="dialog" aria-modal="true" aria-labelledby="partner-workspace-setup-title" onSubmit={saveAdminPartnerSetup}>
+                <p className="approval-kicker">PARTNER WORKSPACE SETUP</p>
+                <h2 id="partner-workspace-setup-title">Add your partner details</h2>
+                <p>Use the usual partner application process for partner accounts. This setup creates the partner workspace linked to your admin account.</p>
+                <label>Business or partner name<input autoComplete="organization" required maxLength={120} value={partnerBusinessName} onChange={(event) => setPartnerBusinessName(event.target.value)} /></label>
+                <label>Business address<textarea autoComplete="street-address" required maxLength={500} rows={3} value={partnerBusinessAddress} onChange={(event) => setPartnerBusinessAddress(event.target.value)} /></label>
+                {notice && <p className="notice" role="alert">{notice}</p>}
+                <div className="workspace-setup-actions">
+                  <button className="primary-btn" type="submit" disabled={partnerSetupBusy}>{partnerSetupBusy ? 'Saving details…' : 'Save partner details'}</button>
+                  <button className="secondary-btn" type="button" disabled={partnerSetupBusy} onClick={() => { setPartnerSetupOpen(false); setWorkspace('Admin'); setNavigation({ page: 'Admin Operations', history: [] }); }}>Back to admin workspace</button>
+                </div>
+              </form>
+            </div>
+          )}
           <div className="eyebrow">
             {workspace === 'Admin'
               ? 'OPERATIONS WORKSPACE'
@@ -1872,10 +1854,8 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             </section>
           )}
 
-          {databaseProfile?.role === 'admin' && workspace !== 'Admin' && !(isSuperadmin && (workspace === 'Partner' ? linkedPartnerProfile : linkedDriverProfile)) && (
-            <div className="profile-preview-note" role="status">
-              Previewing the {workspace.toLowerCase()} profile. A real {workspace.toLowerCase()} account is needed to use its account-specific actions.
-            </div>
+          {databaseProfile?.role === 'admin' && workspace !== 'Admin' && !activeLinkedProfile && !partnerSetupOpen && (
+            <div className="profile-preview-note" role="status">Set up your {workspace.toLowerCase()} workspace to use its account-specific features.</div>
           )}
 
           {workspace === 'Driver' && page === 'About' && (
@@ -1896,7 +1876,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             page === 'Accounts & Finance' ||
             page === 'Accounts') &&
             workspace === 'Admin' && (
-              <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} /></SectionErrorBoundary>
+              <FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} />
             )}
 
           {page === 'Approvals' && workspace === 'Admin' && (
@@ -1911,7 +1891,6 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
               <AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} />
-              <ManagedIgoAccounts />
               <PendingIgoUserApprovals />
               <SuperadminUserManagementAccess />
               <ProfileChangeRequests profile={databaseProfile} user={databaseUser} workspace={workspace} setNotice={setNotice} />
@@ -2566,7 +2545,9 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                           marginTop: 12,
                         }}
                       >
-                        <h3 style={{ display: 'inline-block', margin: '0 0 8px', fontSize: 15 }}>{partner}</h3>
+                        <h3 style={{ display: 'inline-block', margin: '0 0 8px', fontSize: 15 }}>
+                          {partner}
+                        </h3>
                         {partnerPackages.map((p) => (
                           <article
                             key={p.id}
@@ -2606,7 +2587,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               <div className="simple-list">
                 <h2>Invoices and payments</h2>
                 <p>{databaseProfile ? 'Official invoices and payment status from your account.' : 'Official records appear after database setup.'}</p>
-                <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} /></SectionErrorBoundary>
+                <FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} />
               </div>
             </>
           )}
@@ -2658,192 +2639,6 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
   );
 }
 
-function ManagedIgoAccounts() {
-  const [accounts, setAccounts] = useState([]);
-  const [filter, setFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [search, setSearch] = useState('');
-  const [busyId, setBusyId] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [canPromoteAdmins, setCanPromoteAdmins] = useState(false);
-  const [superadminIds, setSuperadminIds] = useState([]);
-
-  const refresh = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      setAccounts(await loadManagedUserAccounts());
-      const { data: isSuperadmin, error: roleError } = await supabase.rpc('is_igo_superadmin');
-      if (roleError) throw roleError;
-      setCanPromoteAdmins(isSuperadmin === true);
-      if (isSuperadmin === true) {
-        const { data: ids, error: idsError } = await supabase.rpc('list_igo_superadmin_user_ids');
-        if (idsError) throw idsError;
-        setSuperadminIds((ids || []).map((row) => row.user_id));
-      } else {
-        setSuperadminIds([]);
-      }
-    } catch (loadError) {
-      setError(loadError.message || 'Could not load user accounts.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { void refresh(); }, []);
-
-  const changeStatus = async (account) => {
-    const nextStatus = account.status === 'approved' ? 'suspended' : 'approved';
-    setBusyId(account.accountId);
-    setMessage('');
-    setError('');
-    try {
-      await setAccountApproval(account.type, account.accountId, nextStatus);
-      await refresh();
-      setMessage(`${account.type === 'Driver' ? 'Rider' : 'Partner'} account ${nextStatus === 'approved' ? 'reactivated' : 'suspended'}.`);
-    } catch (changeError) {
-      setError(changeError.message || 'Could not update this account.');
-    } finally {
-      setBusyId('');
-    }
-  };
-
-  const promoteAdmin = async (account) => {
-    setBusyId(account.accountId);
-    setMessage('');
-    setError('');
-    try {
-      const { error: promoteError } = await supabase.rpc('promote_igo_admin_to_superadmin', {
-        p_user_id: account.accountId,
-      });
-      if (promoteError) throw promoteError;
-      await refresh();
-      setMessage(`${account.name || 'Admin'} was promoted to superadmin.`);
-    } catch (promoteError) {
-      setError(promoteError.message || 'Could not promote this admin account.');
-    } finally {
-      setBusyId('');
-    }
-  };
-
-  const managed = accounts.filter((account) =>
-    account.type === 'Admin' || account.status === 'approved' || account.status === 'suspended'
-  );
-  const visible = managed.filter((account) => {
-    const matchesType = typeFilter === 'all' ||
-      (typeFilter === 'partners' && account.type === 'Partner') ||
-      (typeFilter === 'riders' && account.type === 'Driver') ||
-      (typeFilter === 'admins' && account.type === 'Admin');
-    const matchesStatus = filter === 'all' || account.status === filter;
-    const query = search.trim().toLowerCase();
-    const searchable = [account.name, account.contact_name, account.phone, account.email, account.type === 'Driver' ? 'Rider' : account.type]
-      .filter(Boolean).join(' ').toLowerCase();
-    return matchesType && matchesStatus && (!query || searchable.includes(query));
-  });
-
-  return (
-    <section className="card managed-account-panel" style={{ marginBottom: '1.25rem', padding: 20 }}>
-      <div className="ops-heading">
-        <div>
-          <h2>User accounts</h2>
-          <p>Find partners, riders, and admins. Suspend or restore partner and rider access.</p>
-        </div>
-        <button type="button" className="secondary-btn" onClick={refresh} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'end', gap: 12, flexWrap: 'wrap', margin: '12px 0' }}>
-        <label style={{ flex: '1 1 220px' }}>Search accounts
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Name, phone, or email"
-            aria-label="Search partner, rider, and admin accounts by name, phone, or email"
-          />
-        </label>
-        <label>Show status<select value={filter} onChange={(event) => setFilter(event.target.value)}>
-          <option value="all">All</option>
-          <option value="approved">Approved</option>
-          <option value="suspended">Suspended</option>
-        </select></label>
-      </div>
-      <div role="group" aria-label="Quick filter by account type" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-        {[
-          ['all', 'All'],
-          ['partners', 'Partners'],
-          ['riders', 'Riders'],
-          ['admins', 'Admins'],
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            className={typeFilter === value ? 'primary-btn' : 'secondary-btn'}
-            aria-pressed={typeFilter === value}
-            onClick={() => setTypeFilter(value)}
-          >{label}</button>
-        ))}
-      </div>
-      {message && <p role="status" className="notice">{message}</p>}
-      {error && <p role="alert" className="notice">{error}</p>}
-      {loading ? <p>Loading accounts…</p> : visible.length ? (
-        <div className="managed-account-list">
-          {visible.map((account) => {
-            const isAdmin = account.type === 'Admin';
-            const approved = account.status === 'approved';
-            return (
-              <article
-                key={`managed-${account.type}-${account.accountId}`}
-                className="managed-account-row"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', borderTop: '1px solid #64748b', padding: '12px 0' }}
-              >
-                <div className="managed-account-info" style={{ flex: '1 1 230px', minWidth: 0 }}>
-                  <strong>{account.name || account.contact_name || 'Unnamed account'}</strong>
-                  <p style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>{account.type === 'Driver' ? 'Rider' : account.type} · Phone: {account.phone || 'Not provided'}{account.email ? ` · ${account.email}` : ''}</p>
-                  {isAdmin && <small style={{ display: 'block', marginTop: 4, color: '#94a3b8' }}>
-                    {account.addedByName
-                      ? `Added by ${account.addedByName}${account.addedByEmail ? ` · ${account.addedByEmail}` : ''}`
-                      : 'Inviter not recorded'}
-                    {account.invitedAt ? ` · ${new Date(account.invitedAt).toLocaleDateString()}` : ''}
-                  </small>}
-                </div>
-                <span
-                  className={`status status-${statusClass(account.status)}`}
-                  style={{
-                    flex: '0 0 auto',
-                    background: isAdmin ? '#1d4ed8' : approved ? '#166534' : '#9a3412',
-                    color: '#fff',
-                    fontWeight: 700,
-                    fontSize: 12,
-                    padding: '5px 10px',
-                  }}
-                >{isAdmin && superadminIds.includes(account.accountId) ? 'Superadmin' : isAdmin ? 'Admin' : account.status}</span>
-                {isAdmin && canPromoteAdmins && !superadminIds.includes(account.accountId) && <button
-                  type="button"
-                  className="primary-btn"
-                  disabled={busyId === account.accountId}
-                  onClick={() => promoteAdmin(account)}
-                  title="Grant this admin superadmin access"
-                >
-                  {busyId === account.accountId ? 'Promoting…' : 'Promote to superadmin'}
-                </button>}
-                {!isAdmin && <button
-                  type="button"
-                  className={approved ? 'secondary-btn' : 'primary-btn'}
-                  disabled={busyId === account.accountId}
-                  onClick={() => changeStatus(account)}
-                >
-                  {busyId === account.accountId ? 'Saving…' : approved ? 'Suspend' : 'Reactivate'}
-                </button>}
-              </article>
-            );
-          })}
-        </div>
-      ) : <p>{search.trim() ? 'No accounts match that search.' : 'No accounts match the selected filters.'}</p>}
-    </section>
-  );
-}
-
 function ApprovalDashboard() {
   const [accounts, setAccounts] = useState([]);
   const [status, setStatus] = useState('pending');
@@ -2873,17 +2668,15 @@ function ApprovalDashboard() {
   return (
     <section className="accounts-dashboard" style={{ padding: 24 }}>
       <p className="approval-kicker">ADMIN WORKSPACE · LIVE</p>
-      <h2>Pending user approvals</h2>
+      <h2>Account approvals</h2>
       <label>Show<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option><option value="all">All</option></select></label>
       {message && <p role="status" className="notice">{message}</p>}
       {loading ? <p>Loading accounts…</p> : visible.length ? visible.map((account) => (
         <article className="application-card" key={`${account.type}-${account.accountId}`} style={{ padding: 16, marginTop: 12 }}>
           <div><strong>{account.name}</strong><p>{account.type} · {account.contact_name || account.email || account.phone || 'No contact details'}</p><span className={`status status-${statusClass(account.status)}`}>{account.status}</span></div>
           <div className="finance-report-actions">
-            {account.status === 'suspended'
-              ? <button className="primary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'approved')}>Reactivate</button>
-              : account.status !== 'approved' && <button className="primary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'approved')}>Approve</button>}
-            {account.status !== 'rejected' && account.status !== 'suspended' && <button className="secondary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'rejected')}>Reject</button>}
+            {account.status !== 'approved' && <button className="primary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'approved')}>Approve</button>}
+            {account.status !== 'rejected' && <button className="secondary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'rejected')}>Reject</button>}
             {account.status === 'approved' && <button className="secondary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'suspended')}>Suspend</button>}
           </div>
         </article>
@@ -2897,7 +2690,6 @@ function AdminOperations({ packages, onUpdate, liveMode = false }) {
   const [filter, setFilter] = useState('All');
   const [area, setArea] = useState('All');
   const [drafts, setDrafts] = useState({});
-  const [paymentReviewDrafts, setPaymentReviewDrafts] = useState({});
   const [feedback, setFeedback] = useState('');
   const statuses = [
     'Pending',
@@ -4282,10 +4074,22 @@ function SuperadminUserManagementAccess() {
 }
 
 function SuperadminUserManagementPanel() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [showInviteForm, setShowInviteForm] = useState(false);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    setError('');
+    const { data, error: loadError } = await supabase.rpc('list_igo_user_accounts');
+    if (loadError) setError(loadError.message);
+    else setUsers(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadUsers(); }, []);
 
   const inviteUser = async (event) => {
     event.preventDefault();
@@ -4306,53 +4110,41 @@ function SuperadminUserManagementPanel() {
     });
     if (inviteError) setError(inviteError.message);
     else {
-      let inviterAuditMessage = '';
-      if (String(values.get('role') || '') === 'admin') {
-        const { error: auditError } = await supabase.rpc('record_igo_admin_inviter', {
-          p_invited_email: String(data.email || values.get('email') || '').trim(),
-        });
-        inviterAuditMessage = auditError
-          ? ' Inviter tracking could not be saved: ' + auditError.message
-          : ' The admin invitation is recorded under the signed-in admin.';
-      }
-      setMessage('Invitation sent to ' + data.email + '. ' + (data.approval_status === 'pending' ? 'The account will need admin approval.' : 'The admin account is ready after the invite is accepted.') + inviterAuditMessage);
+      setMessage('Invitation sent to ' + data.email + '. ' + (data.approval_status === 'pending' ? 'The account will need admin approval.' : 'The admin account is ready after the invite is accepted.'));
       form.reset();
-      setShowInviteForm(false);
+      await loadUsers();
     }
     setBusy(false);
   };
 
   return (
     <section className="profile-user-management" style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid #e5e7eb' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-        <h3 style={{ margin: 0 }}>User management</h3>
-        <button
-          type="button"
-          className="secondary-btn"
-          onClick={() => setShowInviteForm((visible) => !visible)}
-          aria-expanded={showInviteForm}
-          aria-controls="superadmin-invite-form"
-        >{showInviteForm ? 'Close form' : 'Add user manually'}</button>
-      </div>
-      <p style={{ margin: '0.5rem 0 0', color: '#64748b' }}>
-        Use manual invites mainly to create admin accounts or handle exceptions. Partners and riders should normally apply through the usual application process.
-      </p>
-      {showInviteForm && (
-        <div style={{ marginTop: '0.75rem' }}>
-          <p>Create an account and send an invitation. Partner and rider accounts still need admin approval.</p>
-          <form id="superadmin-invite-form" onSubmit={inviteUser} style={{ display: 'grid', gap: '0.75rem', maxWidth: '36rem' }}>
-            <label>Full name<input name="full_name" required /></label>
-            <label>Email<input name="email" type="email" required /></label>
-            <label>Phone *<input name="phone" type="tel" autoComplete="tel" required /></label>
-            <label>Account type<select name="role" defaultValue="partner"><option value="partner">Partner</option><option value="driver">Driver</option><option value="admin">Admin</option></select></label>
-            <label>Partner business name<input name="business_name" /></label>
-            <label>Partner address<input name="address" /></label>
-            <button type="submit" className="secondary-btn" disabled={busy}>{busy ? 'Sending invitation…' : 'Create account and invite'}</button>
-          </form>
-        </div>
-      )}
+      <h3>User management</h3>
+      <p>Create an account and send an invitation. Every account needs a registered phone number. Partner and driver accounts wait for admin approval.</p>
+      <form onSubmit={inviteUser} style={{ display: 'grid', gap: '0.75rem', maxWidth: '36rem' }}>
+        <label>Full name<input name="full_name" required /></label>
+        <label>Email<input name="email" type="email" required /></label>
+        <label>Phone *<input name="phone" type="tel" autoComplete="tel" required /></label>
+        <label>Account type<select name="role" defaultValue="partner"><option value="partner">Partner</option><option value="driver">Driver</option><option value="admin">Admin</option></select></label>
+        <label>Partner business name<input name="business_name" /></label>
+        <label>Partner address<input name="address" /></label>
+        <button type="submit" className="secondary-btn" disabled={busy}>{busy ? 'Sending invitation…' : 'Create account and invite'}</button>
+      </form>
       {message && <p role="status" className="notice">{message}</p>}
       {error && <p role="alert" className="notice">{error}</p>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem' }}>
+        <h4>Accounts</h4>
+        <button type="button" className="secondary-btn" onClick={loadUsers} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button>
+      </div>
+      {loading && <p>Loading accounts…</p>}
+      {!loading && !error && users.length === 0 && <p>No user accounts found.</p>}
+      {!loading && users.map((item) => (
+        <article key={item.user_id} style={{ padding: '0.85rem 0', borderBottom: '1px solid #e5e7eb' }}>
+          <strong>{item.full_name || 'Name not provided'}</strong>
+          <p style={{ margin: '0.3rem 0', color: '#64748b' }}>{item.email} · {item.role} · {item.approval_status}</p>
+          <p style={{ margin: '0.3rem 0', color: '#64748b' }}>{item.phone || 'No phone number'}{item.partner_name ? ' · ' + item.partner_name : ''}{item.address ? ' · ' + item.address : ''}</p>
+        </article>
+      ))}
     </section>
   );
 }
@@ -4637,17 +4429,16 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   const [withdrawalRequests, setWithdrawalRequests] = useState(() =>
     liveMode ? [] : readDriverWithdrawalRequests()
   );
-  const [paymentReviewDrafts, setPaymentReviewDrafts] = useState({});
   const refreshDatabaseFinance = async (notifyRoot = false) => {
     if (!liveMode) return;
     try {
-      const records = await loadFinanceRecords({ workspace });
+      const partnerId = workspace === 'Partner' ? await getCurrentPartnerIdOptional() : undefined;
+      const records = await loadFinanceRecords({ workspace, partnerId });
       setBilling((current) => ({
         ...current,
         cutoff: records.invoiceCutoff || current.cutoff,
         invoices: records.invoices,
         payments: records.payments,
-        partnerCredits: records.partnerCredits,
         expenses: records.expenses.map((row) => ({ id: row.id, date: row.expense_date, category: row.category, description: row.description, paidTo: row.paid_to, amount: Number(row.amount || 0), reference: row.reference || '', recordedAt: row.created_at })),
         transferAccountName: records.bankAccounts.find((row) => row.active)?.account_name || '',
         transferAccountNumber: records.bankAccounts.find((row) => row.active)?.account_number || '',
@@ -4831,11 +4622,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     (liveMode
       ? Number(billing.invoices.find((invoice) => invoice.id === invoiceId)?.paidAmount || 0)
       : billing.payments
-      .filter((p) => p.status === 'confirmed')
-      .reduce((sum, p) => sum + Number(
-        p.allocations?.find((allocation) => allocation.invoiceId === invoiceId)?.amount ||
-        (p.invoiceId === invoiceId ? p.amount : 0)
-      ), 0));
+      .filter((p) => p.invoiceId === invoiceId && p.status === 'confirmed')
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0));
   const getInvoiceStatus = (invoice) => {
     const paid = getPaid(invoice.id);
     return paid >= invoice.amount
@@ -4950,39 +4738,32 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         ' demo invoice(s) from delivered packages.'
     );
   };
-  const submitPayment = async (event, invoices) => {
+  const submitPayment = async (event, invoice) => {
     event.preventDefault();
-    const payable = invoices.filter((invoice) => invoice.amount - getPaid(invoice.id) > 0);
-    const dueTotal = payable.reduce((sum, invoice) => sum + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
-    const paymentKey = 'all-outstanding-invoices';
-    const draft = drafts[paymentKey] || {};
-    const amount = Number(draft.amount ?? dueTotal);
-    if (!draft.slipName || dueTotal <= 0 || !Number.isFinite(amount) || amount <= 0) {
-      setNotice(dueTotal <= 0 ? 'There is no outstanding balance to pay.' : !draft.slipName ? 'Attach the payment slip before submitting.' : 'Enter the amount you transferred.');
+    const draft = drafts[invoice.id] || {};
+    const amount = Number(draft.amount || invoice.amount - getPaid(invoice.id));
+    const due = Math.max(0, invoice.amount - getPaid(invoice.id));
+    if (!draft.slipName || amount <= 0 || amount > due) {
+      setNotice(
+        'Select the payment slip and enter an amount no greater than the balance due.'
+      );
       return;
     }
-    const reference = (draft.reference || 'Payment for all outstanding invoices').trim();
-    const invoiceIds = payable.map((invoice) => invoice.id);
-    const invoiceLabels = payable.map((invoice) => invoice.id);
-    const note = 'Payment submitted · Invoices included: ' + invoiceLabels.join(', ');
     if (liveMode) {
       try {
         const partnerId = await getCurrentPartnerId();
         await submitInvoicePayment({
           partnerId,
-          invoices: payable.map((invoice) => ({
-            invoiceId: invoice.dbId,
-            label: invoice.id,
-          })),
+          invoiceId: invoice.dbId,
           amount,
-          reference,
+          reference: (draft.reference || invoice.id).trim(),
           transferDate: draft.transferDate || localDateKey(new Date()),
-          note,
+          note: 'Payment for invoice ' + invoice.id,
           file: draft.file,
         });
         await refreshDatabaseFinance(true);
-        setDrafts((current) => ({ ...current, [paymentKey]: {} }));
-        setNotice('Payment submitted for all listed invoices and sent to admin for review.');
+        setDrafts((current) => ({ ...current, [invoice.id]: {} }));
+        setNotice('Payment slip uploaded and submitted to admin for review.');
       } catch (error) {
         setNotice(error.message || 'Could not submit the payment.');
       }
@@ -4990,15 +4771,10 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     }
     const payment = {
       id: 'PAY-' + Date.now(),
-      invoiceId: invoiceIds.join(', '),
-      invoiceDues: payable.map((invoice) => ({
-        invoiceId: invoice.id,
-        amount: Math.max(0, invoice.amount - getPaid(invoice.id)),
-      })),
-      allocations: [],
-      partner: payable[0]?.partner || 'Style Hub',
+      invoiceId: invoice.id,
+      partner: invoice.partner,
       amount,
-      reference,
+      reference: (draft.reference || invoice.id).trim(),
       slipName: draft.slipName,
       status: 'pending_verification',
       submittedAt: new Date().toISOString(),
@@ -5009,75 +4785,46 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       notifications: addNotification(
         current.notifications,
         'Payment submitted for review',
-        invoiceIds.join(', ') + ' · ' + money(amount) + ' · ' + payment.partner
+        invoice.id + ' · ' + money(amount) + ' · ' + invoice.partner
       ),
     }));
-    setDrafts((current) => ({ ...current, [paymentKey]: {} }));
+    setDrafts((current) => ({ ...current, [invoice.id]: {} }));
     setNotice(
-      'Full payment details were added to this demo. The selected slip file was not uploaded.'
+      'Payment details were added to this demo. The selected slip file was not uploaded.'
     );
   };
   const decidePayment = async (payment, status) => {
-    const reviewDraft = paymentReviewDrafts[payment.id] || {};
-    const verifiedAmount = Number(reviewDraft.amount ?? payment.amount);
-    const rejectionReason = (reviewDraft.reason || '').trim();
-    if (status === 'rejected' && !rejectionReason) {
-      setNotice('Enter a reason before rejecting this payment.');
-      return;
-    }
-    if (status === 'confirmed' && (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0 || verifiedAmount > payment.amount)) {
-      setNotice('Enter the amount actually received, up to the amount reported by the partner.');
-      return;
-    }
     if (liveMode) {
       try {
-        await reviewPayment(payment.id, status, verifiedAmount, rejectionReason);
+        await reviewPayment(payment.id, status);
         await refreshDatabaseFinance(true);
-        if (status === 'confirmed') {
-          try {
-            await sendPaymentReceipt(payment.id);
-            setNotice('Payment approved. The partner has been notified and emailed an itemized receipt.');
-          } catch (emailError) {
-            setNotice('Payment approved and partner notified, but the receipt email failed: ' + (emailError.message || 'Email service unavailable.'));
-          }
-        } else {
-          setNotice('Payment rejected. The partner has been notified with the rejection reason.');
-        }
-        setPaymentReviewDrafts((current) => { const next = { ...current }; delete next[payment.id]; return next; });
+        setNotice(status === 'confirmed' ? 'Payment approved and allocated to the invoice.' : 'Payment rejected.');
       } catch (error) {
         setNotice(error.message || 'Could not update payment.');
       }
       return;
     }
-    let allocations = [];
-    let creditAmount = 0;
-    if (status === 'confirmed') {
-      let remaining = verifiedAmount;
-      allocations = (payment.invoiceDues || []).map((invoice) => {
-        const applied = Math.min(remaining, invoice.amount);
-        remaining -= applied;
-        return { invoiceId: invoice.invoiceId, amount: applied };
-      }).filter((allocation) => allocation.amount > 0);
-      creditAmount = remaining;
-    }
     setBilling((current) => ({
       ...current,
       payments: current.payments.map((item) =>
         item.id === payment.id
-          ? { ...item, status, verifiedAmount: status === 'confirmed' ? verifiedAmount : 0, allocations, creditAmount, rejectionReason, verifiedAt: new Date().toISOString() }
+          ? { ...item, status, verifiedAt: new Date().toISOString() }
           : item
       ),
       notifications: addNotification(
         current.notifications,
         status === 'confirmed' ? 'Payment approved' : 'Payment needs attention',
-        payment.invoiceId + ' · ' + payment.partner + ' · ' + money(verifiedAmount) + (rejectionReason ? ' · ' + rejectionReason : '')
+        payment.invoiceId +
+          ' · ' +
+          payment.partner +
+          ' · ' +
+          money(payment.amount)
       ),
     }));
-    setPaymentReviewDrafts((current) => { const next = { ...current }; delete next[payment.id]; return next; });
     setNotice(
       status === 'confirmed'
-        ? 'Demo payment approved. Invoice balances and any partner credit are updated in this browser.'
-        : 'Demo payment rejected. The reason is included in the partner notification.'
+        ? 'Demo payment approved. The invoice balance is updated in this browser.'
+        : 'Demo payment marked for partner follow-up.'
     );
   };
   const invoiceList = (partnerMode) => {
@@ -5194,10 +4941,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   if (workspace === 'Partner') {
     const partnerInvoices = liveMode ? billing.invoices : billing.invoices.filter((invoice) => invoice.partner === 'Style Hub');
     const payableInvoices = partnerInvoices.filter((invoice) => getInvoiceStatus(invoice) !== 'Paid');
+    const selectedPaymentInvoice = payableInvoices.find((invoice) => invoice.id === selectedPaymentInvoiceId) || payableInvoices[0] || null;
     const totalOutstanding = partnerInvoices.reduce((total, invoice) => total + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
-    const partnerCredit = liveMode
-      ? Number(billing.partnerCredits?.[partnerInvoices[0]?.partnerId] || 0)
-      : billing.payments.filter((payment) => payment.partner === 'Style Hub' && payment.status === 'confirmed').reduce((sum, payment) => sum + Number(payment.creditAmount || 0), 0);
     return (
       <section style={{ paddingBottom: 28 }}>
         <p className="approval-kicker">PARTNER WORKSPACE · INVOICES</p>
@@ -5207,15 +4952,15 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
 
         <section id="partner-invoice-payment-options" style={panel}>
           <h3>Invoices</h3>
-          <p style={{ fontSize: 13, color: '#64748b', marginTop: 0 }}>Only delivered packages are invoiced.</p>
           {partnerInvoices.length ? (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                <thead><tr>{['Invoice', 'Status', 'Amount due', ''].map((label, index) => <th key={label || index} style={{ padding: '9px 8px', borderBottom: '1px solid #dfe7e2', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
+                <thead><tr>{['Pay', 'Invoice', 'Status', 'Amount due', ''].map((label, index) => <th key={label || index} style={{ padding: '9px 8px', borderBottom: '1px solid #dfe7e2', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
                 <tbody>
                   {partnerInvoices.map((invoice) => {
                     const due = Math.max(0, invoice.amount - getPaid(invoice.id));
                     return <tr key={invoice.id} style={{ borderBottom: '1px solid #e7e9e5' }}>
+                      <td style={{ padding: '9px 8px' }}><input type="radio" name="partner-payment-invoice" aria-label={`Pay invoice ${invoice.id}`} checked={selectedPaymentInvoice?.id === invoice.id} disabled={due === 0} onChange={() => setSelectedPaymentInvoiceId(invoice.id)} /></td>
                       <td style={{ padding: '9px 8px', whiteSpace: 'nowrap' }}><strong>{invoice.id}</strong></td>
                       <td style={{ padding: '9px 8px', whiteSpace: 'nowrap' }}>{getInvoiceStatus(invoice)}</td>
                       <td style={{ padding: '9px 8px', whiteSpace: 'nowrap' }}>{money(due)}</td>
@@ -5232,7 +4977,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           </div>
 
           <div style={{ border: '1px solid #dfe7e2', borderRadius: 10, padding: 12, marginBottom: 14 }}>
-            <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>Account Details</h4>
+            <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>iGO account details</h4>
             <div style={{ display: 'grid', gap: 6 }}>
               {[['Account name', billing.transferAccountName], ['Account number', billing.transferAccountNumber]].map(([label, value]) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -5243,15 +4988,16 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             </div>
           </div>
 
-          {totalOutstanding > 0 ? (
-            <form onSubmit={(event) => submitPayment(event, payableInvoices)} style={{ display: 'grid', gap: 10 }}>
-              <p style={{ fontSize: 13, margin: 0 }}>All outstanding invoices are included. Enter the total actually transferred; the admin will verify it against the payment slip.</p>
-              {partnerCredit > 0 && <p style={{ margin: 0 }}>Usable partner credit: <strong>{money(partnerCredit)}</strong>. Credit is applied automatically to new invoices.</p>}
-              <label>Amount transferred (MVR)<input required type="number" min="0.01" step="0.01" value={drafts['all-outstanding-invoices']?.amount ?? totalOutstanding} onChange={(event) => setDrafts((current) => ({ ...current, 'all-outstanding-invoices': { ...current['all-outstanding-invoices'], amount: event.target.value } }))} /></label>
-              <label>Payment slip<input required type="file" accept="image/*,application/pdf" onChange={(event) => setDrafts((current) => ({ ...current, 'all-outstanding-invoices': { ...current['all-outstanding-invoices'], slipName: event.target.files?.[0]?.name || '', file: event.target.files?.[0] || null } }))} /></label>
-              <button style={buttonStyle} type="submit">Submit payment for review</button>
-            </form>
-          ) : <p>There are no outstanding invoices to pay.{partnerCredit > 0 ? ' Your usable credit will apply automatically to new invoices.' : ''}</p>}
+          {selectedPaymentInvoice ? (
+            <>
+              <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px' }}>Payment will be submitted for {selectedPaymentInvoice.id}. Select another invoice in the table to change it.</p>
+              <form onSubmit={(event) => submitPayment(event, selectedPaymentInvoice)} style={{ display: 'grid', gap: 10 }}>
+                <label>Payment amount (MVR)<input required type="number" min="0.01" step="0.01" max={selectedPaymentInvoice.amount - getPaid(selectedPaymentInvoice.id)} value={drafts[selectedPaymentInvoice.id]?.amount ?? selectedPaymentInvoice.amount - getPaid(selectedPaymentInvoice.id)} onChange={(event) => setDrafts((current) => ({ ...current, [selectedPaymentInvoice.id]: { ...current[selectedPaymentInvoice.id], amount: event.target.value } }))} /></label>
+                <label>Payment slip<input required type="file" accept="image/*,application/pdf" onChange={(event) => setDrafts((current) => ({ ...current, [selectedPaymentInvoice.id]: { ...current[selectedPaymentInvoice.id], slipName: event.target.files?.[0]?.name || '', file: event.target.files?.[0] || null } }))} /></label>
+                <button style={buttonStyle} type="submit">Submit payment for review</button>
+              </form>
+            </>
+          ) : <p>There are no outstanding invoices to pay.</p>}
 
           {viewingInvoice && (
             <div
@@ -5813,117 +5559,33 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       <section style={panel}>
         <h3>Payments awaiting review</h3>
         {pendingPayments.length ? (
-          pendingPayments.map((payment) => {
-            const invoiceDues = (payment.invoiceDues || []).filter((invoice) => invoice?.invoiceId);
-            const invoiceLabels = invoiceDues.length
-              ? invoiceDues.map((invoice) => invoice.invoiceId)
-              : String(payment.invoiceId || '').split(',').map((invoiceId) => invoiceId.trim()).filter(Boolean);
-            const invoiceBalanceTotal = invoiceDues.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
-            const compactInvoiceId = (invoiceId) => (
-              invoiceId.length <= 24
-                ? invoiceId
-                : invoiceId.slice(0, invoiceId.startsWith('INV-') ? 13 : 12) + '…' + invoiceId.slice(-6)
-            );
-            return (
-              <article className="payment-review-card" key={payment.id}>
-                <header className="payment-review-header">
-                  <div className="payment-review-title">
-                    <strong className="payment-review-partner">{payment.partner || 'Partner'}</strong>
-                    <div className="payment-review-invoices" aria-label="Invoices included in this payment">
-                      <span className="payment-review-count">{invoiceLabels.length} invoice{invoiceLabels.length === 1 ? '' : 's'}</span>
-                      {invoiceLabels.slice(0, 2).map((invoiceId) => (
-                        <code key={invoiceId} title={invoiceId}>{compactInvoiceId(invoiceId)}</code>
-                      ))}
-                      {invoiceLabels.length > 2 && <span className="payment-review-more">+{invoiceLabels.length - 2} more</span>}
-                    </div>
-                  </div>
-                  <strong className="payment-review-amount">{money(payment.amount)}</strong>
-                </header>
-                {invoiceLabels.length > 0 && (
-                  <details className="payment-review-receipt">
-                    <summary>View payment receipt</summary>
-                    <div className="payment-receipt">
-                      <header className="payment-receipt-heading">
-                        <div><span>Payment receipt</span><strong>{payment.partner || 'Partner'}</strong></div>
-                        <strong className="payment-receipt-total">{money(payment.amount)}</strong>
-                      </header>
-                      <div className="payment-receipt-summary">
-                        <div><span>Invoices included</span><strong>{invoiceLabels.length}</strong></div>
-                        <div><span>Invoice balance total</span><strong>{invoiceDues.length ? money(invoiceBalanceTotal) : 'Unavailable'}</strong></div>
-                        <div><span>Reference</span><strong>{payment.reference || '—'}</strong></div>
-                        <div><span>Transfer date</span><strong>{payment.transferDate || '—'}</strong></div>
-                      </div>
-                      <ol className="payment-receipt-invoices">
-                        {invoiceLabels.map((invoiceId, index) => {
-                          const invoice = invoiceDues.find((item) => item.invoiceId === invoiceId);
-                          return (
-                            <li key={invoiceId}>
-                              <div className="payment-receipt-invoice-heading">
-                                <code>{invoiceId}</code>
-                                <strong>{invoice ? money(invoice.amount) : 'Amount unavailable'}</strong>
-                              </div>
-                              {invoice?.lines?.length > 0 && (
-                                <ul>
-                                  {invoice.lines.map((line, lineIndex) => (
-                                    <li key={line.id || lineIndex}>
-                                      <span>{line.description || line.packageId || 'Invoice item'}</span>
-                                      <span>{money(line.amount)}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ol>
-                      <p>Invoice amounts show the outstanding balance available when this payment was submitted. Compare the itemized invoices with the payment slip above.</p>
-                    </div>
-                  </details>
-                )}
-                <div className="payment-review-metadata">
-                  <div><span>Reference</span><strong>{payment.reference || '—'}</strong></div>
-                  <div><span>Transfer date</span><strong>{payment.transferDate || '—'}</strong></div>
-                  <div><span>Payment slip</span><PaymentSlipLink path={payment.slipPath} name={payment.slipName} /></div>
-                </div>
-                <div className="payment-review-fields">
-                  <label>
-                    Amount verified received (MVR)
-                    <input
-                      type="number"
-                      min="0.01"
-                      max={payment.amount}
-                      step="0.01"
-                      value={paymentReviewDrafts[payment.id]?.amount ?? payment.amount}
-                      onChange={(event) => setPaymentReviewDrafts((current) => ({ ...current, [payment.id]: { ...current[payment.id], amount: event.target.value } }))}
-                    />
-                  </label>
-                  <label>
-                    Rejection reason
-                    <textarea
-                      rows={2}
-                      value={paymentReviewDrafts[payment.id]?.reason || ''}
-                      onChange={(event) => setPaymentReviewDrafts((current) => ({ ...current, [payment.id]: { ...current[payment.id], reason: event.target.value } }))}
-                      placeholder="Explain what needs to be corrected"
-                    />
-                  </label>
-                </div>
-                <p className="payment-review-hint">Any amount above the included invoice balances becomes usable partner credit.</p>
-                <div className="payment-review-actions">
-                  <button type="button" style={buttonStyle} onClick={() => decidePayment(payment, 'confirmed')}>
-                    Approve verified amount
-                  </button>
-                  <button
-                    type="button"
-                    style={{ ...buttonStyle, background: '#8a2d2d', opacity: paymentReviewDrafts[payment.id]?.reason?.trim() ? 1 : 0.55 }}
-                    disabled={!paymentReviewDrafts[payment.id]?.reason?.trim()}
-                    onClick={() => decidePayment(payment, 'rejected')}
-                  >
-                    Reject with reason
-                  </button>
-                </div>
-              </article>
-            );
-          })
+          pendingPayments.map((payment) => (
+            <div
+              key={payment.id}
+              style={{ borderTop: '1px solid #eceef1', padding: '12px 0' }}
+            >
+              <strong>
+                {payment.partner} · {payment.invoiceId} ·{' '}
+                {money(payment.amount)}
+              </strong>
+              <p>
+                Reference {payment.reference} · {payment.transferDate} · Slip:{' '}
+                <PaymentSlipLink path={payment.slipPath} name={payment.slipName} />
+              </p>
+              <button
+                style={buttonStyle}
+                onClick={() => decidePayment(payment, 'confirmed')}
+              >
+                Approve payment
+              </button>{' '}
+              <button
+                style={{ ...buttonStyle, background: '#8a2d2d' }}
+                onClick={() => decidePayment(payment, 'rejected')}
+              >
+                Reject for follow-up
+              </button>
+            </div>
+          ))
         ) : (
           <p>None pending.</p>
         )}

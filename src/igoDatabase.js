@@ -216,7 +216,7 @@ export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
     })),
     payments: (paymentResult.data || []).map((row) => ({
       id: row.id,
-      invoiceId: row.invoices?.invoice_number || row.payment_allocations?.map((a) => a.invoices?.invoice_number).filter(Boolean).join(', ') || '',
+      invoiceId: row.payment_allocations?.map((a) => a.invoices?.invoice_number).filter(Boolean).join(', ') || row.invoices?.invoice_number || row.note?.match(/Full payment for invoices:\s*(.*)/)?.[1] || '',
       partnerId: row.partner_id,
       partner: row.partners?.name || '',
       amount: Number(row.amount || 0),
@@ -242,9 +242,9 @@ export async function loadFinanceRecords({ workspace = 'Admin' } = {}) {
   };
 }
 
-export async function submitInvoicePayment({ partnerId, invoiceId, amount, reference, transferDate, note, file }) {
+export async function submitInvoicePayment({ partnerId, invoiceId = null, amount, reference, transferDate, note, file }) {
   const client = requireClient();
-  const path = await uploadIgoFile(file, 'receipts', invoiceId);
+  const path = await uploadIgoFile(file, 'receipts', invoiceId || 'full-balance');
   const { data, error } = await client.from('payments').insert({
     partner_id: partnerId,
     target_invoice_id: invoiceId,

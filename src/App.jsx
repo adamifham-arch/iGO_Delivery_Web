@@ -5814,15 +5814,15 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <h3>Payments awaiting review</h3>
         {pendingPayments.length ? (
           pendingPayments.map((payment) => {
-            const invoiceLabels = payment.invoiceDues?.map((invoice) => invoice.invoiceId).filter(Boolean)
-              || String(payment.invoiceId || '').split(',').map((invoiceId) => invoiceId.trim()).filter(Boolean);
-            const compactInvoiceId = (invoiceId) => {
-              if (invoiceId.length <= 24) return invoiceId;
-              const invoiceNumber = invoiceId.match(/^(INV-\\d{8})-(.+)$/);
-              return invoiceNumber
-                ? invoiceNumber[1] + '-…' + invoiceNumber[2].slice(-6)
-                : invoiceId.slice(0, 12) + '…' + invoiceId.slice(-6);
-            };
+            const invoiceDues = payment.invoiceDues?.map((invoice) => invoice.invoiceId).filter(Boolean) || [];
+            const invoiceLabels = invoiceDues.length
+              ? invoiceDues
+              : String(payment.invoiceId || '').split(',').map((invoiceId) => invoiceId.trim()).filter(Boolean);
+            const compactInvoiceId = (invoiceId) => (
+              invoiceId.length <= 24
+                ? invoiceId
+                : invoiceId.slice(0, invoiceId.startsWith('INV-') ? 13 : 12) + '…' + invoiceId.slice(-6)
+            );
             return (
               <article className="payment-review-card" key={payment.id}>
                 <header className="payment-review-header">

@@ -6989,6 +6989,11 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .payment-review-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .payment-review-actions button { min-height: 42px; margin: 0 !important; }
 .app[data-theme="night"] .payment-review-card { background: #172235; border-color: #475569; color: #f8fafc; }
+.app[data-theme="night"] .main .payment-review-amount {
+  background: #facc15 !important;
+  border: 1px solid #fde047;
+  color: #172235 !important;
+}
 .app[data-theme="night"] .payment-review-count,
 .app[data-theme="night"] .payment-review-more,
 .app[data-theme="night"] .payment-review-full-invoices summary,

@@ -426,16 +426,19 @@ export async function loadCurrentRole() {
 
 export async function loadApprovalAccounts() {
   const client = requireClient();
-  const [partners, drivers] = await Promise.all([
+  const [partners, drivers, admins] = await Promise.all([
     client.from('partners').select('id,owner_id,name,contact_name,phone,email,approval_status,created_at').order('created_at', { ascending: false }),
     client.from('drivers').select('id,user_id,name,phone,approval_status,created_at').order('created_at', { ascending: false }),
+    client.from('profiles').select('id,full_name,phone,role,created_at').eq('role', 'admin').order('created_at', { ascending: false }),
   ]);
   if (partners.error) throw partners.error;
   if (drivers.error) throw drivers.error;
+  if (admins.error) throw admins.error;
   return [
     ...(partners.data || []).map((row) => ({ ...row, type: 'Partner', accountId: row.id, status: row.approval_status })),
     ...(drivers.data || []).map((row) => ({ ...row, type: 'Driver', accountId: row.id, status: row.approval_status })),
-  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    ...(admins.data || []).map((row) => ({ ...row, name: row.full_name, type: 'Admin', accountId: row.id, status: 'admin' })),
+  ].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 
 export async function setAccountApproval(type, id, status) {

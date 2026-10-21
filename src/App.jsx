@@ -5553,7 +5553,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       <h2>Invoices &amp; collections</h2>
       {!liveMode && <div className="notice">Demo mode.</div>}
       <section style={panel}>
-        <h3>Invoices</h3>
+        <h3>Invoices</h3><div style={{display:"flex",flexWrap:"wrap",alignItems:"end",gap:10,marginBottom:14}}><label>Daily cutoff <input type="time" value={billing.cutoff} onChange={(e)=>setBilling((current)=>({...current,cutoff:e.target.value}))}/></label><button type="button" style={buttonStyle} onClick={persistInvoiceCutoff}>Save cutoff</button><span>Ready to invoice: <strong>{readyPackages.length}</strong> · {money(readyPackages.reduce((sum,p)=>sum+Number(p.fee??p.delivery_fee??0),0))}</span><button type="button" style={buttonStyle} onClick={generateInvoices} disabled={liveBusy||(liveMode&&!adminUser)}>{liveBusy?"Generating…":liveMode?"Generate invoice now":"Generate demo invoice now"}</button></div>{!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Signing in…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}
         {invoiceList(false)}
       </section>
       <section style={panel}>
@@ -5654,7 +5654,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           </>
         )}
       </section>
-      {liveAdminPanel}
+      
       <section style={panel}>
         <div
           style={{
@@ -5666,36 +5666,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           }}
         >
           <div>
-            <h3>Invoice cutoff</h3>
-            <p>{liveMode ? 'Invoices generate daily at this Maldives time.' : 'Daily cutoff time. Demo only.'}</p>
-          </div>
-          <label>
-            Daily cutoff{' '}
-            <input
-              type="time"
-              value={billing.cutoff}
-              onChange={(e) =>
-                setBilling((current) => ({
-                  ...current,
-                  cutoff: e.target.value,
-                }))
-              }
-            />
-          </label>
-          <button style={buttonStyle} type="button" onClick={persistInvoiceCutoff}>Save cutoff</button>
-        </div>
-        <p>
-          Delivered and not invoiced: <strong>{readyPackages.length}</strong> ·{' '}
-          {money(
-            readyPackages.reduce(
-              (sum, p) => sum + Number(p.fee ?? p.delivery_fee ?? 0),
-              0
-            )
-          )}
-        </p>
-        <button style={buttonStyle} onClick={generateInvoices}>
-          {liveMode ? 'Generate invoices now' : 'Generate demo invoices'}
-        </button>
+            </div></div>
       </section>
       <section style={panel}>
         <h3>Record business expense</h3>

@@ -313,6 +313,11 @@ export default function App() {
   });
   const page = navigation.page;
   const [workspace, setWorkspace] = useState('Partner');
+  const workspaceRef = useRef('Partner');
+  const activeUserIdRef = useRef(null);
+  useEffect(() => {
+    workspaceRef.current = workspace;
+  }, [workspace]);
   const [databaseUser, setDatabaseUser] = useState(null);
   const [databaseProfile, setDatabaseProfile] = useState(null);
   const [accountApprovalStatus, setAccountApprovalStatus] = useState(null);
@@ -441,6 +446,7 @@ export default function App() {
       if (!session?.user) {
         setInvitePasswordSetupRequired(false);
         if (!active) return;
+        activeUserIdRef.current = null;
         setDatabaseUser(null);
         setDatabaseProfile(null);
         setIsSuperadmin(false);
@@ -479,10 +485,19 @@ export default function App() {
         setIsSuperadmin(additionalProfiles.isSuperadmin);
         setLinkedPartnerProfile(additionalProfiles.partner);
         setLinkedDriverProfile(additionalProfiles.driver);
-        setWorkspace(roleWorkspace);
+        const selectedWorkspace = workspaceRef.current;
+        const keepSelectedWorkspace = activeUserIdRef.current === user.id && (
+          selectedWorkspace === roleWorkspace
+          || (additionalProfiles.isSuperadmin && selectedWorkspace === 'Partner' && additionalProfiles.partner?.approval_status === 'approved')
+          || (additionalProfiles.isSuperadmin && selectedWorkspace === 'Driver' && additionalProfiles.driver?.approval_status === 'approved')
+        );
+        const nextWorkspace = keepSelectedWorkspace ? selectedWorkspace : roleWorkspace;
+        activeUserIdRef.current = user.id;
+        workspaceRef.current = nextWorkspace;
+        setWorkspace(nextWorkspace);
         setPackages(rows);
         if (finance) applyDatabaseFinanceSnapshot(finance);
-        setNavigation({ page: roleWorkspace === 'Admin' ? 'Admin Operations' : roleWorkspace === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
+        if (!keepSelectedWorkspace) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
         setDatabaseError('');
       } catch (error) {
         if (!active) return;

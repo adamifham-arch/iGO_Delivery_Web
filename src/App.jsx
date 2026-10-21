@@ -4176,6 +4176,7 @@ function SuperadminUserManagementPanel() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showInviteForm, setShowInviteForm] = useState(false);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -4209,6 +4210,7 @@ function SuperadminUserManagementPanel() {
     else {
       setMessage('Invitation sent to ' + data.email + '. ' + (data.approval_status === 'pending' ? 'The account will need admin approval.' : 'The admin account is ready after the invite is accepted.'));
       form.reset();
+      setShowInviteForm(false);
       await loadUsers();
     }
     setBusy(false);
@@ -4216,17 +4218,30 @@ function SuperadminUserManagementPanel() {
 
   return (
     <section className="profile-user-management" style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid #e5e7eb' }}>
-      <h3>User management</h3>
-      <p>Create an account and send an invitation. Every account needs a registered phone number. Partner and driver accounts wait for admin approval.</p>
-      <form onSubmit={inviteUser} style={{ display: 'grid', gap: '0.75rem', maxWidth: '36rem' }}>
-        <label>Full name<input name="full_name" required /></label>
-        <label>Email<input name="email" type="email" required /></label>
-        <label>Phone *<input name="phone" type="tel" autoComplete="tel" required /></label>
-        <label>Account type<select name="role" defaultValue="partner"><option value="partner">Partner</option><option value="driver">Driver</option><option value="admin">Admin</option></select></label>
-        <label>Partner business name<input name="business_name" /></label>
-        <label>Partner address<input name="address" /></label>
-        <button type="submit" className="secondary-btn" disabled={busy}>{busy ? 'Sending invitation…' : 'Create account and invite'}</button>
-      </form>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0 }}>User management</h3>
+        <button
+          type="button"
+          className="secondary-btn"
+          onClick={() => setShowInviteForm((visible) => !visible)}
+          aria-expanded={showInviteForm}
+          aria-controls="superadmin-invite-form"
+        >{showInviteForm ? 'Close form' : 'Create account'}</button>
+      </div>
+      {showInviteForm && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <p>Create an account and send an invitation. Every account needs a registered phone number. Partner and driver accounts wait for admin approval.</p>
+          <form id="superadmin-invite-form" onSubmit={inviteUser} style={{ display: 'grid', gap: '0.75rem', maxWidth: '36rem' }}>
+            <label>Full name<input name="full_name" required /></label>
+            <label>Email<input name="email" type="email" required /></label>
+            <label>Phone *<input name="phone" type="tel" autoComplete="tel" required /></label>
+            <label>Account type<select name="role" defaultValue="partner"><option value="partner">Partner</option><option value="driver">Driver</option><option value="admin">Admin</option></select></label>
+            <label>Partner business name<input name="business_name" /></label>
+            <label>Partner address<input name="address" /></label>
+            <button type="submit" className="secondary-btn" disabled={busy}>{busy ? 'Sending invitation…' : 'Create account and invite'}</button>
+          </form>
+        </div>
+      )}
       {message && <p role="status" className="notice">{message}</p>}
       {error && <p role="alert" className="notice">{error}</p>}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem' }}>

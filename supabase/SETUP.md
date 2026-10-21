@@ -16,6 +16,7 @@ Run each SQL file separately in Supabase SQL Editor, in this order:
 1. `migrations/202610190001_add_operational_statuses.sql`
 2. `migrations/202610190002_persistent_workflows.sql`
 3. `migrations/202610190003_invoice_cutoff_scheduler.sql`
+4. `migrations/202610210001_admin_partner_driver_workspaces.sql` (already applied to the production iGO Supabase project)
 4. `migrations/202610210001_partner_payment_review_and_credits.sql`
 5. `migrations/202610210002_payment_receipt_email_log.sql`
 

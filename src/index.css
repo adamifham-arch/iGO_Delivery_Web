@@ -1508,7 +1508,8 @@ header.topbar {
   border-top: 1px solid #edf0f3;
   padding-top: 16px;
 }
-
+.ops-failure {
+  
   grid-column: 1 / -1;
 }
 .status-failed-delivery {
@@ -4653,7 +4654,7 @@ header.topbar {
   border-top: 1px solid #edf0f3;
   padding-top: 16px;
 }
-
+.ops-failure {
   grid-column: 1 / -1;
 }
 .status-failed-delivery {

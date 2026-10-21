@@ -6905,3 +6905,110 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     height: 42px !important;
   }
 }
+
+/* Compact, readable payment review cards, including narrow phone screens. */
+.payment-review-card {
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid #dfe4e1;
+  border-radius: 14px;
+  background: #fff;
+  color: #202124;
+}
+.payment-review-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.payment-review-title { min-width: 0; }
+.payment-review-partner { display: block; font-size: 16px; }
+.payment-review-invoices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  min-width: 0;
+}
+.payment-review-count, .payment-review-more {
+  color: #65736c;
+  font-size: 12px;
+  font-weight: 600;
+}
+.payment-review-invoices code, .payment-review-full-invoices code {
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid #dfe4e1;
+  border-radius: 7px;
+  background: #f3f5f4;
+  color: #344054;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.payment-review-amount {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #854d0e;
+  white-space: nowrap;
+}
+.payment-review-full-invoices { margin-top: 10px; font-size: 12px; }
+.payment-review-full-invoices summary { width: fit-content; color: #52606d; cursor: pointer; font-weight: 600; }
+.payment-review-full-invoices ul { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.payment-review-full-invoices code { display: inline-block; }
+.payment-review-metadata {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, auto) minmax(120px, auto);
+  gap: 10px 16px;
+  margin: 14px 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f7f8fa;
+}
+.payment-review-metadata > div { display: grid; gap: 4px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.payment-review-metadata > div > span { color: #65736c; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.payment-review-fields { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr); align-items: start; gap: 12px; }
+.payment-review-fields label { display: grid; gap: 6px; min-width: 0; color: #344054; font-size: 13px; font-weight: 600; }
+.payment-review-fields input, .payment-review-fields textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #202124;
+  font: inherit;
+}
+.payment-review-fields textarea { min-height: 70px; resize: vertical; }
+.payment-review-hint { margin: 8px 0 12px; color: #65736c; font-size: 12px; line-height: 1.45; }
+.payment-review-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.payment-review-actions button { min-height: 42px; margin: 0 !important; }
+.app[data-theme="night"] .payment-review-card { background: #172235; border-color: #475569; color: #f8fafc; }
+.app[data-theme="night"] .payment-review-count,
+.app[data-theme="night"] .payment-review-more,
+.app[data-theme="night"] .payment-review-full-invoices summary,
+.app[data-theme="night"] .payment-review-hint { color: #aab8cc; }
+.app[data-theme="night"] .payment-review-invoices code,
+.app[data-theme="night"] .payment-review-full-invoices code { background: #0f172a; border-color: #475569; color: #e2e8f0; }
+.app[data-theme="night"] .payment-review-metadata { background: #0f172a; }
+.app[data-theme="night"] .payment-review-metadata > div > span { color: #aab8cc; }
+.app[data-theme="night"] .payment-review-fields label { color: #e2e8f0; }
+.app[data-theme="night"] .payment-review-fields input,
+.app[data-theme="night"] .payment-review-fields textarea { background: #172235; border-color: #475569; color: #f8fafc; }
+@media (max-width: 640px) {
+  .payment-review-card { padding: 13px; }
+  .payment-review-header { gap: 8px; }
+  .payment-review-partner { font-size: 15px; }
+  .payment-review-invoices { gap: 5px; }
+  .payment-review-invoices code { font-size: 10px; }
+  .payment-review-metadata { grid-template-columns: minmax(0, 1fr) minmax(100px, auto); gap: 10px; }
+  .payment-review-metadata > div:first-child { grid-column: 1 / -1; }
+  .payment-review-fields { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .payment-review-actions { display: grid; grid-template-columns: 1fr; }
+  .payment-review-actions button { width: 100%; }
+}

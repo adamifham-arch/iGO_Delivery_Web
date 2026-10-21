@@ -2832,7 +2832,7 @@ function AdminOperations({ packages, onUpdate, liveMode = false }) {
                   className="ops-assignment"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    onUpdate(p.id, {
+                    const selectedDriver = draft.driver.trim(); if (selectedDriver && selectedDriver !== (p.driver || '').trim() && !driverNames.includes(selectedDriver)) { setFeedback('Choose a driver from the search results before saving.'); setActiveDriverField(p.id); return; } onUpdate(p.id, {
                       driver: draft.driver.trim(),
                       status: draft.status,
                       failureReason:
@@ -3358,7 +3358,7 @@ function DriverWorkflowDashboard({
     encodeURIComponent(address);
   const recordFailed = (p) => {
     if (!reasons[p.id]) return;
-    onUpdate(p.id, {
+    const selectedDriver = draft.driver.trim(); if (selectedDriver && selectedDriver !== (p.driver || '').trim() && !driverNames.includes(selectedDriver)) { setFeedback('Choose a driver from the search results before saving.'); setActiveDriverField(p.id); return; } onUpdate(p.id, {
       status: 'Failed Delivery',
       failureReason: reasons[p.id],
       returnedToGodown: false,
@@ -3366,7 +3366,7 @@ function DriverWorkflowDashboard({
   };
   const confirmBoatDelivery = (p) => {
     if (!proofs[p.id]) return;
-    onUpdate(p.id, { status: 'Delivered', proofPhoto: proofs[p.id] });
+    const selectedDriver = draft.driver.trim(); if (selectedDriver && selectedDriver !== (p.driver || '').trim() && !driverNames.includes(selectedDriver)) { setFeedback('Choose a driver from the search results before saving.'); setActiveDriverField(p.id); return; } onUpdate(p.id, { status: 'Delivered', proofPhoto: proofs[p.id] });
   };
   return (
     <div className="driver-dashboard">
@@ -3586,13 +3586,13 @@ function DriverWorkflowDashboard({
                       ({rate}% of MVR {p.fee})
                     </small>
                   </span>
-                  {p.status === 'Pending' && (<><button type="button" className="driver-action" onClick={() => onUpdate(p.id, { status: 'Picked Up', pickedUpAt: new Date().toISOString() })}>Confirm package collected</button><button type="button" className="secondary-btn" onClick={() => setDeferredPickupIds((ids) => ids.includes(p.id) ? ids : [...ids, p.id])}>Leave for next trip</button></>)}
+                  {p.status === 'Pending' && (<><button type="button" className="driver-action" onClick={() => const selectedDriver = draft.driver.trim(); if (selectedDriver && selectedDriver !== (p.driver || '').trim() && !driverNames.includes(selectedDriver)) { setFeedback('Choose a driver from the search results before saving.'); setActiveDriverField(p.id); return; } onUpdate(p.id, { status: 'Picked Up', pickedUpAt: new Date().toISOString() })}>Confirm package collected</button><button type="button" className="secondary-btn" onClick={() => setDeferredPickupIds((ids) => ids.includes(p.id) ? ids : [...ids, p.id])}>Leave for next trip</button></>)}
                   {p.status === 'Picked Up' && (
                     <button
                       type="button"
                       className="driver-action"
                       onClick={() =>
-                        onUpdate(p.id, { status: 'Out for Delivery' })
+                        const selectedDriver = draft.driver.trim(); if (selectedDriver && selectedDriver !== (p.driver || '').trim() && !driverNames.includes(selectedDriver)) { setFeedback('Choose a driver from the search results before saving.'); setActiveDriverField(p.id); return; } onUpdate(p.id, { status: 'Out for Delivery' })
                       }
                     >
                       Start delivery
@@ -3634,7 +3634,7 @@ function DriverWorkflowDashboard({
                         type="button"
                         className="driver-action"
                         onClick={() =>
-                          onUpdate(p.id, {
+                          const selectedDriver = draft.driver.trim(); if (selectedDriver && selectedDriver !== (p.driver || '').trim() && !driverNames.includes(selectedDriver)) { setFeedback('Choose a driver from the search results before saving.'); setActiveDriverField(p.id); return; } onUpdate(p.id, {
                             status: 'Delivered',
                             deliveredAt: new Date().toISOString(),
                           })
@@ -3648,7 +3648,7 @@ function DriverWorkflowDashboard({
                       type="button"
                       className="driver-action"
                       onClick={() =>
-                        onUpdate(p.id, {
+                        const selectedDriver = draft.driver.trim(); if (selectedDriver && selectedDriver !== (p.driver || '').trim() && !driverNames.includes(selectedDriver)) { setFeedback('Choose a driver from the search results before saving.'); setActiveDriverField(p.id); return; } onUpdate(p.id, {
                           status: 'Returned to Godown',
                           driverReturnConfirmed: true,
                         })

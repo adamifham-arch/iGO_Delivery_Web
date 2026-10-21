@@ -2577,7 +2577,7 @@ function ApprovalDashboard() {
 }
 
 function AdminOperations({ packages, onUpdate, liveMode = false }) {
-  const [query, setQuery] = useState('');
+  const [onlineDrivers, setOnlineDrivers] = useState([]); const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [area, setArea] = useState('All');
   const [drafts, setDrafts] = useState({});
@@ -2853,17 +2853,7 @@ function AdminOperations({ packages, onUpdate, liveMode = false }) {
                   }}
                 >
                   <label>
-                    Driver name
-                    <input
-                      value={draft.driver}
-                      onChange={(e) => change(p, 'driver', e.target.value)}
-                      required={['Picked Up', 'Out for Delivery'].includes(
-                        draft.status
-                      )}
-                      pattern=".*\S.*"
-                      placeholder="Enter driver name"
-                      aria-label={`Driver for ${p.id}`}
-                    />
+                    Driver name <select value={draft.driver} onChange={(e) => change(p, 'driver', e.target.value)} required={['Picked Up', 'Out for Delivery'].includes(draft.status)} aria-label={`Driver for ${p.id}`}><option value="" disabled>{onlineDrivers.length ? 'Select online driver' : 'No online drivers'}</option>{draft.driver && !onlineDrivers.includes(draft.driver) && <option value={draft.driver}>{draft.driver} (currently offline)</option>}{onlineDrivers.map((name) => <option key={name} value={name}>{name}</option>)}</select>
                   </label>
                   <label>
                     Delivery status
@@ -3063,7 +3053,7 @@ function PaymentSlipLink({ path, name }) {
   return <PackageProofLink path={path} label="View payment slip" />;
 }
 
-function AdminDriverRoster({ packages, liveMode = false }) {
+function AdminDriverRoster({ packages, liveMode = false, onOnlineDriversChange }) {
   const names = [
     ...new Set([
       'Ahmed Rasheed',
@@ -3089,7 +3079,7 @@ function AdminDriverRoster({ packages, liveMode = false }) {
     if (!liveMode) return;
     try {
       const rows = await loadDriverRoster();
-      setLiveDrivers(rows);
+      setLiveDrivers(rows); onOnlineDriversChange?.(rows.filter((driver) => driver.online && driver.active !== false && (!driver.approval_status || driver.approval_status === 'approved')).map((driver) => driver.name));
       setRosterError('');
     } catch (error) {
       setRosterError(error.message || 'Could not load drivers.');

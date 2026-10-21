@@ -3420,6 +3420,7 @@ function PackageTable({ packages }) {
           <tr>
             <th>Package ID</th>
             <th>Customer</th>
+            <th>Partner</th>
             <th>Phone</th>
             <th>Area</th>
             <th>Fee</th>
@@ -3433,6 +3434,7 @@ function PackageTable({ packages }) {
                 <strong>{p.id}</strong>
               </td>
               <td>{p.customer}</td>
+              <td>{p.partnerName || p.partner || 'Partner not linked'}</td>
               <td>{p.phone}</td>
               <td>{p.area}</td>
               <td>MVR {p.fee}</td>
@@ -3462,6 +3464,9 @@ function PackageTable({ packages }) {
               <div className="package-mobile-details">
                 <strong>{p.customer}</strong>
                 <span>MVR {p.fee}</span>
+              </div>
+              <div className="package-mobile-contact">
+                <span>Partner · {p.partnerName || p.partner || 'Partner not linked'}</span>
               </div>
               <div className="package-mobile-contact">
                 <a href={`tel:${p.phone}`}>{p.phone}</a>

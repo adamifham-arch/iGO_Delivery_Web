@@ -1428,7 +1428,7 @@ export default function App() {
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
           ['Finance Management', '♙'],
-          ['Approvals', '✓'],
+          ['Approvals', '✓', 'Pending user approvals'],
           ['User Management', '♙'],
         ]
       : [
@@ -1529,7 +1529,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 
         <p className="nav-label">MY WORKSPACE</p>
 
-        {navItems.map(([name, icon]) => (
+        {navItems.map(([name, icon, label = name]) => (
           <button
             key={name}
             className={`nav-item ${page === name ? 'selected' : ''}`}
@@ -1545,7 +1545,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             }}
           >
             <span>{icon}</span>
-            {name}
+            {label}
             {workspace === 'Admin' && name === 'Finance Management' && pendingWithdrawalCount > 0 && (
               <span className="withdrawal-alert-badge" aria-label={pendingWithdrawalCount + ' pending driver withdrawals'}>
                 {pendingWithdrawalCount}
@@ -2769,7 +2769,7 @@ function ApprovalDashboard() {
   return (
     <section className="accounts-dashboard" style={{ padding: 24 }}>
       <p className="approval-kicker">ADMIN WORKSPACE · LIVE</p>
-      <h2>Account approvals</h2>
+      <h2>Pending user approvals</h2>
       <label>Show<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option><option value="all">All</option></select></label>
       {message && <p role="status" className="notice">{message}</p>}
       {loading ? <p>Loading accounts…</p> : visible.length ? visible.map((account) => (

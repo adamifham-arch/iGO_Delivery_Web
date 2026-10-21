@@ -6789,11 +6789,31 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     z-index: 1;
   }
 
-  header.topbar > .dashboard-logo,
+  header.topbar > .dashboard-logo {
+    display: grid;
+    place-items: center;
+    width: 48px !important;
+    min-width: 48px;
+    height: 48px;
+    padding: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 12px;
+    background: #facc15 !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22) !important;
+  }
+
   header.topbar > .dashboard-logo img {
-    width: 38px !important;
-    min-width: 38px;
-    height: 38px;
+    display: block;
+    width: 42px !important;
+    min-width: 0;
+    height: 42px;
+    object-fit: contain;
+    border-radius: 8px;
+  }
+
+  header.topbar > .dashboard-logo:focus-visible {
+    outline: 3px solid #93c5fd;
+    outline-offset: 3px;
   }
 
   header.topbar > .mobile-nav-toggle {
@@ -6844,10 +6864,9 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     height: 36px;
   }
 
-  header.topbar > .dashboard-logo,
-  header.topbar > .dashboard-logo img {
-    width: 34px !important;
-    min-width: 34px;
-    height: 34px;
+  header.topbar > .dashboard-logo {
+    width: 42px !important;
+    min-width: 42px;
+    height: 42px;
   }
 }

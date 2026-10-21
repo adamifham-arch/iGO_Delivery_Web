@@ -4781,6 +4781,45 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             )}
           </tbody>
         </table>
+      {!partnerMode && viewingInvoice && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-invoice-view-title"
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15,23,42,.58)', display: 'grid', placeItems: 'center', padding: 16 }}
+        >
+          <article className="invoice-preview" style={{ ...panel, marginTop: 0, width: 'min(760px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <p className="approval-kicker">IGO DELIVERY · INVOICE</p>
+                <h2 id="admin-invoice-view-title" style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>{viewingInvoice.id}</h2>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="no-print" type="button" style={buttonStyle} onClick={() => window.print()}>Print invoice</button>
+                <button className="no-print" type="button" style={{ ...buttonStyle, background: '#56615c' }} onClick={() => setViewingInvoice(null)}>Close</button>
+              </div>
+            </header>
+            <p><strong>Partner:</strong> {viewingInvoice.partner} · <strong>Status:</strong> {getInvoiceStatus(viewingInvoice)} · <strong>Period:</strong> {viewingInvoice.period}</p>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                <thead><tr><th>Package</th><th>Customer</th><th>Destination</th><th>Description</th><th>Amount</th></tr></thead>
+                <tbody>
+                  {viewingInvoice.lines.map((line) => (
+                    <tr key={line.packageId}>
+                      <td>{line.packageId}</td><td>{line.customer}</td><td>{line.area}</td><td>{line.description}</td><td>{money(line.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ borderTop: '1px solid #e7e9e5', marginTop: 16, paddingTop: 14, textAlign: 'right', lineHeight: 1.9 }}>
+              Invoice total: <strong>{money(viewingInvoice.amount)}</strong><br />
+              Paid: <strong>{money(getPaid(viewingInvoice.id))}</strong><br />
+              Amount due: <strong>{money(Math.max(0, viewingInvoice.amount - getPaid(viewingInvoice.id)))}</strong>
+            </div>
+          </article>
+        </div>
+      )}
       </div>
     );
   };

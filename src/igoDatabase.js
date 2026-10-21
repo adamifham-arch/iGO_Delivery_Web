@@ -439,14 +439,30 @@ export async function loadApprovalAccounts() {
 }
 
 export async function loadManagedUserAccounts() {
-  const [accounts, admins] = await Promise.all([
+  const client = requireClient();
+  const [accounts, admins, audit] = await Promise.all([
     loadApprovalAccounts(),
-    requireClient().from('profiles').select('id,full_name,phone,role,created_at').eq('role', 'admin').order('created_at', { ascending: false }),
+    client.from('profiles').select('id,full_name,phone,role,created_at').eq('role', 'admin').order('created_at', { ascending: false }),
+    client.rpc('list_igo_admin_invite_audit'),
   ]);
   if (admins.error) throw admins.error;
+  if (audit.error) throw audit.error;
+  const auditByUserId = new Map((audit.data || []).map((row) => [row.invited_user_id, row]));
   return [
     ...accounts,
-    ...(admins.data || []).map((row) => ({ ...row, name: row.full_name, type: 'Admin', accountId: row.id, status: 'admin' })),
+    ...(admins.data || []).map((row) => {
+      const inviter = auditByUserId.get(row.id);
+      return {
+        ...row,
+        name: row.full_name,
+        type: 'Admin',
+        accountId: row.id,
+        status: 'admin',
+        addedByName: inviter?.invited_by_name || '',
+        addedByEmail: inviter?.invited_by_email || '',
+        invitedAt: inviter?.invited_at || '',
+      };
+    }),
   ].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 

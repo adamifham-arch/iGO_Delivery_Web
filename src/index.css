@@ -7083,3 +7083,21 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .workspace-setup-card label { display: grid; gap: 7px; font-weight: 600; }
 .workspace-setup-card input, .workspace-setup-card textarea { width: 100%; color: #f4f7fb; background: #152033; border: 1px solid #52647c; border-radius: 9px; padding: 11px 12px; font: inherit; }
 .workspace-setup-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+
+/* Keep profile details readable on dark workspace backgrounds. */
+.app[data-theme='night'] .profile-details-card {
+  background: #1e293b;
+  border-color: #42516a;
+  color: #f8fafc;
+}
+.app[data-theme='night'] .profile-details-card h2,
+.app[data-theme='night'] .profile-details-card dd {
+  color: #f8fafc;
+}
+.app[data-theme='night'] .profile-details-card dl div {
+  border-color: #3b4a61;
+}
+.app[data-theme='night'] .profile-details-card dt {
+  color: #cbd5e1;
+}

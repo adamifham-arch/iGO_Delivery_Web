@@ -3,6 +3,7 @@ alter table public.payments
   add column if not exists invoice_ids uuid[] not null default '{}',
   add column if not exists verified_amount numeric(12,2);
 
+alter table public.payments disable trigger payments_guard_review;
 update public.payments
 set invoice_ids = array[target_invoice_id]
 where cardinality(invoice_ids) = 0 and target_invoice_id is not null;
@@ -10,6 +11,7 @@ where cardinality(invoice_ids) = 0 and target_invoice_id is not null;
 update public.payments
 set verified_amount = amount
 where status = 'confirmed'::public.payment_status and verified_amount is null;
+alter table public.payments enable trigger payments_guard_review;
 
 create table if not exists public.partner_credit_ledger (
   id uuid primary key default gen_random_uuid(),

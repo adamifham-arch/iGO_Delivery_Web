@@ -2696,6 +2696,12 @@ function ManagedIgoAccounts() {
                 <div className="managed-account-info" style={{ flex: '1 1 230px', minWidth: 0 }}>
                   <strong>{account.name || account.contact_name || 'Unnamed account'}</strong>
                   <p style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>{account.type === 'Driver' ? 'Rider' : account.type} · Phone: {account.phone || 'Not provided'}{account.email ? ` · ${account.email}` : ''}</p>
+                  {isAdmin && <small style={{ display: 'block', marginTop: 4, color: '#94a3b8' }}>
+                    {account.addedByName
+                      ? `Added by ${account.addedByName}${account.addedByEmail ? ` · ${account.addedByEmail}` : ''}`
+                      : 'Added before inviter tracking'}
+                    {account.invitedAt ? ` · ${new Date(account.invitedAt).toLocaleDateString()}` : ''}
+                  </small>}
                 </div>
                 <span
                   className={`status status-${statusClass(account.status)}`}
@@ -4195,7 +4201,16 @@ function SuperadminUserManagementPanel() {
     });
     if (inviteError) setError(inviteError.message);
     else {
-      setMessage('Invitation sent to ' + data.email + '. ' + (data.approval_status === 'pending' ? 'The account will need admin approval.' : 'The admin account is ready after the invite is accepted.'));
+      let inviterAuditMessage = '';
+      if (String(values.get('role') || '') === 'admin') {
+        const { error: auditError } = await supabase.rpc('record_igo_admin_inviter', {
+          p_invited_email: String(data.email || values.get('email') || '').trim(),
+        });
+        inviterAuditMessage = auditError
+          ? ' Inviter tracking could not be saved: ' + auditError.message
+          : ' The admin invitation is recorded under the signed-in admin.';
+      }
+      setMessage('Invitation sent to ' + data.email + '. ' + (data.approval_status === 'pending' ? 'The account will need admin approval.' : 'The admin account is ready after the invite is accepted.') + inviterAuditMessage);
       form.reset();
       setShowInviteForm(false);
     }

@@ -2617,10 +2617,14 @@ function ManagedIgoAccounts() {
           {visible.map((account) => {
             const approved = account.status === 'approved';
             return (
-              <article key={`managed-${account.type}-${account.accountId}`} className="managed-account-row">
-                <div className="managed-account-info">
+              <article
+                key={`managed-${account.type}-${account.accountId}`}
+                className="managed-account-row"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', borderTop: '1px solid #64748b', padding: '12px 0' }}
+              >
+                <div className="managed-account-info" style={{ flex: '1 1 230px', minWidth: 0 }}>
                   <strong>{account.name || account.contact_name || 'Unnamed account'}</strong>
-                  <p>{account.type === 'Driver' ? 'Rider' : 'Partner'} · Phone: {account.phone || 'Not provided'}{account.email ? ` · ${account.email}` : ''}</p>
+                  <p style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>{account.type === 'Driver' ? 'Rider' : 'Partner'} · Phone: {account.phone || 'Not provided'}{account.email ? ` · ${account.email}` : ''}</p>
                 </div>
                 <span
                   className={`status status-${statusClass(account.status)}`}

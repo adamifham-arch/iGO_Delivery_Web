@@ -8,6 +8,7 @@ import {
   getCurrentPartnerId,
   getPrivateFileUrl,
   loadApprovalAccounts,
+  loadManagedUserAccounts,
   loadCurrentRole,
   loadFinanceRecords,
   loadDriverSettings,
@@ -2567,7 +2568,7 @@ function ManagedIgoAccounts() {
     setLoading(true);
     setError('');
     try {
-      setAccounts(await loadApprovalAccounts());
+      setAccounts(await loadManagedUserAccounts());
     } catch (loadError) {
       setError(loadError.message || 'Could not load user accounts.');
     } finally {

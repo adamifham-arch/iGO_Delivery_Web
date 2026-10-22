@@ -4938,6 +4938,52 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     }
   };
   const [billing, setBilling] = useState(() => (liveMode ? initialState : readState()));
+  const [overviewDriverRates, setOverviewDriverRates] = useState(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem('igo-driver-share-percent-v1') || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [overviewDriverRatesReady, setOverviewDriverRatesReady] = useState(!liveMode);
+  const [overviewDriverRatesError, setOverviewDriverRatesError] = useState('');
+  useEffect(() => {
+    let active = true;
+    const syncDemoRates = () => {
+      try {
+        setOverviewDriverRates(JSON.parse(window.localStorage.getItem('igo-driver-share-percent-v1') || '{}'));
+        setOverviewDriverRatesReady(true);
+      } catch {
+        setOverviewDriverRates({});
+        setOverviewDriverRatesReady(false);
+      }
+    };
+    if (!liveMode) {
+      syncDemoRates();
+      window.addEventListener('igo-driver-rate', syncDemoRates);
+      window.addEventListener('storage', syncDemoRates);
+      return () => {
+        active = false;
+        window.removeEventListener('igo-driver-rate', syncDemoRates);
+        window.removeEventListener('storage', syncDemoRates);
+      };
+    }
+    setOverviewDriverRatesReady(false);
+    loadDriverRoster()
+      .then((rows) => {
+        if (!active) return;
+        setOverviewDriverRates(Object.fromEntries(rows.map((driver) => [driver.name, Number(driver.sharePercent)])));
+        setOverviewDriverRatesReady(true);
+        setOverviewDriverRatesError('');
+      })
+      .catch((error) => {
+        if (!active) return;
+        setOverviewDriverRates({});
+        setOverviewDriverRatesReady(false);
+        setOverviewDriverRatesError(error.message || 'Driver share rates could not be loaded.');
+      });
+    return () => { active = false; };
+  }, [liveMode]);
   const [databaseFinanceReady, setDatabaseFinanceReady] = useState(false);
   const [databaseFinanceError, setDatabaseFinanceError] = useState('');
   const [paymentAccountId, setPaymentAccountId] = useState(null);
@@ -5721,9 +5767,26 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       year: 'numeric',
     });
   const overviewTotalsForMonth = (month) => {
-    const deliveredValue = deliveredPackages
-      .filter((delivery) => monthKey(delivery.deliveredAt || delivery.updatedAt || delivery.createdAt) === month)
+    const monthDeliveries = deliveredPackages
+      .filter((delivery) => monthKey(delivery.deliveredAt || delivery.updatedAt || delivery.createdAt) === month);
+    const deliveredValue = monthDeliveries
       .reduce((sum, delivery) => sum + Number(delivery.fee ?? delivery.delivery_fee ?? 0), 0);
+    const driverShareIsComplete = overviewDriverRatesReady && monthDeliveries.every((delivery) =>
+      !delivery.driver || (Object.prototype.hasOwnProperty.call(overviewDriverRates, delivery.driver) && Number.isFinite(Number(overviewDriverRates[delivery.driver])))
+    );
+    const estimatedDriverShares = driverShareIsComplete
+      ? monthDeliveries.reduce((sum, delivery) => {
+          const fee = Number(delivery.fee ?? delivery.delivery_fee ?? 0);
+          const rate = Number(overviewDriverRates[delivery.driver] || 0);
+          return sum + fee * rate / 100;
+        }, 0)
+      : null;
+    const recordedExpenses = billing.expenses
+      .filter((expense) => monthKey(expense.date || expense.expense_date || expense.recordedAt) === month)
+      .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+    const estimatedOperatingResult = estimatedDriverShares === null
+      ? null
+      : deliveredValue - estimatedDriverShares - recordedExpenses;
     const outstandingInvoices = billing.invoices
       .filter((invoice) => monthKey(invoice.createdAt) === month)
       .reduce((sum, invoice) => sum + Math.max(0, Number(invoice.amount || 0) - getPaid(invoice.id)), 0);
@@ -5735,6 +5798,9 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       .reduce((sum, request) => sum + Number(request.amount || 0), 0);
     return {
       deliveredValue,
+      estimatedDriverShares,
+      recordedExpenses,
+      estimatedOperatingResult,
       outstandingInvoices,
       payments,
       netAfterWithdrawals: payments - withdrawals,
@@ -6392,6 +6458,21 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             <small>{overviewComparison(overviewTotals.deliveredValue, previousOverviewTotals.deliveredValue)}</small>
           </article>
           <article className="stat-card">
+            <span>Estimated driver shares</span>
+            <strong>{overviewTotals.estimatedDriverShares === null ? '—' : money(overviewTotals.estimatedDriverShares)}</strong>
+            <small>{overviewTotals.estimatedDriverShares === null ? (overviewDriverRatesError || 'Waiting for driver share rates.') : overviewComparison(overviewTotals.estimatedDriverShares, previousOverviewTotals.estimatedDriverShares)}</small>
+          </article>
+          <article className="stat-card">
+            <span>Recorded business expenses</span>
+            <strong>{money(overviewTotals.recordedExpenses)}</strong>
+            <small>{overviewComparison(overviewTotals.recordedExpenses, previousOverviewTotals.recordedExpenses)}</small>
+          </article>
+          <article className="stat-card">
+            <span>Estimated operating result</span>
+            <strong>{overviewTotals.estimatedOperatingResult === null ? '—' : money(overviewTotals.estimatedOperatingResult)}</strong>
+            <small>{overviewTotals.estimatedOperatingResult === null ? 'Unavailable until driver shares load.' : overviewComparison(overviewTotals.estimatedOperatingResult, previousOverviewTotals.estimatedOperatingResult)}</small>
+          </article>
+          <article className="stat-card">
             <span>Outstanding invoices</span>
             <strong>{money(overviewTotals.outstandingInvoices)}</strong>
             <small>{overviewComparison(overviewTotals.outstandingInvoices, previousOverviewTotals.outstandingInvoices)}</small>
@@ -6407,6 +6488,9 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             <small>{overviewComparison(overviewTotals.netAfterWithdrawals, previousOverviewTotals.netAfterWithdrawals)}</small>
           </article>
         </div>
+        <p style={{ margin: '10px 0 0', color: '#65736c', fontSize: 13 }}>
+          Estimated operating result = delivered fees earned − estimated driver shares − recorded business expenses. Expenses are recorded when paid, so unpaid expenses and other costs may be missing; this is not a finalized accounting profit and loss statement.
+        </p>
       </section>
 
       <section style={panel}>

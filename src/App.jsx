@@ -2,6 +2,7 @@ import { Component, useEffect, useRef, useState } from 'react';
 import './index.css';
 import { supabase, supabaseConfigured } from './supabase';
 import { StaffOperations } from './StaffOperations';
+import { DayEndReport } from './DayEndReport';
 import {
   createPackages,
   getDriverIdByName,
@@ -5498,7 +5499,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     return (
       <section style={{ paddingBottom: 28 }}>
         <p className="approval-kicker">PARTNER WORKSPACE · INVOICES</p>
-        <h2>Invoices &amp; payments</h2>
+        {workspace === 'Admin' && <h2>Invoices &amp; collections</h2>}
         <p>Rates are set at registration.</p>
         {!liveMode && <div className="notice">Demo only. Payments and slips aren't saved.</div>}
 
@@ -5933,39 +5934,43 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   };
   const generateLiveInvoices = async (partnerId = null) => {
     if (!supabase || !adminUser) {
-      setLiveError(
-        'Sign in with an iGO admin account to generate live invoices.'
-      );
+      setLiveError('Sign in with an iGO admin account to generate live invoices.');
       return;
     }
     setLiveBusy(true);
     setLiveError('');
     setLiveMessage('');
-    const { data, error } = await supabase.rpc('generate_delivered_invoices', {
-      p_partner_id: partnerId,
-    });
-    if (error) {
-      setLiveError(error.message);
-      setLiveBusy(false);
-      return;
-    }
+    let generationCompleted = false;
     try {
+      const { data, error } = await supabase.rpc('generate_delivered_invoices', {
+        p_partner_id: partnerId,
+      });
+      if (error) throw error;
+      generationCompleted = true;
       await refreshLiveInvoices();
       await refreshDatabaseFinance(true);
-      setLiveMessage(
-        data?.length
-          ? 'Generated ' +
-              data.length +
-              ' live invoice(s). Each partner was notified.'
-          : 'No delivered, uninvoiced packages are ready. You can run this manually at any time; the daily cutoff does not affect it.'
-      );
-    } catch (loadError) {
-      setLiveError(
-        loadError.message ||
-          'Invoices were generated, but the list could not be refreshed.'
-      );
+      if (data?.length) {
+        setLiveMessage(
+          'Generated ' + data.length + ' live invoice(s). Each partner was notified.'
+        );
+      } else if (readyPackages.length > 0) {
+        setLiveError(
+          'No invoice was generated, although ' + readyPackages.length +
+          ' package(s) still appear ready here. The package list and invoice service disagree. Refresh the data and check again before retrying.'
+        );
+      } else {
+        setLiveMessage(
+          'No delivered, uninvoiced packages are ready. The daily cutoff does not affect manual generation.'
+        );
+      }
+    } catch (error) {
+      const prefix = generationCompleted
+        ? 'The invoice request completed, but the latest records could not be refreshed. '
+        : 'Invoice generation failed. ';
+      setLiveError(prefix + (error.message || 'Please refresh and try again.'));
+    } finally {
+      setLiveBusy(false);
     }
-    setLiveBusy(false);
   };
   const liveAdminPanel = (
     <section style={panel}>
@@ -6084,7 +6089,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         {[
           ['Invoices', 'Invoices & collections'],
           ['Expenses', 'Record business expense'],
-          ['Reports', 'Daily sales report'],
+          [workspace === 'Admin' ? 'Day-end' : 'Reports', workspace === 'Admin' ? 'Day-end report' : 'Daily sales report'],
           ['Settings', 'Payment account settings'],
         ].map(([label, target]) => (
           <button
@@ -6265,6 +6270,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           <button style={buttonStyle} type="submit">Record paid expense</button>
         </form>
       </section>
+      {workspace === 'Admin' && <DayEndReport packages={packages} invoices={billing.invoices} payments={billing.payments} expenses={billing.expenses} withdrawals={withdrawalRequests} />}
+      {workspace !== 'Admin' && (
       <section style={panel}>
         <h3>Daily sales report</h3>
         <form onSubmit={generateDailySalesReport} className="finance-report-controls no-print">
@@ -6302,6 +6309,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           </>
         )}
       </section>
+      )}
       <section className="finance-report-print" style={panel}>
         <div className="finance-report-heading">
           <div>

@@ -13,7 +13,10 @@ const roleLabels = {
 const money = (value) => 'MVR ' + Number(value || 0).toFixed(2);
 const card = { padding: 18, borderRadius: 16, border: '1px solid #405169', background: '#1e2b40', marginBottom: 16 };
 
-export function StaffOperations({ user, profile, isOwner = false }) {
+export function StaffOperations({ user, profile, isOwner = false, view = 'all' }) {
+  const showOperations = ['all', 'operations', 'staff'].includes(view);
+  const showFinance = ['all', 'finance'].includes(view);
+  const showPeople = ['all', 'people', 'staff'].includes(view);
   const assignments = profile?.staffAssignments || [];
   const roles = new Set(assignments.map((item) => item.role));
   const [requests, setRequests] = useState([]);
@@ -153,19 +156,19 @@ export function StaffOperations({ user, profile, isOwner = false }) {
 
   return <div className="staff-operations">
     <header style={{ marginBottom: 18 }}>
-      <p className="eyebrow">iGO STAFF WORKSPACE</p>
-      <h2>Department payments</h2>
-      <p>Submit, review, and record payments. Driver withdrawals follow the same approval and payment handoff.</p>
+      <p className="eyebrow">{showFinance && view === 'finance' ? 'FINANCE MANAGEMENT' : showPeople && view === 'people' ? 'PEOPLE MANAGEMENT' : 'iGO STAFF WORKSPACE'}</p>
+      <h2>{view === 'finance' ? 'Finance Management' : view === 'people' ? 'Department and staff access' : view === 'staff' ? 'Staff Operations' : 'Department payments'}</h2>
+      {view === 'all' && <p>Submit, review, and record payments. Driver withdrawals follow the same approval and payment handoff.</p>}
     </header>
     {notice && <p role="status" className="notice">{notice}</p>}
     {error && <p role="alert" className="notice">{error}</p>}
 
-    {(roles.has('operations_manager') || roles.has('operations_staff') || roles.has('customer_support') || isOwner) && <section style={card}>
+    {showOperations && (roles.has('operations_manager') || roles.has('operations_staff') || roles.has('customer_support') || isOwner) && <section style={card}>
       <h3>Package operations · read-only</h3><p>Operations and support can look up delivery status here. Drivers and admins make package status changes.</p>
       {packages.length ? <div className="staff-package-table-wrap"><table className="finance-report-table staff-package-table"><thead><tr><th>Package</th><th>Customer</th><th>Phone</th><th>Area</th><th>Status</th><th>Added</th></tr></thead><tbody>{packages.map((item) => <tr key={item.id}><td data-label="Package">{item.package_number || item.package_code || item.id}</td><td data-label="Customer">{item.customer_name || '—'}</td><td data-label="Phone">{item.customer_phone || item.phone || '—'}</td><td data-label="Area">{item.area || item.address || '—'}</td><td data-label="Status">{item.status || '—'}</td><td data-label="Added">{item.created_at ? new Date(item.created_at).toLocaleString() : '—'}</td></tr>)}</tbody></table></div> : <p>No packages available.</p>}
     </section>}
 
-    {canRequest && <section style={card}>
+    {showFinance && canRequest && <section style={card}>
       <h3>Request a payment</h3>
       <form onSubmit={submitRequest} className="finance-expense-form">
         <label>Department<select required value={draft.departmentId} onChange={(event) => setDraft({ ...draft, departmentId: event.target.value })}><option value="">Choose department</option>{departments.filter((department) => department.active && (isOwner || roles.has('people_manager') || assignments.some((item) => item.department_id === department.id))).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
@@ -178,7 +181,7 @@ export function StaffOperations({ user, profile, isOwner = false }) {
       </form>
     </section>}
 
-    <section id="staff-payment-status" style={card}>
+    {showFinance && <section id="staff-payment-status" style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}><div><h3>Payment status</h3><p>Finance sees requests for review; payment officers see approved items to pay.</p></div><button type="button" onClick={() => void refresh()}>Refresh</button></div>
       {rows.length ? rows.map((item) => {
         const withdrawal = item.kind === 'withdrawal';
@@ -207,9 +210,9 @@ export function StaffOperations({ user, profile, isOwner = false }) {
           {!withdrawal && history.length > 0 && <details style={{ marginTop: 8 }}><summary>Activity history</summary>{history.map((entry) => <p key={entry.id}>{entry.event} · {new Date(entry.created_at).toLocaleString()} · by {entry.actor_id ? entry.actor_id.slice(0, 8) : 'system'} {entry.details && '· ' + entry.details}</p>)}</details>}
         </article>;
       }) : <p>No payment requests are visible to your role.</p>}
-    </section>
+    </section>}
 
-    {canManage && <section style={card}>
+    {showPeople && canManage && <section style={card}>
       <h3>Departments and staff access</h3>
       <p>Invite a person through User Management first, then assign their account here. Staff assignments replace broad admin access with the selected department role.</p>
       <form onSubmit={assignRole} className="finance-expense-form">

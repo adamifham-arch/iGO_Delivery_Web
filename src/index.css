@@ -7527,3 +7527,35 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   outline-offset: 3px;
   border-radius: 3px;
 }
+
+
+@media print {
+  @page day-end-report {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
+  body[data-print-report="day-end"] .day-end-report-print {
+    page: day-end-report;
+  }
+
+  body[data-print-report="day-end"] .day-end-report-print .no-print {
+    display: none !important;
+  }
+
+  body[data-print-report="day-end"] .day-end-report-print .finance-report-table-wrap {
+    overflow: visible !important;
+  }
+
+  body[data-print-report="day-end"] .day-end-report-print .finance-report-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 8pt !important;
+  }
+
+  body[data-print-report="day-end"] .day-end-report-print .finance-report-table tr,
+  body[data-print-report="day-end"] .day-end-report-print .stat-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

@@ -183,7 +183,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
     )}
 
     {showOperations && roles.has('customer_support') && !roles.has('operations_manager') && !roles.has('operations_staff') && !isOwner && <section style={card}>
-      <h3>Package operations · read-only</h3>
+      <h3>Package tracker · Read-only</h3>
       <p>Search packages and check delivery details. This role cannot change package records.</p>
       <form className="staff-package-filters" onSubmit={(event) => { event.preventDefault(); setPackageSearch(packageSearchInput); }}>
         <label>Search packages

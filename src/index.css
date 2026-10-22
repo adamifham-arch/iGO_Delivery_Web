@@ -7143,3 +7143,63 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     outline-offset: 3px;
   }
 }
+
+
+/* Keep the staff payments workflow readable in split-screen and phone layouts. */
+.staff-operations,
+.staff-operations > section,
+.staff-operations article,
+.staff-operations article > div,
+.staff-operations article > div > div {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.staff-operations p,
+.staff-operations strong,
+.staff-operations article {
+  overflow-wrap: anywhere;
+}
+.staff-payment-form label {
+  min-width: 0;
+}
+.staff-payment-form input,
+.staff-payment-form input[type="file"] {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.staff-department-form input {
+  flex: 1 1 220px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.staff-operations article form input {
+  flex: 1 1 180px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+@media (max-width: 560px) {
+  .staff-payment-form {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .staff-payment-form button,
+  .staff-department-form button {
+    width: 100%;
+    max-width: 100%;
+  }
+  .staff-department-form {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .staff-operations > section {
+    padding: 14px !important;
+  }
+  .staff-operations > section > div:first-child {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+}

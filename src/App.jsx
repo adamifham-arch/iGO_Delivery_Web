@@ -1893,7 +1893,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             className="dashboard-logo"
             aria-label="iGO Delivery dashboard"
             onClick={() => {
-              setPage(workspace === 'Admin' ? 'Admin Operations' : 'Overview');
+              setPage(workspace === 'Admin' ? 'Admin Operations' : workspace === 'Staff' ? 'Staff Operations' : 'Overview');
               setShowForm(false);
               setShowMobileNav(false);
               setNotice('');

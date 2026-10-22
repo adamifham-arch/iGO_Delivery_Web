@@ -27,6 +27,7 @@ Run each SQL file separately in Supabase SQL Editor, in this order:
 12. `migrations/202610220006_finance_notifications_storage.sql`
 13. `migrations/202610220007_owner_payment_notifications.sql`
 14. `migrations/202610220008_operations_dispatch_permissions.sql`
+15. `migrations/202610220009_finance_withdrawal_approval_scope.sql`
 
 The first file adds enum values, which must commit before the next migration refers to them. The third file enables Supabase Cron (`pg_cron`) and schedules a once-per-minute check; invoices are generated once the configured Maldives-local cutoff passes. If Supabase says the extension is unavailable or cannot be enabled through SQL, enable **pg_cron** in the project dashboard under Integrations → Cron, then run migration 3 again. Manual invoice generation works independently of the scheduler.
 

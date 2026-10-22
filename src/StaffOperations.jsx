@@ -44,6 +44,10 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
   });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [queueSearch, setQueueSearch] = useState('');
+  const [queueTypeFilter, setQueueTypeFilter] = useState('all');
+  const [queueStatusFilter, setQueueStatusFilter] = useState('all');
+  const [queuePage, setQueuePage] = useState(0);
   const [draft, setDraft] = useState({ departmentId: assignments[0]?.department_id || '', category: 'Supplies', description: '', payee: '', amount: '', dueDate: '' });
   const [assignmentDraft, setAssignmentDraft] = useState({ userId: '', departmentId: assignments[0]?.department_id || '', role: 'department_requester' });
   const canManage = isOwner || roles.has('people_manager');
@@ -163,6 +167,30 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
   const requestRows = useMemo(() => requests.map((item) => ({ ...item, kind: 'payment', date: item.created_at, displayName: item.departments?.name || 'Department' })), [requests]);
   const withdrawalRows = useMemo(() => withdrawals.map((item) => ({ ...item, kind: 'withdrawal', date: item.requested_at, displayName: item.drivers?.name || 'Driver' })), [withdrawals]);
   const rows = [...requestRows, ...withdrawalRows].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const roleVisibleRows = rows.filter((item) =>
+    isOwner || canReview || !canPay || ['approved', 'paid'].includes(item.status)
+  );
+  const normalizedQueueSearch = queueSearch.trim().toLocaleLowerCase();
+  const filteredQueueRows = roleVisibleRows.filter((item) => {
+    const matchesType = queueTypeFilter === 'all' || item.kind === queueTypeFilter;
+    const matchesStatus = queueStatusFilter === 'all' || item.status === queueStatusFilter;
+    const searchText = [
+      item.kind === 'withdrawal' ? 'driver withdrawal' : 'payment request',
+      item.displayName,
+      item.category,
+      item.description,
+      item.payee_name,
+      item.amount,
+      item.status,
+      item.id,
+    ].filter(Boolean).join(' ').toLocaleLowerCase();
+    return matchesType && matchesStatus && (!normalizedQueueSearch || searchText.includes(normalizedQueueSearch));
+  });
+  const queuePageSize = 10;
+  const queuePageCount = Math.max(1, Math.ceil(filteredQueueRows.length / queuePageSize));
+  useEffect(() => { setQueuePage((current) => Math.min(current, queuePageCount - 1)); }, [queuePageCount]);
+  const pagedQueueRows = filteredQueueRows.slice(queuePage * queuePageSize, (queuePage + 1) * queuePageSize);
+  const queueStatuses = [...new Set(roleVisibleRows.map((item) => item.status).filter(Boolean))].sort();
 
   const renderPaymentForm = (item, table) => <form className="staff-payment-form" onSubmit={(event) => recordPayment(table, item.id, event)} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 8, marginTop: 12 }}>
     <label>Payment reference<input name="reference" required /></label>
@@ -249,16 +277,39 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
     </section>}
 
     {showFinance && <section id="staff-payment-status" style={card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}><div><h3>Payment status</h3><p>Finance sees requests for review; payment officers see approved items to pay.</p></div><button type="button" onClick={() => void refresh()}>Refresh</button></div>
-      {rows.length ? rows.map((item) => {
+      <div className="staff-payment-status-heading">
+        <div><h3>Payment status</h3><p>Finance can review requests. Payment officers see finance-approved payouts only.</p></div>
+        <button type="button" onClick={() => void refresh()}>Refresh</button>
+      </div>
+      <div className="staff-payment-queue-filters">
+        <label>Search
+          <input type="search" value={queueSearch} onChange={(event) => { setQueueSearch(event.target.value); setQueuePage(0); }} placeholder="Person, department, payee, reference…" />
+        </label>
+        <label>Request type
+          <select value={queueTypeFilter} onChange={(event) => { setQueueTypeFilter(event.target.value); setQueuePage(0); }}>
+            <option value="all">All types</option>
+            <option value="payment">Department payments</option>
+            <option value="withdrawal">Driver withdrawals</option>
+          </select>
+        </label>
+        <label>Status
+          <select value={queueStatusFilter} onChange={(event) => { setQueueStatusFilter(event.target.value); setQueuePage(0); }}>
+            <option value="all">All statuses</option>
+            {queueStatuses.map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
+          </select>
+        </label>
+      </div>
+      <p className="staff-payment-queue-count">Showing {filteredQueueRows.length ? queuePage * queuePageSize + 1 : 0}–{Math.min((queuePage + 1) * queuePageSize, filteredQueueRows.length)} of {filteredQueueRows.length}</p>
+      {filteredQueueRows.length ? <>
+        <div className="staff-payment-queue-list">{pagedQueueRows.map((item) => {
         const withdrawal = item.kind === 'withdrawal';
         const status = item.status;
         const canApprove = canReview && status === 'pending_review' && !withdrawal
           || canReview && status === 'pending' && withdrawal;
         const canComplete = canPay && status === 'approved';
         const history = item.payment_request_events || [];
-        return <article key={item.kind + item.id} style={{ borderTop: '1px solid #526178', padding: '14px 0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        return <article key={item.kind + item.id} className="staff-payment-queue-item">
+          <div className="staff-payment-queue-item-heading">
             <div><strong>{withdrawal ? 'Driver withdrawal' : item.category}</strong> · {item.displayName}<p>{withdrawal ? 'Withdrawal request' : item.description + ' · Payee: ' + item.payee_name}</p><p>{money(item.amount)} · Submitted {new Date(item.date).toLocaleString()}</p></div>
             <strong className={'status-pill status-' + status}>{status.replaceAll('_', ' ')}</strong>
           </div>
@@ -267,16 +318,22 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
           {withdrawal && (item.reviewed_at || item.paid_at) && <p><strong>Reviewed:</strong> {item.reviewed_at ? new Date(item.reviewed_at).toLocaleString() + ' · ' + (item.reviewed_by || 'system').slice(0, 8) : '—'}{item.paid_at && <> · <strong>Paid:</strong> {new Date(item.paid_at).toLocaleString()} · {(item.paid_by || 'system').slice(0, 8)}</>}</p>}
           {(item.payment_reference || item.paid_reference) && <p><strong>Payment reference:</strong> {item.payment_reference || item.paid_reference}</p>}
           {item.payment_slip_path && <p><strong>Payment slip attached.</strong> <button type="button" onClick={() => void openSlip(item.payment_slip_path)}>View slip</button></p>}
-          {canApprove && <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+          {canApprove && <div className="staff-payment-queue-actions">
             <button type="button" onClick={() => void decide(withdrawal ? 'driver_withdrawal_requests' : 'payment_requests', item.id, 'approved')}>Approve and request payment</button>
-            <form onSubmit={(event) => { event.preventDefault(); const reason = String(new FormData(event.currentTarget).get('reason') || '').trim(); if (reason.length < 3) { setError('Enter a reason for rejection.'); return; } void decide(withdrawal ? 'driver_withdrawal_requests' : 'payment_requests', item.id, 'rejected', reason); }} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <form onSubmit={(event) => { event.preventDefault(); const reason = String(new FormData(event.currentTarget).get('reason') || '').trim(); if (reason.length < 3) { setError('Enter a reason for rejection.'); return; } void decide(withdrawal ? 'driver_withdrawal_requests' : 'payment_requests', item.id, 'rejected', reason); }}>
               <input name="reason" placeholder="Reason for rejection" required minLength={3} /><button type="submit">Reject with reason</button>
             </form>
           </div>}
           {canComplete && renderPaymentForm(item, withdrawal ? 'driver_withdrawal_requests' : 'payment_requests')}
           {!withdrawal && history.length > 0 && <details style={{ marginTop: 8 }}><summary>Activity history</summary>{history.map((entry) => <p key={entry.id}>{entry.event} · {new Date(entry.created_at).toLocaleString()} · by {entry.actor_id ? entry.actor_id.slice(0, 8) : 'system'} {entry.details && '· ' + entry.details}</p>)}</details>}
         </article>;
-      }) : <p>No payment requests are visible to your role.</p>}
+      })}</div>
+      <div className="staff-payment-queue-pagination">
+        <button type="button" disabled={queuePage === 0} onClick={() => setQueuePage((page) => Math.max(0, page - 1))}>Previous</button>
+        <span>Page {queuePage + 1} of {queuePageCount}</span>
+        <button type="button" disabled={queuePage + 1 >= queuePageCount} onClick={() => setQueuePage((page) => Math.min(queuePageCount - 1, page + 1))}>Next</button>
+      </div>
+      </> : <p>{canPay && !canReview && !isOwner ? 'No finance-approved payouts match these filters.' : 'No requests match these filters.'}</p>}
     </section>}
 
     {showPeople && canManage && <section style={card}>

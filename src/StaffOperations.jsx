@@ -316,7 +316,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
         return <article key={item.kind + item.id} className={"staff-payment-queue-item" + (queueView === "list" ? " is-compact" : "")}>
           <div className="staff-payment-queue-item-heading">
             <div><strong>{withdrawal ? 'Driver withdrawal' : item.category}</strong> · {item.displayName}<p>{withdrawal ? 'Withdrawal request' : item.description + ' · Payee: ' + item.payee_name}</p><p>{money(item.amount)} · Submitted {new Date(item.date).toLocaleString()}</p></div>
-            <strong className={'status-pill status-' + status.replaceAll('_', ' ')}>{status.replaceAll('_', ' ')}</strong>
+            <strong className={'status-pill status-' + status}>{status.replaceAll('_', ' ')}</strong>
           </div>
           {queueView === 'list' ? (
             <details className="staff-payment-list-details">

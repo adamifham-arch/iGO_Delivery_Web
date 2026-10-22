@@ -573,7 +573,8 @@ export default function App() {
         const profile = baseProfile.role === 'staff' ? { ...baseProfile, staffAssignments: staffResult.data || [] } : baseProfile;
         const isStaff = profile.role === 'staff';
         const additionalProfiles = isStaff ? { isSuperadmin: false, partner: null, driver: null } : await loadSuperadminLinkedProfiles(user, profile);
-        const rows = isStaff ? [] : await loadPackages();
+        const canOperatePackages = (profile.staffAssignments || []).some((item) => ['operations_manager', 'operations_staff'].includes(item.role));
+        const rows = isStaff ? (canOperatePackages ? await loadPackages() : []) : await loadPackages();
         let finance = null;
         if (!isStaff) { try { finance = await loadFinanceRecords(); } catch {} }
         if (!active) return;
@@ -736,7 +737,8 @@ export default function App() {
         const profile = baseProfile.role === 'staff' ? { ...baseProfile, staffAssignments: staffResult.data || [] } : baseProfile;
         const isStaff = profile.role === 'staff';
         const additionalProfiles = isStaff ? { isSuperadmin: false, partner: null, driver: null } : await loadSuperadminLinkedProfiles(data.user, profile);
-        const rows = isStaff ? [] : await loadPackages();
+        const canOperatePackages = (profile.staffAssignments || []).some((item) => ['operations_manager', 'operations_staff'].includes(item.role));
+        const rows = isStaff ? (canOperatePackages ? await loadPackages() : []) : await loadPackages();
         let finance = null;
         if (!isStaff) { try { finance = await loadFinanceRecords(); } catch {} }
         const roleWorkspace = { admin: 'Admin', partner: 'Partner', driver: 'Driver', staff: 'Staff' }[profile.role];
@@ -2154,7 +2156,10 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 
 
           {page === 'Staff Operations' && workspace === 'Staff' && (
-            <StaffOperations user={databaseUser} profile={databaseProfile} view="staff" />
+            <>
+              {['operations_manager', 'operations_staff'].some((role) => staffRoles.has(role)) && <AdminOperations packages={newestPackages} liveMode={Boolean(databaseProfile)} staffMode onUpdate={updatePackageRecord} />}
+              <StaffOperations user={databaseUser} profile={databaseProfile} view="staff" />
+            </>
           )}
 
           {page === 'Admin Operations' && workspace === 'Admin' && (
@@ -3168,8 +3173,8 @@ function ApprovalDashboard() {
   );
 }
 
-function AdminOperations({ packages, onUpdate, liveMode = false }) {
-  const [driverNames, setDriverNames] = useState([]); const [activeDriverField, setActiveDriverField] = useState(''); useEffect(() => { if (!liveMode) return undefined; let active = true; const refreshDrivers = async () => { try { const rows = await loadDriverRoster(); if (active) setDriverNames([...new Set(rows.map((driver) => driver.name).filter(Boolean))]); } catch {} }; void refreshDrivers(); const timer = window.setInterval(() => void refreshDrivers(), 30000); return () => { active = false; window.clearInterval(timer); }; }, [liveMode]); const [query, setQuery] = useState('');
+function AdminOperations({ packages, onUpdate, liveMode = false, staffMode = false }) {
+  const [driverNames, setDriverNames] = useState([]); const [activeDriverField, setActiveDriverField] = useState(''); useEffect(() => { if (!liveMode) return undefined; let active = true; const refreshDrivers = async () => { try { const rows = staffMode ? (await supabase.from('drivers').select('name').eq('active', true).eq('approval_status', 'approved').order('name')).data || [] : await loadDriverRoster(); if (active) setDriverNames([...new Set(rows.map((driver) => driver.name).filter(Boolean))]); } catch {} }; void refreshDrivers(); const timer = window.setInterval(() => void refreshDrivers(), 30000); return () => { active = false; window.clearInterval(timer); }; }, [liveMode]); const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [area, setArea] = useState('All');
   const [drafts, setDrafts] = useState({});

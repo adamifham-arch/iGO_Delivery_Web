@@ -108,6 +108,15 @@ const shortWithdrawalRequestId = (id) => {
     ? 'WR-' + compact.slice(0, 10).toUpperCase()
     : value;
 };
+const shortExpenseRecordId = (id) => {
+  const compact = String(id || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+  const suffix = compact.startsWith('EXP') ? compact.slice(-8) : compact.slice(0, 8);
+  return 'EXP-' + (suffix || 'RECORD');
+};
+const compactExpenseReference = (value) => {
+  const text = String(value || '');
+  return text.length > 18 ? text.slice(0, 10) + '…' + text.slice(-4) : text;
+};
 const formatPackageAddedAt = (value) => {
   if (!value) return 'Date unavailable';
   const date = new Date(value);
@@ -5765,15 +5774,19 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         income: 0,
         outgoing: Number(request.amount || 0),
       })),
-    ...(billing.expenses || []).map((expense) => ({
-      date: expense.date,
-      type: 'Expense · ' + expense.category,
-      reference: expense.reference || expense.id,
-      party: expense.paidTo || '—',
-      details: expense.description,
-      income: 0,
-      outgoing: Number(expense.amount || 0),
-    })),
+    ...(billing.expenses || []).map((expense) => {
+      const fullReference = expense.reference || shortExpenseRecordId(expense.id);
+      return {
+        date: expense.date,
+        type: 'Expense · ' + expense.category,
+        reference: compactExpenseReference(fullReference),
+        fullReference,
+        party: expense.paidTo || '—',
+        details: expense.description,
+        income: 0,
+        outgoing: Number(expense.amount || 0),
+      };
+    }),
   ]
     .filter((row) => {
       const day = localDateKey(row.date);
@@ -5872,7 +5885,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   };
   const exportFinancialReport = () => {
     const fields = ['Date', 'Type', 'Reference', 'Payee / From', 'Details', 'Received (MVR)', 'Outgoing (MVR)'];
-    const rows = reportRows.map((row) => [localDateKey(row.date), row.type, row.reference, row.party, row.details, row.income.toFixed(2), row.outgoing.toFixed(2)]);
+    const rows = reportRows.map((row) => [localDateKey(row.date), row.type, row.fullReference || row.reference, row.party, row.details, row.income.toFixed(2), row.outgoing.toFixed(2)]);
     const csvValue = (value) => '"' + String(value ?? '').replace(/"/g, '""') + '"';
     const content = [fields, ...rows].map((row) => row.map(csvValue).join(',')).join('\r\n');
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
@@ -6341,7 +6354,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
                 <tbody>
                   {reportRows.length ? reportRows.map((row, index) => (
                     <tr key={row.reference + '-' + index}>
-                      <td>{localDateKey(row.date)}</td><td>{row.type}</td><td>{row.reference}</td><td>{row.party}</td><td>{row.details || '—'}</td><td>{row.income ? money(row.income) : '—'}</td><td>{row.outgoing ? money(row.outgoing) : '—'}</td>
+                      <td>{localDateKey(row.date)}</td><td>{row.type}</td><td title={row.fullReference || row.reference}>{row.reference}</td><td>{row.party}</td><td>{row.details || '—'}</td><td>{row.income ? money(row.income) : '—'}</td><td>{row.outgoing ? money(row.outgoing) : '—'}</td>
                     </tr>
                   )) : <tr><td colSpan="7">No transactions in this date range.</td></tr>}
                 </tbody>

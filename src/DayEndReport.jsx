@@ -172,6 +172,22 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
     });
   };
 
+  const printReport = () => {
+    const body = document.body;
+    const previousReport = body.getAttribute('data-print-report');
+    let cleanupTimer;
+    const cleanup = () => {
+      if (cleanupTimer) window.clearTimeout(cleanupTimer);
+      if (previousReport == null) body.removeAttribute('data-print-report');
+      else body.setAttribute('data-print-report', previousReport);
+      window.removeEventListener('afterprint', cleanup);
+    };
+    body.setAttribute('data-print-report', 'day-end');
+    window.addEventListener('afterprint', cleanup, { once: true });
+    window.requestAnimationFrame(() => window.print());
+    cleanupTimer = window.setTimeout(cleanup, 60000);
+  };
+
   const exportCsv = () => {
     if (!report) return;
     const rows = [
@@ -213,7 +229,7 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
   };
 
   return (
-    <section className="day-end-report finance-report-print">
+    <section className="day-end-report finance-report-print day-end-report-print">
       <h3>Day-end report</h3>
       <p>Daily delivery activity and recorded cash movement. Generate after the day’s records have been entered.</p>
       <form onSubmit={generate} className="finance-report-controls no-print">
@@ -258,7 +274,7 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
             <p>Expected closing balance is opening balance plus recorded money received, less withdrawals and expenses. Compare it with the bank statement; this report does not connect to the bank.</p>
           </section>
           <div className="finance-report-actions no-print">
-            <button type="button" onClick={() => window.print()}>Print report</button>
+            <button type="button" onClick={printReport}>Print report</button>
             <button type="button" onClick={exportCsv}>Export CSV</button>
           </div>
           <details open>

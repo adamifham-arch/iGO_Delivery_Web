@@ -15,7 +15,7 @@ const maldivesDate = (date) => {
 const dayKey = (value) => {
   if (!value) return '';
   const text = String(value);
-  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(text)) return text;
+  if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(text)) return text;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return maldivesDate(date);
@@ -82,6 +82,14 @@ const createReport = ({ date, openingBalance, actualClosing, packages, invoices,
   const withdrawalRows = (withdrawals || []).filter((item) =>
     item.status === 'paid' && dayKey(item.paid_at || item.paidAt || item.updated_at || item.reviewedAt || item.requestedAt) === date
   );
+  const pendingWithdrawals = (withdrawals || []).filter((item) =>
+    ['pending', 'approved'].includes(String(item.status || '').toLowerCase()) &&
+    dayKey(item.requestedAt || item.requested_at) === date
+  );
+  const pendingPayments = (payments || []).filter((item) =>
+    ['pending', 'submitted', 'under_review'].includes(String(item.status || '').toLowerCase()) &&
+    dayKey(item.submittedAt || item.submitted_at) === date
+  );
   const cashIn = receiptRows.reduce((sum, item) => sum + Number(item.verifiedAmount ?? item.amount ?? 0), 0);
   const expenseOut = expenseRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const withdrawalOut = withdrawalRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -132,6 +140,8 @@ const createReport = ({ date, openingBalance, actualClosing, packages, invoices,
     invoiceRows,
     invoiceDue: invoiceRows.reduce((sum, item) => sum + item.due, 0),
     receiptRows,
+    pendingPayments,
+    pendingWithdrawals,
     cashIn,
     expenseRows,
     expenseOut,
@@ -173,6 +183,8 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
       ['Delivery', 'Registered today still open', report.openRegistered.length, '', '', '', '', ''],
       ['Finance', 'Invoices generated', report.invoiceRows.length, report.invoiceRows.reduce((sum, item) => sum + Number(item.amount || 0), 0).toFixed(2), '', '', '', ''],
       ['Finance', 'Invoice balance due', '', report.invoiceDue.toFixed(2), '', '', '', ''],
+      ['Follow-up', 'Payment requests awaiting confirmation', report.pendingPayments.length, '', '', '', '', ''],
+      ['Follow-up', 'Withdrawal requests awaiting payment', report.pendingWithdrawals.length, '', '', '', '', ''],
       ['Cash movement', 'Confirmed partner payments received', report.receiptRows.length, report.cashIn.toFixed(2), '', '', '', ''],
       ['Cash movement', 'Driver withdrawals paid', report.withdrawalRows.length, report.withdrawalOut.toFixed(2), '', '', '', ''],
       ['Cash movement', 'Business expenses recorded as paid', report.expenseRows.length, report.expenseOut.toFixed(2), '', '', '', ''],
@@ -228,6 +240,13 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
             <article className="stat-card"><span>Driver withdrawals paid</span><strong>{currency(report.withdrawalOut)}</strong><small>{report.withdrawalRows.length} payout(s)</small></article>
             <article className="stat-card"><span>Business expenses</span><strong>{currency(report.expenseOut)}</strong><small>{report.expenseRows.length} recorded as paid</small></article>
             <article className="stat-card"><span>Net recorded cash movement</span><strong>{currency(report.netMovement)}</strong><small>Received minus paid withdrawals and expenses</small></article>
+          </div>
+          <h4>Needs follow-up</h4>
+          <div className="stats-grid finance-report-totals">
+            <article className="stat-card"><span>Unpaid balance on invoices generated today</span><strong>{currency(report.invoiceDue)}</strong><small>{report.invoiceRows.filter((item) => item.due > 0).length} invoice(s)</small></article>
+            <article className="stat-card"><span>Payment requests awaiting confirmation</span><strong>{report.pendingPayments.length}</strong></article>
+            <article className="stat-card"><span>Withdrawal requests awaiting payment</span><strong>{report.pendingWithdrawals.length}</strong></article>
+            <article className="stat-card"><span>Packages registered today still open</span><strong>{report.openRegistered.length}</strong></article>
           </div>
           <section className="day-end-reconciliation">
             <h4>Bank reconciliation</h4>

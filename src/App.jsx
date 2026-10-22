@@ -1736,9 +1736,15 @@ export default function App() {
     0
   );
 
+  const staffRoles = new Set((databaseProfile?.staffAssignments || []).map((item) => item.role));
+  const hasFinanceAccess = ['department_requester', 'finance_approver', 'payment_officer', 'operations_manager'].some((role) => staffRoles.has(role));
+  const hasStaffOperationsAccess = ['operations_manager', 'operations_staff', 'customer_support', 'people_manager'].some((role) => staffRoles.has(role));
   const navItems =
     workspace === 'Staff'
-      ? [['Staff Operations', '▣']]
+      ? [
+          ...(hasStaffOperationsAccess ? [['Staff Operations', '▣']] : []),
+          ...(hasFinanceAccess ? [['Finance Management', '♙']] : []),
+        ]
       : workspace === 'Driver'
       ? [
           ['Driver Overview', '⌂'],
@@ -2117,8 +2123,11 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           {(page === 'Finance Management' ||
             page === 'Accounts & Finance' ||
             page === 'Accounts') &&
-            workspace === 'Admin' && (
-              <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} /><StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} /></SectionErrorBoundary>
+            (workspace === 'Admin' || workspace === 'Staff') && (
+              <SectionErrorBoundary>
+                {workspace === 'Admin' && <FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} />}
+                <StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} view="finance" />
+              </SectionErrorBoundary>
             )}
 
           {page === 'Approvals' && workspace === 'Admin' && (
@@ -2132,7 +2141,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
-              <StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} />
+              <StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} view="people" />
               <AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} />
               <ManagedIgoAccounts />
               <PendingIgoUserApprovals />
@@ -2143,7 +2152,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 
 
           {page === 'Staff Operations' && workspace === 'Staff' && (
-            <StaffOperations user={databaseUser} profile={databaseProfile} />
+            <StaffOperations user={databaseUser} profile={databaseProfile} view="staff" />
           )}
 
           {page === 'Admin Operations' && workspace === 'Admin' && (

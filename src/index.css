@@ -7203,3 +7203,65 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     flex-wrap: wrap;
   }
 }
+
+
+/* The package lookup table becomes labeled cards instead of scrolling sideways. */
+.staff-package-table-wrap {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+.staff-package-table {
+  width: 100%;
+}
+@media (max-width: 640px) {
+  .staff-package-table-wrap {
+    overflow: visible;
+  }
+  .staff-package-table,
+  .staff-package-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  .staff-package-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
+  }
+  .staff-package-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+  .staff-package-table tbody tr {
+    display: block;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #405169;
+    border-radius: 10px;
+    background: #172438;
+  }
+  .staff-package-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(76px, 30%) minmax(0, 1fr);
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px solid #334155;
+    overflow-wrap: anywhere;
+  }
+  .staff-package-table tbody td:last-child {
+    border-bottom: 0;
+  }
+  .staff-package-table tbody td::before {
+    content: attr(data-label);
+    color: #aab8cc;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+}

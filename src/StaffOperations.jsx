@@ -22,6 +22,7 @@ export function StaffOperations({ user, profile, isOwner = false }) {
   const [events, setEvents] = useState({});
   const [people, setPeople] = useState([]);
   const [staffRows, setStaffRows] = useState([]);
+  const [packages, setPackages] = useState([]);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [draft, setDraft] = useState({ departmentId: assignments[0]?.department_id || '', category: 'Supplies', description: '', payee: '', amount: '', dueDate: '' });
@@ -46,6 +47,11 @@ export function StaffOperations({ user, profile, isOwner = false }) {
       setRequests(requestResult.data || []);
       setWithdrawals(withdrawalResult.data || []);
       setDepartments(departmentResult.data || []);
+      if (roles.has('operations_manager') || roles.has('operations_staff') || roles.has('customer_support') || isOwner) {
+        const packageResult = await supabase.from('packages').select('*').order('created_at', { ascending: false }).limit(100);
+        if (packageResult.error) throw packageResult.error;
+        setPackages(packageResult.data || []);
+      } else setPackages([]);
       if (canManage) {
         const [profileResult, assignmentResult] = await Promise.all([
           supabase.from('profiles').select('id,full_name,role').in('role', ['admin', 'staff']).order('full_name'),
@@ -93,6 +99,14 @@ export function StaffOperations({ user, profile, isOwner = false }) {
       setNotice(status === 'approved' ? 'Approved. The payment officer has been notified.' : status === 'rejected' ? 'Request rejected.' : 'Request updated.');
       await refresh();
     } catch (updateError) { setError(updateError.message || 'Could not update the request.'); }
+  };
+
+  const openSlip = async (path) => {
+    try {
+      const { data, error: signedError } = await supabase.storage.from('payment-proofs').createSignedUrl(path, 60);
+      if (signedError) throw signedError;
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    } catch (openError) { setError(openError.message || 'Could not open the payment slip.'); }
   };
 
   const recordPayment = async (table, id, event) => {
@@ -154,6 +168,11 @@ export function StaffOperations({ user, profile, isOwner = false }) {
     {notice && <p role="status" className="notice">{notice}</p>}
     {error && <p role="alert" className="notice">{error}</p>}
 
+    {(roles.has('operations_manager') || roles.has('operations_staff') || roles.has('customer_support') || isOwner) && <section style={card}>
+      <h3>Package operations · read-only</h3><p>Operations and support can look up delivery status here. Drivers and admins make package status changes.</p>
+      {packages.length ? <div style={{ overflowX: 'auto' }}><table className="finance-report-table"><thead><tr><th>Package</th><th>Customer</th><th>Phone</th><th>Area</th><th>Status</th><th>Added</th></tr></thead><tbody>{packages.map((item) => <tr key={item.id}><td>{item.package_number || item.package_code || item.id}</td><td>{item.customer_name || '—'}</td><td>{item.customer_phone || item.phone || '—'}</td><td>{item.area || item.address || '—'}</td><td>{item.status || '—'}</td><td>{item.created_at ? new Date(item.created_at).toLocaleString() : '—'}</td></tr>)}</tbody></table></div> : <p>No packages available.</p>}
+    </section>}
+
     {canRequest && <section style={card}>
       <h3>Request a payment</h3>
       <form onSubmit={submitRequest} className="finance-expense-form">
@@ -184,7 +203,7 @@ export function StaffOperations({ user, profile, isOwner = false }) {
           {withdrawal && <details><summary>Bank details for payout</summary><p>{item.bank_details_snapshot?.bankName} · {item.bank_details_snapshot?.accountHolder} · {item.bank_details_snapshot?.accountNumber} · {item.bank_details_snapshot?.branch}</p></details>}
           {item.rejection_reason && <p><strong>Reason:</strong> {item.rejection_reason}</p>}
           {(item.payment_reference || item.paid_reference) && <p><strong>Payment reference:</strong> {item.payment_reference || item.paid_reference}</p>}
-          {item.payment_slip_path && <p><strong>Payment slip attached.</strong></p>}
+          {item.payment_slip_path && <p><strong>Payment slip attached.</strong> <button type="button" onClick={() => void openSlip(item.payment_slip_path)}>View slip</button></p>}
           {canApprove && <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
             <button type="button" onClick={() => void decide(withdrawal ? 'driver_withdrawal_requests' : 'payment_requests', item.id, 'approved')}>Approve and request payment</button>
             <form onSubmit={(event) => { event.preventDefault(); const reason = String(new FormData(event.currentTarget).get('reason') || '').trim(); if (reason.length < 3) { setError('Enter a reason for rejection.'); return; } void decide(withdrawal ? 'driver_withdrawal_requests' : 'payment_requests', item.id, 'rejected', reason); }} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

@@ -7265,3 +7265,119 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     text-transform: uppercase;
   }
 }
+
+
+.staff-package-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(130px, 1fr)) auto auto;
+  align-items: end;
+  gap: 10px;
+  margin: 16px 0 8px;
+}
+.staff-package-filters label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.staff-package-filters input,
+.staff-package-filters select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.staff-package-filters button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+.staff-package-result-count {
+  color: #aab8cc;
+  font-size: 0.9rem;
+}
+.staff-package-list {
+  display: grid;
+  gap: 10px;
+}
+.staff-package-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #405169;
+  border-radius: 12px;
+  background: #172438;
+}
+.staff-package-card > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+.staff-package-card > summary::marker {
+  color: #f7c900;
+}
+.staff-package-card > summary > span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.staff-package-card > summary > span > span {
+  overflow-wrap: anywhere;
+}
+.staff-package-summary-meta {
+  text-align: right;
+}
+.staff-package-summary-meta strong {
+  color: #f7c900;
+  overflow-wrap: anywhere;
+}
+.staff-package-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 0 14px;
+  margin: 0;
+  padding: 0 14px 14px;
+}
+.staff-package-detail-grid > div {
+  min-width: 0;
+  padding: 9px 0;
+  border-top: 1px solid #334155;
+}
+.staff-package-detail-grid dt {
+  color: #aab8cc;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.staff-package-detail-grid dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.staff-package-detail-wide {
+  grid-column: 1 / -1;
+}
+@media (max-width: 760px) {
+  .staff-package-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .staff-package-filters label:first-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 420px) {
+  .staff-package-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .staff-package-filters label:first-child {
+    grid-column: auto;
+  }
+  .staff-package-card > summary {
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 10px;
+  }
+  .staff-package-summary-meta {
+    max-width: 42%;
+    overflow-wrap: anywhere;
+  }
+}

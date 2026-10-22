@@ -26,6 +26,22 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
   const [people, setPeople] = useState([]);
   const [staffRows, setStaffRows] = useState([]);
   const [packages, setPackages] = useState([]);
+  const [packageSearchInput, setPackageSearchInput] = useState('');
+  const [packageSearch, setPackageSearch] = useState('');
+  const [packagePartnerFilter, setPackagePartnerFilter] = useState('all');
+  const [packageStatusFilter, setPackageStatusFilter] = useState('all');
+  const [packageAreaFilter, setPackageAreaFilter] = useState('all');
+  const supportPackagePartners = [...new Map(packages.map((item) => [item.partner_id, item.partners?.name || item.partner_name || 'Partner unavailable']).filter(([id]) => id)).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const supportPackageStatuses = [...new Set(packages.map((item) => item.status).filter(Boolean))].sort();
+  const supportPackageAreas = [...new Set(packages.map((item) => item.area).filter(Boolean))].sort();
+  const visibleSupportPackages = packages.filter((item) => {
+    const query = packageSearch.trim().toLocaleLowerCase();
+    const searchable = [item.package_number, item.package_code, item.id, item.customer_name, item.customer_phone, item.partners?.name, item.partner_name, item.area, item.address, item.item_description, item.notes, item.status].filter(Boolean).join(' ').toLocaleLowerCase();
+    return (!query || searchable.includes(query)) &&
+      (packagePartnerFilter === 'all' || item.partner_id === packagePartnerFilter) &&
+      (packageStatusFilter === 'all' || item.status === packageStatusFilter) &&
+      (packageAreaFilter === 'all' || item.area === packageAreaFilter);
+  });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [draft, setDraft] = useState({ departmentId: assignments[0]?.department_id || '', category: 'Supplies', description: '', payee: '', amount: '', dueDate: '' });
@@ -50,7 +66,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
       setWithdrawals(withdrawalResult.data || []);
       setDepartments(departmentResult.data || []);
       if (roles.has('customer_support') && !roles.has('operations_manager') && !roles.has('operations_staff') && !isOwner) {
-        const packageResult = await supabase.from('packages').select('*').order('created_at', { ascending: false }).limit(100);
+        const packageResult = await supabase.from('packages').select('*,partners(name,phone,address),drivers(name,phone)').order('created_at', { ascending: false }).limit(1000);
         if (packageResult.error) throw packageResult.error;
         setPackages(packageResult.data || []);
       } else setPackages([]);
@@ -167,8 +183,56 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
     )}
 
     {showOperations && roles.has('customer_support') && !roles.has('operations_manager') && !roles.has('operations_staff') && !isOwner && <section style={card}>
-      <h3>Package operations · read-only</h3><p>Operations and support can look up delivery status here. Drivers and admins make package status changes.</p>
-      {packages.length ? <div className="staff-package-table-wrap"><table className="finance-report-table staff-package-table"><thead><tr><th>Package</th><th>Customer</th><th>Phone</th><th>Area</th><th>Status</th><th>Added</th></tr></thead><tbody>{packages.map((item) => <tr key={item.id}><td data-label="Package">{item.package_number || item.package_code || item.id}</td><td data-label="Customer">{item.customer_name || '—'}</td><td data-label="Phone">{item.customer_phone || item.phone || '—'}</td><td data-label="Area">{item.area || item.address || '—'}</td><td data-label="Status">{item.status || '—'}</td><td data-label="Added">{item.created_at ? new Date(item.created_at).toLocaleString() : '—'}</td></tr>)}</tbody></table></div> : <p>No packages available.</p>}
+      <h3>Package operations · read-only</h3>
+      <p>Search packages and check delivery details. This role cannot change package records.</p>
+      <form className="staff-package-filters" onSubmit={(event) => { event.preventDefault(); setPackageSearch(packageSearchInput); }}>
+        <label>Search packages
+          <input type="search" value={packageSearchInput} onChange={(event) => setPackageSearchInput(event.target.value)} placeholder="Package number, customer, phone, partner…" />
+        </label>
+        <button type="submit">Search</button>
+        <label>Partner
+          <select value={packagePartnerFilter} onChange={(event) => setPackagePartnerFilter(event.target.value)}>
+            <option value="all">All partners</option>
+            {supportPackagePartners.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        </label>
+        <label>Status
+          <select value={packageStatusFilter} onChange={(event) => setPackageStatusFilter(event.target.value)}>
+            <option value="all">All statuses</option>
+            {supportPackageStatuses.map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
+          </select>
+        </label>
+        <label>Area
+          <select value={packageAreaFilter} onChange={(event) => setPackageAreaFilter(event.target.value)}>
+            <option value="all">All areas</option>
+            {supportPackageAreas.map((area) => <option key={area} value={area}>{area}</option>)}
+          </select>
+        </label>
+        <button type="button" onClick={() => { setPackageSearchInput(''); setPackageSearch(''); setPackagePartnerFilter('all'); setPackageStatusFilter('all'); setPackageAreaFilter('all'); }}>Clear filters</button>
+      </form>
+      <p className="staff-package-result-count">Showing {visibleSupportPackages.length} of {packages.length} packages</p>
+      {visibleSupportPackages.length ? <div className="staff-package-list">
+        {visibleSupportPackages.map((item) => <details className="staff-package-card" key={item.id}>
+          <summary>
+            <span><strong>{item.package_number || item.package_code || item.id}</strong><span>{item.customer_name || 'Customer unavailable'} · {item.customer_phone || item.phone || 'Phone unavailable'}</span></span>
+            <span className="staff-package-summary-meta"><strong>{item.partners?.name || item.partner_name || 'Partner unavailable'}</strong><span>{String(item.status || 'status unavailable').replaceAll('_', ' ')}</span></span>
+          </summary>
+          <dl className="staff-package-detail-grid">
+            <div><dt>Partner</dt><dd>{item.partners?.name || item.partner_name || 'Partner unavailable'}</dd></div>
+            <div><dt>Partner phone</dt><dd>{item.partners?.phone || '—'}</dd></div>
+            <div><dt>Package number</dt><dd>{item.package_number || item.package_code || item.id}</dd></div>
+            <div><dt>Customer</dt><dd>{item.customer_name || '—'}</dd></div>
+            <div><dt>Customer phone</dt><dd>{item.customer_phone || item.phone || '—'}</dd></div>
+            <div><dt>Area</dt><dd>{item.area || '—'}</dd></div>
+            <div><dt>Address</dt><dd>{item.address || '—'}</dd></div>
+            <div><dt>Status</dt><dd>{String(item.status || '—').replaceAll('_', ' ')}</dd></div>
+            <div><dt>Item</dt><dd>{item.item_description || '—'}</dd></div>
+            <div><dt>Assigned driver</dt><dd>{item.drivers?.name || 'Not assigned'}</dd></div>
+            <div><dt>Added</dt><dd>{item.created_at ? new Date(item.created_at).toLocaleString() : '—'}</dd></div>
+            {item.notes && <div className="staff-package-detail-wide"><dt>Notes</dt><dd>{item.notes}</dd></div>}
+          </dl>
+        </details>)}
+      </div> : <p>No packages match these search terms or filters.</p>}
     </section>}
 
     {showFinance && canRequest && <section style={card}>

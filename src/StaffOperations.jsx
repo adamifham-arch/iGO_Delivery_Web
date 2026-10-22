@@ -48,6 +48,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
   const [queueTypeFilter, setQueueTypeFilter] = useState('all');
   const [queueStatusFilter, setQueueStatusFilter] = useState('all');
   const [queuePage, setQueuePage] = useState(0);
+  const [queueView, setQueueView] = useState('cards');
   const [draft, setDraft] = useState({ departmentId: assignments[0]?.department_id || '', category: 'Supplies', description: '', payee: '', amount: '', dueDate: '' });
   const [assignmentDraft, setAssignmentDraft] = useState({ userId: '', departmentId: assignments[0]?.department_id || '', role: 'department_requester' });
   const canManage = isOwner || roles.has('people_manager');
@@ -299,20 +300,27 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
           </select>
         </label>
       </div>
+      <div className="staff-payment-queue-view" role="group" aria-label="Payment queue layout">
+        <button type="button" aria-pressed={queueView === 'cards'} onClick={() => setQueueView('cards')}>Cards</button>
+        <button type="button" aria-pressed={queueView === 'list'} onClick={() => setQueueView('list')}>List</button>
+      </div>
       <p className="staff-payment-queue-count">Showing {filteredQueueRows.length ? queuePage * queuePageSize + 1 : 0}–{Math.min((queuePage + 1) * queuePageSize, filteredQueueRows.length)} of {filteredQueueRows.length}</p>
       {filteredQueueRows.length ? <>
-        <div className="staff-payment-queue-list">{pagedQueueRows.map((item) => {
+        <div className={"staff-payment-queue-list" + (queueView === "list" ? " is-list-view" : "")}>{pagedQueueRows.map((item) => {
         const withdrawal = item.kind === 'withdrawal';
         const status = item.status;
         const canApprove = canReview && status === 'pending_review' && !withdrawal
           || canReview && status === 'pending' && withdrawal;
         const canComplete = canPay && status === 'approved';
         const history = item.payment_request_events || [];
-        return <article key={item.kind + item.id} className="staff-payment-queue-item">
+        return <article key={item.kind + item.id} className={"staff-payment-queue-item" + (queueView === "list" ? " is-compact" : "")}>
           <div className="staff-payment-queue-item-heading">
             <div><strong>{withdrawal ? 'Driver withdrawal' : item.category}</strong> · {item.displayName}<p>{withdrawal ? 'Withdrawal request' : item.description + ' · Payee: ' + item.payee_name}</p><p>{money(item.amount)} · Submitted {new Date(item.date).toLocaleString()}</p></div>
-            <strong className={'status-pill status-' + status}>{status.replaceAll('_', ' ')}</strong>
+            <strong className={'status-pill status-' + status.replaceAll('_', ' ')}>{status.replaceAll('_', ' ')}</strong>
           </div>
+          {queueView === 'list' ? (
+            <details className="staff-payment-list-details">
+              <summary>Request details and actions</summary>
           {withdrawal && <details><summary>Bank details for payout</summary><p>{item.bank_details_snapshot?.bankName} · {item.bank_details_snapshot?.accountHolder} · {item.bank_details_snapshot?.accountNumber} · {item.bank_details_snapshot?.branch}</p></details>}
           {item.rejection_reason && <p><strong>Reason:</strong> {item.rejection_reason}</p>}
           {withdrawal && (item.reviewed_at || item.paid_at) && <p><strong>Reviewed:</strong> {item.reviewed_at ? new Date(item.reviewed_at).toLocaleString() + ' · ' + (item.reviewed_by || 'system').slice(0, 8) : '—'}{item.paid_at && <> · <strong>Paid:</strong> {new Date(item.paid_at).toLocaleString()} · {(item.paid_by || 'system').slice(0, 8)}</>}</p>}
@@ -326,6 +334,26 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
           </div>}
           {canComplete && renderPaymentForm(item, withdrawal ? 'driver_withdrawal_requests' : 'payment_requests')}
           {!withdrawal && history.length > 0 && <details style={{ marginTop: 8 }}><summary>Activity history</summary>{history.map((entry) => <p key={entry.id}>{entry.event} · {new Date(entry.created_at).toLocaleString()} · by {entry.actor_id ? entry.actor_id.slice(0, 8) : 'system'} {entry.details && '· ' + entry.details}</p>)}</details>}
+
+            </details>
+          ) : (
+            <>
+          {withdrawal && <details><summary>Bank details for payout</summary><p>{item.bank_details_snapshot?.bankName} · {item.bank_details_snapshot?.accountHolder} · {item.bank_details_snapshot?.accountNumber} · {item.bank_details_snapshot?.branch}</p></details>}
+          {item.rejection_reason && <p><strong>Reason:</strong> {item.rejection_reason}</p>}
+          {withdrawal && (item.reviewed_at || item.paid_at) && <p><strong>Reviewed:</strong> {item.reviewed_at ? new Date(item.reviewed_at).toLocaleString() + ' · ' + (item.reviewed_by || 'system').slice(0, 8) : '—'}{item.paid_at && <> · <strong>Paid:</strong> {new Date(item.paid_at).toLocaleString()} · {(item.paid_by || 'system').slice(0, 8)}</>}</p>}
+          {(item.payment_reference || item.paid_reference) && <p><strong>Payment reference:</strong> {item.payment_reference || item.paid_reference}</p>}
+          {item.payment_slip_path && <p><strong>Payment slip attached.</strong> <button type="button" onClick={() => void openSlip(item.payment_slip_path)}>View slip</button></p>}
+          {canApprove && <div className="staff-payment-queue-actions">
+            <button type="button" onClick={() => void decide(withdrawal ? 'driver_withdrawal_requests' : 'payment_requests', item.id, 'approved')}>Approve and request payment</button>
+            <form onSubmit={(event) => { event.preventDefault(); const reason = String(new FormData(event.currentTarget).get('reason') || '').trim(); if (reason.length < 3) { setError('Enter a reason for rejection.'); return; } void decide(withdrawal ? 'driver_withdrawal_requests' : 'payment_requests', item.id, 'rejected', reason); }}>
+              <input name="reason" placeholder="Reason for rejection" required minLength={3} /><button type="submit">Reject with reason</button>
+            </form>
+          </div>}
+          {canComplete && renderPaymentForm(item, withdrawal ? 'driver_withdrawal_requests' : 'payment_requests')}
+          {!withdrawal && history.length > 0 && <details style={{ marginTop: 8 }}><summary>Activity history</summary>{history.map((entry) => <p key={entry.id}>{entry.event} · {new Date(entry.created_at).toLocaleString()} · by {entry.actor_id ? entry.actor_id.slice(0, 8) : 'system'} {entry.details && '· ' + entry.details}</p>)}</details>}
+
+            </>
+          )}
         </article>;
       })}</div>
       <div className="staff-payment-queue-pagination">

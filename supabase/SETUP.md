@@ -26,12 +26,13 @@ Run each SQL file separately in Supabase SQL Editor, in this order:
 11. `migrations/202610220005_department_access_scopes.sql`
 12. `migrations/202610220006_finance_notifications_storage.sql`
 13. `migrations/202610220007_owner_payment_notifications.sql`
+14. `migrations/202610220008_operations_dispatch_permissions.sql`
 
 The first file adds enum values, which must commit before the next migration refers to them. The third file enables Supabase Cron (`pg_cron`) and schedules a once-per-minute check; invoices are generated once the configured Maldives-local cutoff passes. If Supabase says the extension is unavailable or cannot be enabled through SQL, enable **pg_cron** in the project dashboard under Integrations → Cron, then run migration 3 again. Manual invoice generation works independently of the scheduler.
 
 Admin workspace migration lets each admin create a linked partner profile on first use and a driver profile using their registered name and phone.
 
-Department workflow migrations create Finance, Operations, Customer Support, and People Management departments. Invite staff from User Management, then assign one or more department roles from the staff workspace controls. Use the owner account to assign finance approvers, payment officers, and People Managers. Finance staff approve/reject payment requests and driver withdrawals; payment officers then attach proof and mark approved payouts paid. Operations and support roles can look up packages without changing their status. The owner account keeps full admin access.
+Department workflow migrations create Finance, Operations, Customer Support, and People Management departments. Invite staff from User Management, then assign one or more department roles from the staff workspace controls. Use the owner account to assign finance approvers, payment officers, and People Managers. Finance staff approve/reject payment requests and driver withdrawals; payment officers then attach proof and mark approved payouts paid. Operations Managers and Operations Staff can assign active approved drivers, update delivery statuses, record failed-delivery reasons, and attach boat handover proof. Customer Support retains read-only package lookup. Finance approvals and payouts remain restricted to Finance roles. The owner account keeps full admin access.
 
 Partner-payment migrations allow one submission to cover every outstanding invoice, record the admin-verified amount, leave unpaid balances due, and apply overpayment as credit to future invoices. Rejection requires a reason. Run migrations 4 and 5 before using the updated payment UI.
 

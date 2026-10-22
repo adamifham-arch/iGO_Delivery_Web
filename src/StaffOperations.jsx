@@ -155,13 +155,16 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
   </form>;
 
   return <div className="staff-operations">
-    <header style={{ marginBottom: 18 }}>
-      <p className="eyebrow">{showFinance && view === 'finance' ? 'FINANCE MANAGEMENT' : showPeople && view === 'people' ? 'PEOPLE MANAGEMENT' : 'iGO STAFF WORKSPACE'}</p>
-      <h2>{view === 'finance' ? 'Finance Management' : view === 'people' ? 'Department and staff access' : view === 'staff' ? 'Staff Operations' : 'Department payments'}</h2>
-      {view === 'all' && <p>Submit, review, and record payments. Driver withdrawals follow the same approval and payment handoff.</p>}
-    </header>
     {notice && <p role="status" className="notice">{notice}</p>}
     {error && <p role="alert" className="notice">{error}</p>}
+    {view === 'staff' && !isOwner && !canManage && !['operations_manager', 'operations_staff', 'customer_support'].some((role) => roles.has(role)) && (
+      <section style={card} role="status">
+        <h2>No staff tools are assigned</h2>
+        {['department_requester', 'finance_approver', 'payment_officer'].some((role) => roles.has(role))
+          ? <p>This account has finance access. Open Finance Management from the menu to view payment requests.</p>
+          : <p>Ask the iGO owner to assign an active department and staff role to this account.</p>}
+      </section>
+    )}
 
     {showOperations && (roles.has('operations_manager') || roles.has('operations_staff') || roles.has('customer_support') || isOwner) && <section style={card}>
       <h3>Package operations · read-only</h3><p>Operations and support can look up delivery status here. Drivers and admins make package status changes.</p>

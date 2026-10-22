@@ -366,12 +366,33 @@ export default function App() {
     history: [],
   });
   const page = navigation.page;
+  const [notificationScrollRequest, setNotificationScrollRequest] = useState(null);
   const [workspace, setWorkspace] = useState('Partner');
   const workspaceRef = useRef('Partner');
   const activeUserIdRef = useRef(null);
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
+  useEffect(() => {
+    if (!notificationScrollRequest?.targetId) return undefined;
+    let attempts = 0;
+    let timer;
+    const findAndScroll = () => {
+      const target = document.getElementById(notificationScrollRequest.targetId);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target.classList.add('notification-scroll-target');
+        window.setTimeout(() => target.classList.remove('notification-scroll-target'), 1800);
+        setNotificationScrollRequest(null);
+      } else if (attempts++ < 15) {
+        timer = window.setTimeout(findAndScroll, 100);
+      } else {
+        setNotificationScrollRequest(null);
+      }
+    };
+    timer = window.setTimeout(findAndScroll, 80);
+    return () => window.clearTimeout(timer);
+  }, [notificationScrollRequest, page, workspace]);
   const [databaseUser, setDatabaseUser] = useState(null);
   const [databaseProfile, setDatabaseProfile] = useState(null);
   const [accountApprovalStatus, setAccountApprovalStatus] = useState(null);
@@ -1016,26 +1037,106 @@ export default function App() {
   function handleNotificationNavigate(item) {
     const explicitPage = [item.target_page, item.related_page, item.page, item.destination]
       .find((value) => typeof value === 'string' && value.trim());
-    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Profile', 'About'];
+    const explicitTarget = [
+      item.target_element_id,
+      item.target_anchor,
+      item.anchor_id,
+      item.related_section,
+      item.target_section,
+    ].find((value) => typeof value === 'string' && value.trim());
+    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Profile', 'About', 'Driver Overview', 'My Deliveries'];
     let destination = pages.find((page) => page.toLowerCase() === String(explicitPage || '').trim().toLowerCase());
-    const details = [item.type, item.category, item.entity_type, item.related_type, item.title, item.message]
-      .filter(Boolean).join(' ').toLowerCase();
-    const packageReference = item.package_number || item.tracking_number || item.tracking_code || item.package_code || item.package_id ||
+    const notificationText = [item.type, item.category, item.entity_type, item.related_type, item.title, item.message]
+      .filter(Boolean).join(' ');
+    const details = notificationText.toLowerCase();
+    const title = String(item.title || '').toLowerCase();
+    let packageReference = item.package_number || item.tracking_number || item.tracking_code || item.package_code || item.package_id ||
       (/(package|delivery)/.test(String(item.entity_type || item.related_type || '').toLowerCase()) ? item.related_id || item.entity_id : '');
-
-    if (!destination && packageReference) destination = 'Packages';
-    if (!destination && /(approval|application|pending account|partner request|rider request)/.test(details)) {
-      destination = workspace === 'Admin' ? 'Approvals' : 'Profile';
-    } else if (!destination && /(invoice|payment|withdrawal|expense|financial|finance|billing)/.test(details)) {
-      destination = workspace === 'Admin' ? 'Finance Management' : 'Invoices & Payments';
-    } else if (!destination && /(package|delivery|tracking|shipment|pickup)/.test(details)) {
-      destination = 'Packages';
-    } else if (!destination && /(profile|account|user)/.test(details)) {
-      destination = workspace === 'Admin' ? 'User Management' : 'Profile';
+    if (!packageReference) {
+      const match = notificationText.match(/\bpackage\s+(?:igo[-\s]?)?(\d+)\b/i);
+      if (match) packageReference = 'IGO-' + match[1];
     }
 
-    if (destination === 'Packages' && packageReference) setSearch(String(packageReference));
-    setPage(destination || (workspace === 'Admin' ? 'Admin Operations' : workspace === 'Driver' ? 'About' : 'Overview'));
+    let targetId = explicitTarget;
+    let targetWorkspace = '';
+    if (/new delivery available/.test(title)) {
+      destination = destination || 'Driver Overview';
+      targetId = targetId || 'driver-new-jobs';
+      targetWorkspace = 'Driver';
+    } else if (/withdrawal request updated/.test(title)) {
+      destination = destination || 'Driver Overview';
+      targetId = targetId || 'driver-earnings';
+      targetWorkspace = 'Driver';
+    } else if (/driver withdrawal request/.test(title)) {
+      destination = destination || 'Finance Management';
+      targetId = targetId || 'admin-withdrawal-requests';
+      targetWorkspace = 'Admin';
+    } else if (/partner payment submitted/.test(title)) {
+      destination = destination || 'Finance Management';
+      targetId = targetId || 'admin-payment-review';
+      targetWorkspace = 'Admin';
+    } else if (/invoice available|payment approved|payment needs attention/.test(title)) {
+      destination = destination || 'Invoices & Payments';
+      targetId = targetId || 'partner-invoice-payment-options';
+      targetWorkspace = 'Partner';
+    } else if (/package status updated/.test(title)) {
+      destination = destination || 'Packages';
+      targetId = targetId || 'package-list';
+      targetWorkspace = 'Partner';
+    }
+
+    if (!destination && packageReference) {
+      destination = workspace === 'Driver' ? 'Driver Overview' : 'Packages';
+      targetId = targetId || (workspace === 'Driver' ? 'driver-new-jobs' : 'package-list');
+    }
+    if (!destination && /(approval|application|pending account|partner request|rider request)/.test(details)) {
+      destination = workspace === 'Admin' ? 'Approvals' : 'Profile';
+      targetId = targetId || (workspace === 'Admin' ? 'pending-account-approvals' : 'profile-details');
+      if (workspace === 'Admin') targetWorkspace = 'Admin';
+    } else if (!destination && /(invoice|payment|withdrawal|expense|financial|finance|billing)/.test(details)) {
+      destination = workspace === 'Admin' ? 'Finance Management' : 'Invoices & Payments';
+      targetId = targetId || (workspace === 'Admin' ? 'admin-payment-review' : 'partner-invoice-payment-options');
+      if (workspace === 'Admin') targetWorkspace = 'Admin';
+      else if (workspace === 'Driver') {
+        destination = 'Driver Overview';
+        targetId = 'driver-earnings';
+        targetWorkspace = 'Driver';
+      } else targetWorkspace = 'Partner';
+    } else if (!destination && /(package|delivery|tracking|shipment|pickup)/.test(details)) {
+      destination = workspace === 'Driver' ? 'Driver Overview' : 'Packages';
+      targetId = targetId || (workspace === 'Driver' ? 'driver-new-jobs' : 'package-list');
+    } else if (!destination && /(profile|account|user)/.test(details)) {
+      destination = workspace === 'Admin' ? 'User Management' : 'Profile';
+      targetId = targetId || (workspace === 'Admin' ? 'user-management' : 'profile-details');
+      if (workspace === 'Admin') targetWorkspace = 'Admin';
+    }
+
+    destination = destination || (workspace === 'Admin' ? 'Admin Operations' : workspace === 'Driver' ? 'Driver Overview' : 'Overview');
+    if (!targetId) {
+      targetId = destination === 'Packages' ? 'package-list'
+        : destination === 'Driver Overview' || destination === 'My Deliveries' ? 'driver-new-jobs'
+        : destination === 'Approvals' ? 'pending-account-approvals'
+        : destination === 'User Management' ? 'user-management'
+        : destination === 'Profile' ? 'profile-details'
+        : destination === 'Finance Management' ? 'admin-payment-review'
+        : destination === 'Invoices & Payments' ? (workspace === 'Driver' ? 'driver-earnings' : 'partner-invoice-payment-options')
+        : '';
+    }
+    if (!targetWorkspace) {
+      if (['Admin Operations', 'User Management', 'Approvals', 'Finance Management'].includes(destination)) targetWorkspace = 'Admin';
+      else if (destination === 'Driver Overview' || destination === 'My Deliveries' || destination === 'About') targetWorkspace = 'Driver';
+      else if (destination === 'Invoices & Payments' || destination === 'Register Package') targetWorkspace = 'Partner';
+    }
+
+    const navigate = async () => {
+      if (databaseProfile?.role === 'admin' && targetWorkspace && workspace !== targetWorkspace) {
+        await switchWorkspace(targetWorkspace);
+      }
+      if (destination === 'Packages' && packageReference) setSearch(String(packageReference));
+      setPage(destination);
+      if (targetId) setNotificationScrollRequest({ targetId, requestId: Date.now() + Math.random() });
+    };
+    void navigate();
   }
 
   function setPage(nextPage) {
@@ -1954,7 +2055,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           {notice && <div className="notice">{notice}</div>}
 
           {page === 'Profile' && (
-            <section className="profile-details-card">
+            <section id="profile-details" className="profile-details-card">
               <h2>Profile</h2>
               <dl>
               <div><dt>Name</dt><dd>{viewedProfileName}</dd></div>
@@ -2008,7 +2109,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           )}
 
           {page === 'User Management' && workspace === 'Admin' && (
-            <section style={{ display: 'grid', gap: 20 }}>
+            <section id="user-management" style={{ display: 'grid', gap: 20 }}>
               <header>
                 <p className="eyebrow">ADMIN WORKSPACE</p>
                 
@@ -2553,7 +2654,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   + Register
                 </button>
               </div>
-              <div className="package-filter-bar">
+              <div id="package-list" className="package-filter-bar">
                 <label htmlFor="package-status-filter">Show</label>
                 <select
                   id="package-status-filter"
@@ -3013,7 +3114,7 @@ function ApprovalDashboard() {
   };
   const visible = accounts.filter((account) => status === 'all' || account.status === status);
   return (
-    <section className="accounts-dashboard" style={{ padding: 24 }}>
+    <section id="pending-account-approvals" className="accounts-dashboard" style={{ padding: 24 }}>
       <p className="approval-kicker">ADMIN WORKSPACE · LIVE</p>
       <h2>Pending user approvals</h2>
       <label>Show<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option><option value="all">All</option></select></label>
@@ -5962,7 +6063,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <h3>Invoices</h3><div style={{display:"flex",flexWrap:"wrap",alignItems:"end",gap:10,marginBottom:14}}><label>Daily cutoff <input type="time" value={billing.cutoff} onChange={(e)=>setBilling((current)=>({...current,cutoff:e.target.value}))}/></label><button type="button" style={buttonStyle} onClick={persistInvoiceCutoff}>Save cutoff</button><span>Ready to invoice: <strong>{readyPackages.length}</strong> · {money(readyPackages.reduce((sum,p)=>sum+Number(p.fee??p.delivery_fee??0),0))}</span><button type="button" style={buttonStyle} onClick={generateInvoices} disabled={liveBusy||(liveMode&&!adminUser)||readyPackages.length===0} title={readyPackages.length === 0 ? 'No delivered packages are ready to invoice' : undefined}>{liveBusy?"Generating…":liveMode?"Generate invoice now":"Generate demo invoice now"}</button>{readyPackages.length===0&&<span style={{fontSize:12,color:'#64748b'}}>No delivered packages ready to invoice.</span>}</div>{!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Signing in…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}
         {invoiceList(false)}
       </section>
-      <section style={panel}>
+      <section id="admin-payment-review" style={panel}>
         <h3>Payments awaiting review</h3>
         {pendingPayments.length ? (
           pendingPayments.map((payment) => {
@@ -6080,7 +6181,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           <p>None pending.</p>
         )}
       </section>
-      <section style={panel}>
+      <section id="admin-withdrawal-requests" style={panel}>
         <h3>Driver withdrawal requests</h3>
         <p>New requests: <strong>{withdrawalRequests.filter((request) => request.status === 'pending').length}</strong> · Review bank details and record decisions.</p>
         {withdrawalRequests.length ? (

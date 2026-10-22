@@ -188,6 +188,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
   });
   const queuePageSize = 10;
   const queuePageCount = Math.max(1, Math.ceil(filteredQueueRows.length / queuePageSize));
+  useEffect(() => { setQueuePage((current) => Math.min(current, queuePageCount - 1)); }, [queuePageCount]);
   const pagedQueueRows = filteredQueueRows.slice(queuePage * queuePageSize, (queuePage + 1) * queuePageSize);
   const queueStatuses = [...new Set(roleVisibleRows.map((item) => item.status).filter(Boolean))].sort();
 

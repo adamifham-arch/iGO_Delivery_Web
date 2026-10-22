@@ -49,7 +49,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
       setRequests(requestResult.data || []);
       setWithdrawals(withdrawalResult.data || []);
       setDepartments(departmentResult.data || []);
-      if (roles.has('operations_manager') || roles.has('operations_staff') || roles.has('customer_support') || isOwner) {
+      if (roles.has('customer_support') && !roles.has('operations_manager') && !roles.has('operations_staff') && !isOwner) {
         const packageResult = await supabase.from('packages').select('*').order('created_at', { ascending: false }).limit(100);
         if (packageResult.error) throw packageResult.error;
         setPackages(packageResult.data || []);
@@ -166,7 +166,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
       </section>
     )}
 
-    {showOperations && (roles.has('operations_manager') || roles.has('operations_staff') || roles.has('customer_support') || isOwner) && <section style={card}>
+    {showOperations && roles.has('customer_support') && !roles.has('operations_manager') && !roles.has('operations_staff') && !isOwner && <section style={card}>
       <h3>Package operations · read-only</h3><p>Operations and support can look up delivery status here. Drivers and admins make package status changes.</p>
       {packages.length ? <div className="staff-package-table-wrap"><table className="finance-report-table staff-package-table"><thead><tr><th>Package</th><th>Customer</th><th>Phone</th><th>Area</th><th>Status</th><th>Added</th></tr></thead><tbody>{packages.map((item) => <tr key={item.id}><td data-label="Package">{item.package_number || item.package_code || item.id}</td><td data-label="Customer">{item.customer_name || '—'}</td><td data-label="Phone">{item.customer_phone || item.phone || '—'}</td><td data-label="Area">{item.area || item.address || '—'}</td><td data-label="Status">{item.status || '—'}</td><td data-label="Added">{item.created_at ? new Date(item.created_at).toLocaleString() : '—'}</td></tr>)}</tbody></table></div> : <p>No packages available.</p>}
     </section>}

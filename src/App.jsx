@@ -3100,7 +3100,9 @@ function ManagedIgoAccounts() {
               >
                 <div className="managed-account-info" style={{ flex: '1 1 230px', minWidth: 0 }}>
                   <strong>{account.name || account.contact_name || 'Unnamed account'}</strong>
-                  <p style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>{account.type === 'Driver' ? 'Rider' : account.type} · Phone: {account.phone || 'Not provided'}{account.email ? ` · ${account.email}` : ''}</p>
+                  <p style={{ margin: '4px 0 0' }}>{account.type === 'Driver' ? 'Rider' : account.type}</p>
+                  <p style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>Email: {account.email || 'Not provided'}</p>
+                  <p style={{ margin: '4px 0 0', overflowWrap: 'anywhere' }}>Phone: {account.phone || 'Not provided'}</p>
                   {isAdmin && <small style={{ display: 'block', marginTop: 4, color: '#94a3b8' }}>
                     {account.addedByName
                       ? `Added by ${account.addedByName}${account.addedByEmail ? ` · ${account.addedByEmail}` : ''}`
@@ -3179,7 +3181,14 @@ function ApprovalDashboard() {
       {message && <p role="status" className="notice">{message}</p>}
       {loading ? <p>Loading accounts…</p> : visible.length ? visible.map((account) => (
         <article className="application-card" key={`${account.type}-${account.accountId}`} style={{ padding: 16, marginTop: 12 }}>
-          <div><strong>{account.name}</strong><p>{account.type} · {account.contact_name || account.email || account.phone || 'No contact details'}</p><span className={`status status-${statusClass(account.status)}`}>{account.status}</span></div>
+          <div>
+            <strong>{account.name}</strong>
+            {account.contact_name && <p>Contact: {account.contact_name}</p>}
+            <p>{account.type}</p>
+            <p>Email: {account.email || 'Not provided'}</p>
+            <p>Phone: {account.phone || 'Not provided'}</p>
+            <span className={`status status-${statusClass(account.status)}`}>{account.status}</span>
+          </div>
           <div className="finance-report-actions">
             {account.status === 'suspended'
               ? <button className="primary-btn" disabled={busyId === account.accountId} onClick={() => decide(account, 'approved')}>Reactivate</button>
@@ -4543,12 +4552,16 @@ function SuperadminUserManagement() {
   const loadUsers = async () => {
     setLoading(true);
     setError('');
-    const { data, error: loadError } = await supabase
-      .from('profiles')
-      .select('id, full_name, phone, role, created_at')
-      .order('created_at', { ascending: false });
+    const [{ data, error: loadError }, { data: emailRows, error: emailError }] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, phone, role, created_at').order('created_at', { ascending: false }),
+      supabase.rpc('list_igo_account_contact_emails'),
+    ]);
     if (loadError) setError(loadError.message);
-    else setUsers(data || []);
+    else if (emailError) setError(emailError.message);
+    else {
+      const emailByUserId = new Map((emailRows || []).map((row) => [row.user_id, row.email || '']));
+      setUsers((data || []).map((item) => ({ ...item, email: emailByUserId.get(item.id) || '' })));
+    }
     setLoading(false);
   };
 
@@ -4572,7 +4585,9 @@ function SuperadminUserManagement() {
           {!loading && !error && users.map((item) => (
             <article key={item.id} style={{ padding: '0.85rem 0', borderBottom: '1px solid #e5e7eb' }}>
               <strong>{item.full_name || 'Name not provided'}</strong>
-              <p style={{ margin: '0.3rem 0 0', color: '#64748b' }}>{item.role} · {item.phone || 'No phone number'}</p>
+              <p style={{ margin: '0.3rem 0 0', color: '#64748b' }}>{item.role}</p>
+              <p style={{ margin: '0.3rem 0 0', color: '#64748b', overflowWrap: 'anywhere' }}>Email: {item.email || 'Not provided'}</p>
+              <p style={{ margin: '0.3rem 0 0', color: '#64748b' }}>Phone: {item.phone || 'Not provided'}</p>
               <small style={{ color: '#64748b' }}>Account ID: {item.id}</small>
             </article>
           ))}

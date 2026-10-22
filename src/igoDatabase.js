@@ -498,26 +498,34 @@ export async function loadCurrentRole() {
   return { user: userResult.user, profile: data };
 }
 
+async function loadAccountContactEmails(client = requireClient()) {
+  const { data, error } = await client.rpc('list_igo_account_contact_emails');
+  if (error) throw error;
+  return new Map((data || []).map((row) => [row.user_id, row.email || '']));
+}
+
 export async function loadApprovalAccounts() {
   const client = requireClient();
-  const [partners, drivers] = await Promise.all([
+  const [partners, drivers, emails] = await Promise.all([
     client.from('partners').select('id,owner_id,name,contact_name,phone,email,approval_status,created_at').order('created_at', { ascending: false }),
     client.from('drivers').select('id,user_id,name,phone,approval_status,created_at').order('created_at', { ascending: false }),
+    loadAccountContactEmails(client),
   ]);
   if (partners.error) throw partners.error;
   if (drivers.error) throw drivers.error;
   return [
-    ...(partners.data || []).map((row) => ({ ...row, type: 'Partner', accountId: row.id, status: row.approval_status })),
-    ...(drivers.data || []).map((row) => ({ ...row, type: 'Driver', accountId: row.id, status: row.approval_status })),
+    ...(partners.data || []).map((row) => ({ ...row, email: row.email || emails.get(row.owner_id) || '', type: 'Partner', accountId: row.id, status: row.approval_status })),
+    ...(drivers.data || []).map((row) => ({ ...row, email: emails.get(row.user_id) || '', type: 'Driver', accountId: row.id, status: row.approval_status })),
   ].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 
 export async function loadManagedUserAccounts() {
   const client = requireClient();
-  const [accounts, admins, audit] = await Promise.all([
+  const [accounts, admins, audit, emails] = await Promise.all([
     loadApprovalAccounts(),
     client.from('profiles').select('id,full_name,phone,role,created_at').eq('role', 'admin').order('created_at', { ascending: false }),
     client.rpc('list_igo_admin_invite_audit'),
+    loadAccountContactEmails(client),
   ]);
   if (admins.error) throw admins.error;
   if (audit.error) throw audit.error;
@@ -528,6 +536,7 @@ export async function loadManagedUserAccounts() {
       const inviter = auditByUserId.get(row.id);
       return {
         ...row,
+        email: emails.get(row.id) || '',
         name: row.full_name,
         type: 'Admin',
         accountId: row.id,

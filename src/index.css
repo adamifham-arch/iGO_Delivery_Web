@@ -7470,3 +7470,43 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     font-size: 0.9rem;
   }
 }
+
+.staff-payment-queue-view {
+  display: inline-flex;
+  gap: 4px;
+  margin: 4px 0 8px;
+  padding: 3px;
+  border: 1px solid #526178;
+  border-radius: 10px;
+}
+.staff-payment-queue-view button {
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+}
+.staff-payment-queue-view button[aria-pressed="true"] {
+  background: #334155;
+  font-weight: 700;
+}
+.staff-payment-queue-list.is-list-view .staff-payment-queue-item {
+  margin-top: 7px;
+  padding: 10px 12px;
+  border: 1px solid #405169;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.22);
+}
+.staff-payment-queue-list.is-list-view .staff-payment-queue-item-heading {
+  align-items: center;
+}
+.staff-payment-list-details {
+  margin-top: 5px;
+}
+.staff-payment-list-details > summary {
+  width: fit-content;
+  padding: 5px 0;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 0.9rem;
+}

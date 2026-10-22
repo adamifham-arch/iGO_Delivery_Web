@@ -186,7 +186,7 @@ export function StaffOperations({ user, profile, isOwner = false }) {
       </form>
     </section>}
 
-    <section style={card}>
+    <section id="staff-payment-status" style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}><div><h3>Payment status</h3><p>Finance sees requests for review; payment officers see approved items to pay.</p></div><button type="button" onClick={() => void refresh()}>Refresh</button></div>
       {rows.length ? rows.map((item) => {
         const withdrawal = item.kind === 'withdrawal';
@@ -202,6 +202,7 @@ export function StaffOperations({ user, profile, isOwner = false }) {
           </div>
           {withdrawal && <details><summary>Bank details for payout</summary><p>{item.bank_details_snapshot?.bankName} · {item.bank_details_snapshot?.accountHolder} · {item.bank_details_snapshot?.accountNumber} · {item.bank_details_snapshot?.branch}</p></details>}
           {item.rejection_reason && <p><strong>Reason:</strong> {item.rejection_reason}</p>}
+          {withdrawal && (item.reviewed_at || item.paid_at) && <p><strong>Reviewed:</strong> {item.reviewed_at ? new Date(item.reviewed_at).toLocaleString() + ' · ' + (item.reviewed_by || 'system').slice(0, 8) : '—'}{item.paid_at && <> · <strong>Paid:</strong> {new Date(item.paid_at).toLocaleString()} · {(item.paid_by || 'system').slice(0, 8)}</>}</p>}
           {(item.payment_reference || item.paid_reference) && <p><strong>Payment reference:</strong> {item.payment_reference || item.paid_reference}</p>}
           {item.payment_slip_path && <p><strong>Payment slip attached.</strong> <button type="button" onClick={() => void openSlip(item.payment_slip_path)}>View slip</button></p>}
           {canApprove && <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
@@ -211,7 +212,7 @@ export function StaffOperations({ user, profile, isOwner = false }) {
             </form>
           </div>}
           {canComplete && renderPaymentForm(item, withdrawal ? 'driver_withdrawal_requests' : 'payment_requests')}
-          {!withdrawal && history.length > 0 && <details style={{ marginTop: 8 }}><summary>Activity history</summary>{history.map((entry) => <p key={entry.id}>{entry.event} · {new Date(entry.created_at).toLocaleString()} {entry.details && '· ' + entry.details}</p>)}</details>}
+          {!withdrawal && history.length > 0 && <details style={{ marginTop: 8 }}><summary>Activity history</summary>{history.map((entry) => <p key={entry.id}>{entry.event} · {new Date(entry.created_at).toLocaleString()} · by {entry.actor_id ? entry.actor_id.slice(0, 8) : 'system'} {entry.details && '· ' + entry.details}</p>)}</details>}
         </article>;
       }) : <p>No payment requests are visible to your role.</p>}
     </section>

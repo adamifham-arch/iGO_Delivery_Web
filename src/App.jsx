@@ -6165,15 +6165,6 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   return (
     <section style={{ paddingBottom: 28 }}>
       {mode === 'management' && (
-        <div className="stats-grid">
-          <article className="stat-card">
-            <span>Ready to invoice</span>
-            <strong>{readyPackages.length}</strong>
-            <small>{money(readyPackages.reduce((sum, packageItem) => sum + Number(packageItem.fee ?? packageItem.delivery_fee ?? 0), 0))} in delivered fees</small>
-          </article>
-        </div>
-      )}
-      {mode === 'management' && (
         <nav aria-label="Finance sections" style={{ display: 'flex', alignItems: 'stretch', gap: 4, overflowX: 'auto', whiteSpace: 'nowrap', padding: '0 2px', marginBottom: 18, borderBottom: '1px solid #dfe7e2' }}>
           {[
             ['Invoices', 'Invoices & collections'],

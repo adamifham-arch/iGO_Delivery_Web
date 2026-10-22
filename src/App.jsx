@@ -1102,6 +1102,8 @@ export default function App() {
       destination = workspace === 'Admin' ? 'Approvals' : 'Profile';
       targetId = targetId || (workspace === 'Admin' ? 'pending-account-approvals' : 'profile-details');
       if (workspace === 'Admin') targetWorkspace = 'Admin';
+    } else if (!destination && workspace === 'Staff' && /(payment|withdrawal|expense|financial|finance)/.test(details)) {
+      destination = 'Staff Operations'; targetId = targetId || 'staff-payment-status'; targetWorkspace = 'Staff';
     } else if (!destination && /(invoice|payment|withdrawal|expense|financial|finance|billing)/.test(details)) {
       destination = workspace === 'Admin' ? 'Finance Management' : 'Invoices & Payments';
       targetId = targetId || (workspace === 'Admin' ? 'admin-payment-review' : 'partner-invoice-payment-options');

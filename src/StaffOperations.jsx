@@ -66,7 +66,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
       setWithdrawals(withdrawalResult.data || []);
       setDepartments(departmentResult.data || []);
       if (roles.has('customer_support') && !roles.has('operations_manager') && !roles.has('operations_staff') && !isOwner) {
-        const packageResult = await supabase.from('packages').select('*').order('created_at', { ascending: false }).limit(100);
+        const packageResult = await supabase.from('packages').select('*,partners(name,phone,address),drivers(name,phone)').order('created_at', { ascending: false }).limit(1000);
         if (packageResult.error) throw packageResult.error;
         setPackages(packageResult.data || []);
       } else setPackages([]);

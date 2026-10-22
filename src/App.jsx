@@ -2769,13 +2769,13 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           {page === 'Invoices & Payments' && (
             <>
               <div className="stats-grid">
-                <Stat
+                {workspace !== 'Admin' && <Stat
                   label="Estimated delivery fees"
                   value={`MVR ${outstanding.toLocaleString()}`}
                   detail={`${estimatedPackages.length} package(s) not yet invoiced`}
                   scrollTarget="delivery-fee-estimates"
                   onClick={() => setShowEstimateList(true)}
-                />
+                />}
                 {workspace === 'Partner' && (
                   <Stat
                     label="Amount due"
@@ -2903,7 +2903,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               <div className="simple-list">
                 <h2>Invoices and payments</h2>
                 <p>{databaseProfile ? 'Official invoices and payment status from your account.' : 'Official records appear after database setup.'}</p>
-                <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} /></SectionErrorBoundary>
+                <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} mode="invoices" /></SectionErrorBoundary>
               </div>
             </>
           )}
@@ -4911,7 +4911,7 @@ function NotificationCenter({ onNavigate }) {
   );
 }
 
-function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = false }) {
+function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = false, mode = 'management' }) {
   const [activeFinanceTab, setActiveFinanceTab] = useState('Invoices');
   const [overviewMonth, setOverviewMonth] = useState(() => {
     const now = new Date();
@@ -6164,33 +6164,46 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   );
   return (
     <section style={{ paddingBottom: 28 }}>
-      <nav aria-label="Finance sections" style={{ display: 'flex', alignItems: 'stretch', gap: 4, overflowX: 'auto', whiteSpace: 'nowrap', padding: '0 2px', marginBottom: 18, borderBottom: '1px solid #dfe7e2' }}>
-        {[
-          ['Invoices', 'Invoices & collections'],
-          ['Expenses', 'Record business expense'],
-          [workspace === 'Admin' ? 'Day-end' : 'Reports', workspace === 'Admin' ? 'Day-end report' : 'Daily sales report'],
-          ['Settings', 'Payment account settings'],
-        ].map(([label, target]) => (
-          <button
-            key={target}
-            type="button"
-            style={{ flex: '0 0 auto', padding: '12px 15px', background: 'transparent', color: activeFinanceTab === label ? '#155b43' : '#65736c', border: 0, borderBottom: activeFinanceTab === label ? '3px solid #17634b' : '3px solid transparent', borderRadius: 0, boxShadow: 'none', fontSize: 13, fontWeight: activeFinanceTab === label ? 700 : 600, cursor: 'pointer' }}
-            onClick={() => {
-              setActiveFinanceTab(label);
-              const sectionHeading = Array.from(document.querySelectorAll('h2, h3')).find((heading) => heading.textContent.trim().includes(target));
-              sectionHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-      <h2>Invoices &amp; collections</h2>
+      {mode === 'management' && (
+        <div className="stats-grid">
+          <article className="stat-card">
+            <span>Ready to invoice</span>
+            <strong>{readyPackages.length}</strong>
+            <small>{money(readyPackages.reduce((sum, packageItem) => sum + Number(packageItem.fee ?? packageItem.delivery_fee ?? 0), 0))} in delivered fees</small>
+          </article>
+        </div>
+      )}
+      {mode === 'management' && (
+        <nav aria-label="Finance sections" style={{ display: 'flex', alignItems: 'stretch', gap: 4, overflowX: 'auto', whiteSpace: 'nowrap', padding: '0 2px', marginBottom: 18, borderBottom: '1px solid #dfe7e2' }}>
+          {[
+            ['Invoices', 'Invoices & collections'],
+            ['Expenses', 'Record business expense'],
+            [workspace === 'Admin' ? 'Day-end' : 'Reports', workspace === 'Admin' ? 'Day-end report' : 'Daily sales report'],
+            ['Settings', 'Payment account settings'],
+          ].map(([label, target]) => (
+            <button
+              key={target}
+              type="button"
+              style={{ flex: '0 0 auto', padding: '12px 15px', background: 'transparent', color: activeFinanceTab === label ? '#155b43' : '#65736c', border: 0, borderBottom: activeFinanceTab === label ? '3px solid #17634b' : '3px solid transparent', borderRadius: 0, boxShadow: 'none', fontSize: 13, fontWeight: activeFinanceTab === label ? 700 : 600, cursor: 'pointer' }}
+              onClick={() => {
+                setActiveFinanceTab(label);
+                const sectionHeading = Array.from(document.querySelectorAll('h2, h3')).find((heading) => heading.textContent.trim().includes(target));
+                sectionHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+      {mode === 'management' && <h2>Invoices &amp; collections</h2>}
       {!liveMode && <div className="notice">Demo mode.</div>}
       <section style={panel}>
-        <h3>Invoices</h3><div style={{display:"flex",flexWrap:"wrap",alignItems:"end",gap:10,marginBottom:14}}><label>Daily cutoff <input type="time" value={billing.cutoff} onChange={(e)=>setBilling((current)=>({...current,cutoff:e.target.value}))}/></label><button type="button" style={buttonStyle} onClick={persistInvoiceCutoff}>Save cutoff</button><span>Ready to invoice: <strong>{readyPackages.length}</strong> · {money(readyPackages.reduce((sum,p)=>sum+Number(p.fee??p.delivery_fee??0),0))}</span><button type="button" style={buttonStyle} onClick={generateInvoices} disabled={liveBusy||(liveMode&&!adminUser)||readyPackages.length===0} title={readyPackages.length === 0 ? 'No delivered packages are ready to invoice' : undefined}>{liveBusy?"Generating…":liveMode?"Generate invoice now":"Generate demo invoice now"}</button>{readyPackages.length===0&&<span style={{fontSize:12,color:'#64748b'}}>No delivered packages ready to invoice.</span>}</div>{!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Signing in…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}
+        <h3>Invoices</h3>{mode === 'management' && <><div style={{display:"flex",flexWrap:"wrap",alignItems:"end",gap:10,marginBottom:14}}><label>Daily cutoff <input type="time" value={billing.cutoff} onChange={(e)=>setBilling((current)=>({...current,cutoff:e.target.value}))}/></label><button type="button" style={buttonStyle} onClick={persistInvoiceCutoff}>Save cutoff</button><span>Ready to invoice: <strong>{readyPackages.length}</strong> · {money(readyPackages.reduce((sum,p)=>sum+Number(p.fee??p.delivery_fee??0),0))}</span><button type="button" style={buttonStyle} onClick={generateInvoices} disabled={liveBusy||(liveMode&&!adminUser)||readyPackages.length===0} title={readyPackages.length === 0 ? 'No delivered packages are ready to invoice' : undefined}>{liveBusy?"Generating…":liveMode?"Generate invoice now":"Generate demo invoice now"}</button>{readyPackages.length===0&&<span style={{fontSize:12,color:'#64748b'}}>No delivered packages ready to invoice.</span>}</div>{!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Working…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}</>}
         {invoiceList(false)}
       </section>
+      {mode === 'management' && (
+      <>
       <section id="admin-payment-review" style={panel}>
         <h3>Payments awaiting review</h3>
         {pendingPayments.length ? (
@@ -6542,6 +6555,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           Save payment account
         </button>
       </section>
+      </>
+      )}
       {liveMode && databaseFinanceError && <p role="alert" className="notice">{databaseFinanceError}</p>}
       {notice && (
         <p role="status" className="notice">

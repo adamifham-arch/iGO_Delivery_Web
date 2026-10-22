@@ -2072,6 +2072,8 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               ? page === 'About'
                 ? 'Profile and bank details.'
                 : 'Assigned deliveries.'
+              : workspace === 'Staff'
+              ? page === 'Finance Management' ? 'Payment requests, approvals, and payouts.' : 'Tools depend on your assigned staff role.'
               : 'Packages and payments.'}
           </p>
 

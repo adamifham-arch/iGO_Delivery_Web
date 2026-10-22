@@ -13,7 +13,7 @@ const roleLabels = {
 const money = (value) => 'MVR ' + Number(value || 0).toFixed(2);
 const card = { padding: 18, borderRadius: 16, border: '1px solid #405169', background: '#1e2b40', marginBottom: 16 };
 
-export function StaffOperations({ user, profile }) {
+export function StaffOperations({ user, profile, isOwner = false }) {
   const assignments = profile?.staffAssignments || [];
   const roles = new Set(assignments.map((item) => item.role));
   const [requests, setRequests] = useState([]);
@@ -27,7 +27,6 @@ export function StaffOperations({ user, profile }) {
   const [draft, setDraft] = useState({ departmentId: assignments[0]?.department_id || '', category: 'Supplies', description: '', payee: '', amount: '', dueDate: '' });
   const [newDepartment, setNewDepartment] = useState('');
   const [assignmentDraft, setAssignmentDraft] = useState({ userId: '', departmentId: assignments[0]?.department_id || '', role: 'department_requester' });
-  const isOwner = profile?.isOwner === true;
   const canManage = isOwner || roles.has('people_manager');
   const canReview = isOwner || roles.has('finance_approver');
   const canPay = isOwner || roles.has('payment_officer');

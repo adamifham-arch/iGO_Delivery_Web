@@ -6089,7 +6089,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         {[
           ['Invoices', 'Invoices & collections'],
           ['Expenses', 'Record business expense'],
-          ['Reports', workspace === 'Admin' ? 'Day-end report' : 'Daily sales report'],
+          [workspace === 'Admin' ? 'Day-end' : 'Reports', workspace === 'Admin' ? 'Day-end report' : 'Daily sales report'],
           ['Settings', 'Payment account settings'],
         ].map(([label, target]) => (
           <button

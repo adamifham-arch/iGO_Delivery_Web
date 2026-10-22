@@ -7748,3 +7748,78 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   .day-end-signoff > div { color: #17253a !important; }
   .day-end-signoff i { border-color: #64748b !important; }
 }
+
+/* Keep invoice records readable in narrow embedded/mobile viewports. */
+@media (max-width: 560px) {
+  .finance-invoice-table-wrap {
+    overflow: visible !important;
+  }
+
+  .finance-invoice-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed !important;
+  }
+
+  .finance-invoice-table colgroup,
+  .finance-invoice-table thead {
+    display: none !important;
+  }
+
+  .finance-invoice-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .finance-invoice-table tbody tr {
+    display: grid;
+    grid-template-areas:
+      "status total"
+      "invoice invoice"
+      "action action";
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 12px 10px;
+    border-top: 1px solid #475569;
+  }
+
+  .finance-invoice-table tbody td {
+    display: block;
+    min-width: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .finance-invoice-table tbody td:nth-child(1) {
+    grid-area: status;
+  }
+
+  .finance-invoice-table tbody td:nth-child(2) {
+    grid-area: invoice;
+  }
+
+  .finance-invoice-table tbody td:nth-child(2) strong {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .finance-invoice-table tbody td:nth-child(2) small {
+    overflow-wrap: anywhere;
+  }
+
+  .finance-invoice-table tbody td:nth-child(3) {
+    grid-area: total;
+    text-align: right;
+    white-space: nowrap !important;
+  }
+
+  .finance-invoice-table tbody td:nth-child(4) {
+    grid-area: action;
+  }
+
+  .finance-invoice-table tbody td:nth-child(4) button {
+    width: 100%;
+  }
+}

@@ -1086,7 +1086,11 @@ export default function App() {
 
     let targetId = explicitTarget;
     let targetWorkspace = '';
-    if (/new delivery available/.test(title)) {
+    if (/new user awaiting approval/.test(title)) {
+      destination = destination || 'Approvals';
+      targetId = targetId || 'pending-account-approvals';
+      targetWorkspace = 'Admin';
+    } else if (/new delivery available/.test(title)) {
       destination = destination || 'Driver Overview';
       targetId = targetId || 'driver-new-jobs';
       targetWorkspace = 'Driver';

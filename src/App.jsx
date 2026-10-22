@@ -94,6 +94,12 @@ const initialPackages = [
 ];
 
 const statusClass = (status) => status.toLowerCase().replaceAll(' ', '-');
+const getStaffLandingPage = (profile) => {
+  const roles = new Set((profile?.staffAssignments || []).map((assignment) => assignment.role));
+  return ['department_requester', 'finance_approver', 'payment_officer'].some((role) => roles.has(role))
+    ? 'Finance Management'
+    : 'Staff Operations';
+};
 const shortWithdrawalRequestId = (id) => {
   const value = String(id || '');
   const compact = value.replace(/[^a-z0-9]/gi, '');
@@ -610,7 +616,7 @@ export default function App() {
         setWorkspace(nextWorkspace);
         setPackages(rows);
         if (finance) applyDatabaseFinanceSnapshot(finance);
-        if (!keepSelectedWorkspace) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : nextWorkspace === 'Staff' ? 'Staff Operations' : 'Overview', history: [] });
+        if (!keepSelectedWorkspace) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : nextWorkspace === 'Staff' ? getStaffLandingPage(profile) : 'Overview', history: [] });
         setDatabaseError('');
       } catch (error) {
         if (!active) return;
@@ -751,7 +757,7 @@ export default function App() {
         setPackages(rows);
         if (finance) applyDatabaseFinanceSnapshot(finance);
         setWorkspace(roleWorkspace);
-        setNavigation({ page: roleWorkspace === 'Admin' ? 'Admin Operations' : roleWorkspace === 'Driver' ? 'Driver Overview' : roleWorkspace === 'Staff' ? 'Staff Operations' : 'Overview', history: [] });
+        setNavigation({ page: roleWorkspace === 'Admin' ? 'Admin Operations' : roleWorkspace === 'Driver' ? 'Driver Overview' : roleWorkspace === 'Staff' ? getStaffLandingPage(profile) : 'Overview', history: [] });
       } catch (loadError) {
         await supabase.auth.signOut();
         setDatabaseError(loadError.message || 'This account is not linked to an iGO profile.');

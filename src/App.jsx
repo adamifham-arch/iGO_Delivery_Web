@@ -2072,7 +2072,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               ? 'DRIVER WORKSPACE'
               : 'PARTNER WORKSPACE'}
           </div>
-          <h1>{page === 'Register Package' ? 'Register a package' : page}</h1>
+          <h1>{page === 'Register Package' ? 'Register a package' : page === 'Staff Operations' ? 'Delivery Management Room' : page}</h1>
           <p className="subtitle">
             {workspace === 'Admin'
               ? 'Admin workspace.'

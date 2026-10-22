@@ -26,7 +26,6 @@ export function StaffOperations({ user, profile, isOwner = false }) {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [draft, setDraft] = useState({ departmentId: assignments[0]?.department_id || '', category: 'Supplies', description: '', payee: '', amount: '', dueDate: '' });
-  const [newDepartment, setNewDepartment] = useState('');
   const [assignmentDraft, setAssignmentDraft] = useState({ userId: '', departmentId: assignments[0]?.department_id || '', role: 'department_requester' });
   const canManage = isOwner || roles.has('people_manager');
   const canReview = isOwner || roles.has('finance_approver');
@@ -130,13 +129,6 @@ export function StaffOperations({ user, profile, isOwner = false }) {
     } catch (paymentError) { setError(paymentError.message || 'Could not record the payment.'); }
   };
 
-  const addDepartment = async (event) => {
-    event.preventDefault();
-    if (!newDepartment.trim()) return;
-    const { error: insertError } = await supabase.from('departments').insert({ name: newDepartment.trim(), description: '' });
-    if (insertError) setError(insertError.message); else { setNewDepartment(''); setNotice('Department added.'); await refresh(); }
-  };
-
   const assignRole = async (event) => {
     event.preventDefault();
     const { error: assignError } = await supabase.rpc('assign_igo_staff_role', {
@@ -220,14 +212,13 @@ export function StaffOperations({ user, profile, isOwner = false }) {
     {canManage && <section style={card}>
       <h3>Departments and staff access</h3>
       <p>Invite a person through User Management first, then assign their account here. Staff assignments replace broad admin access with the selected department role.</p>
-      {isOwner && <form className="staff-department-form" onSubmit={addDepartment} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}><input aria-label="New department name" placeholder="New department name" value={newDepartment} onChange={(event) => setNewDepartment(event.target.value)} /><button type="submit">Add department</button></form>}
       <form onSubmit={assignRole} className="finance-expense-form">
         <label>Account<select required value={assignmentDraft.userId} onChange={(event) => setAssignmentDraft({ ...assignmentDraft, userId: event.target.value })}><option value="">Choose invited account</option>{people.filter((person) => person.id !== user.id).map((person) => <option key={person.id} value={person.id}>{person.full_name || person.id.slice(0, 8)} · {person.role}</option>)}</select></label>
         <label>Department<select required value={assignmentDraft.departmentId} onChange={(event) => setAssignmentDraft({ ...assignmentDraft, departmentId: event.target.value })}><option value="">Choose department</option>{departments.filter((department) => department.active && (isOwner || roles.has('people_manager') || assignments.some((item) => item.department_id === department.id))).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
         <label>Staff role<select value={assignmentDraft.role} onChange={(event) => setAssignmentDraft({ ...assignmentDraft, role: event.target.value })}>{Object.entries(roleLabels).filter(([role]) => isOwner || !['finance_approver','payment_officer','people_manager'].includes(role)).map(([role,label]) => <option key={role} value={role}>{label}</option>)}</select></label>
         <button type="submit">Assign department role</button>
       </form>
-      {staffRows.map((row) => <p key={row.id}>{row.profiles?.full_name || row.user_id.slice(0,8)} · {row.departments?.name} · {roleLabels[row.role]} · {row.active ? 'Active' : 'Inactive'} {row.active && (isOwner || (roles.has('people_manager') && !['finance_approver','payment_officer','people_manager'].includes(row.role))) && <button type="button" onClick={async () => { const { error: revokeError } = await supabase.rpc('assign_igo_staff_role', { p_user_id: row.user_id, p_department_id: row.department_id, p_role: row.role, p_active: false }); if (revokeError) setError(revokeError.message); else { setNotice('Staff role removed.'); await refresh(); } }}>Remove role</button>}</p>)}
+      {staffRows.filter((row) => row.active).map((row) => <p key={row.id}>{row.profiles?.full_name || row.user_id.slice(0,8)} · {row.departments?.name} · {roleLabels[row.role]} · {row.active ? 'Active' : 'Inactive'} {row.active && (isOwner || (roles.has('people_manager') && !['finance_approver','payment_officer','people_manager'].includes(row.role))) && <button type="button" onClick={async () => { const { error: revokeError } = await supabase.rpc('assign_igo_staff_role', { p_user_id: row.user_id, p_department_id: row.department_id, p_role: row.role, p_active: false }); if (revokeError) setError(revokeError.message); else { setNotice('Staff role removed.'); await refresh(); } }}>Remove role</button>}</p>)}
     </section>}
   </div>;
 }

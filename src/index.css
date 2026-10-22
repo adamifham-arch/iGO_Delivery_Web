@@ -7151,6 +7151,10 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 
 
 /* Keep the staff payments workflow readable in split-screen and phone layouts. */
+.staff-operations .finance-expense-form label {
+  color: #e2e8f0;
+}
+
 .staff-operations,
 .staff-operations > section,
 .staff-operations article,

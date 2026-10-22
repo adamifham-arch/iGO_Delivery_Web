@@ -11,7 +11,7 @@ const roleLabels = {
   people_manager: 'People manager',
 };
 const money = (value) => 'MVR ' + Number(value || 0).toFixed(2);
-const card = { padding: 18, borderRadius: 16, border: '1px solid #405169', background: '#1e2b40', marginBottom: 16 };
+const card = { padding: 18, borderRadius: 16, border: '1px solid #405169', background: '#1e2b40', color: '#edf3ff', marginBottom: 16 };
 
 export function StaffOperations({ user, profile, isOwner = false, view = 'all' }) {
   const showOperations = ['all', 'operations', 'staff'].includes(view);

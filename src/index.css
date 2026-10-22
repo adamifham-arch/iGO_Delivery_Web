@@ -7510,3 +7510,15 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   cursor: pointer;
   font-size: 0.9rem;
 }
+
+/* Disclosure controls in the staff payment queue are interactive, not editable text. */
+.staff-payment-queue-item details > summary {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.staff-payment-queue-item details > summary:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 3px;
+  border-radius: 3px;
+}

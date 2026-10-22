@@ -129,8 +129,7 @@ export function StaffOperations({ user, profile, isOwner = false }) {
     } catch (paymentError) { setError(paymentError.message || 'Could not record the payment.'); }
   };
 
-  const addDepartment = async (event) => {
-    event.preve  const assignRole = async (event) => {
+  const assignRole = async (event) => {
     event.preventDefault();
     const { error: assignError } = await supabase.rpc('assign_igo_staff_role', {
       p_user_id: assignmentDraft.userId,

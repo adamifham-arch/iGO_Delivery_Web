@@ -6,17 +6,19 @@ const currency = (value) =>
     maximumFractionDigits: 2,
   });
 
+const maldivesDate = (date) => {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Indian/Maldives', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value || '';
+  return get('year') + '-' + get('month') + '-' + get('day');
+};
+
 const dayKey = (value) => {
   if (!value) return '';
   const text = String(value);
   if (/^\\d{4}-\\d{2}-\\d{2}$/.test(text)) return text;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
+  return maldivesDate(date);
 };
 
 const timed = (value) => {
@@ -24,7 +26,7 @@ const timed = (value) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? String(value)
-    : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    : date.toLocaleTimeString([], { timeZone: 'Indian/Maldives', hour: 'numeric', minute: '2-digit' });
 };
 
 const packageAmount = (item) =>
@@ -52,6 +54,21 @@ const createReport = ({ date, openingBalance, actualClosing, packages, invoices,
   const pickedUp = packageRows.filter((item) => dayKey(item.pickedUpAt) === date);
   const failed = packageRows.filter((item) => dayKey(item.failedAttemptAt || item.failedAt) === date);
   const openRegistered = registered.filter((item) => !['delivered', 'failed', 'returned', 'cancelled'].includes(String(item.status || '').toLowerCase()));
+  const deliveryEvents = [
+    ...registered.map((item) => ({ item, time: item.createdAt || item.addedAt, type: 'Registered' })),
+    ...pickedUp.map((item) => ({ item, time: item.pickedUpAt, type: 'Picked up' })),
+    ...delivered.map((item) => ({ item, time: item.deliveredAt, type: 'Delivered' })),
+    ...failed.map((item) => ({ item, time: item.failedAttemptAt || item.failedAt, type: 'Failed attempt' })),
+  ].map(({ item, time, type }) => ({
+    time,
+    type,
+    reference: item.displayId || item.id || item.packageNumber || 'Package',
+    customer: item.customer || item.customer_name || 'Customer',
+    partner: item.partnerName || item.partner || 'Partner',
+    driver: item.driver || '—',
+    status: item.status || '—',
+    fee: type === 'Delivered' ? packageAmount(item) : 0,
+  })).sort((left, right) => new Date(left.time || 0) - new Date(right.time || 0));
   const invoiceRows = (invoices || []).filter((item) => dayKey(item.createdAt || item.generatedAt) === date).map((item) => {
     const paid = invoicePaid(item, payments);
     return { ...item, paid, due: Math.max(0, Number(item.amount || 0) - paid) };
@@ -75,15 +92,6 @@ const createReport = ({ date, openingBalance, actualClosing, packages, invoices,
   const expectedClosing = opening == null ? null : opening + netMovement;
   const variance = expectedClosing == null || actual == null ? null : actual - expectedClosing;
   const activity = [
-    ...delivered.map((item) => ({
-      time: item.deliveredAt,
-      type: 'Delivery fee earned',
-      reference: item.displayId || item.id || item.packageNumber || 'Package',
-      party: item.partnerName || item.partner || 'Partner',
-      details: (item.customer || item.customer_name || 'Customer') + ' · ' + (item.driver || 'No driver listed'),
-      incoming: packageAmount(item),
-      outgoing: 0,
-    })),
     ...receiptRows.map((item) => ({
       time: item.transferDate || item.verifiedAt || item.submittedAt,
       type: 'Partner payment received',
@@ -116,6 +124,7 @@ const createReport = ({ date, openingBalance, actualClosing, packages, invoices,
     date,
     registered,
     pickedUp,
+    deliveryEvents,
     delivered,
     failed,
     openRegistered,
@@ -139,10 +148,7 @@ const createReport = ({ date, openingBalance, actualClosing, packages, invoices,
 };
 
 export function DayEndReport({ packages = [], invoices = [], payments = [], expenses = [], withdrawals = [] }) {
-  const [date, setDate] = useState(() => {
-    const now = new Date();
-    return [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
-  });
+  const [date, setDate] = useState(() => maldivesDate(new Date()));
   const [openingBalance, setOpeningBalance] = useState('');
   const [actualClosing, setActualClosing] = useState('');
   const [report, setReport] = useState(null);
@@ -175,6 +181,9 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
       ['Reconciliation', 'Expected closing balance', '', report.expectedClosing == null ? '' : report.expectedClosing.toFixed(2), '', '', '', ''],
       ['Reconciliation', 'Actual closing balance', '', report.actual == null ? '' : report.actual.toFixed(2), '', '', '', ''],
       ['Reconciliation', 'Difference (actual minus expected)', '', report.variance == null ? '' : report.variance.toFixed(2), '', '', '', ''],
+      ...report.deliveryEvents.map((item) => [
+        'Delivery activity', item.type, '', item.fee.toFixed(2), item.reference, item.customer, item.partner + ' · ' + item.driver + ' · ' + item.status, timed(item.time),
+      ]),
       ...report.activity.map((item) => [
         'Activity', item.type, '', (item.incoming || item.outgoing).toFixed(2),
         item.reference, item.party, item.details, timed(item.time),
@@ -234,15 +243,14 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
             <button type="button" onClick={exportCsv}>Export CSV</button>
           </div>
           <details open>
-            <summary>Delivery activity · {report.delivered.length + report.registered.length + report.pickedUp.length + report.failed.length} events</summary>
+            <summary>Delivery activity · {report.deliveryEvents.length} events</summary>
             <div className="finance-report-table-wrap">
               <table className="finance-report-table">
-                <thead><tr><th>Time</th><th>Event</th><th>Package</th><th>Customer</th><th>Partner</th><th>Driver</th><th>Fee earned</th></tr></thead>
+                <thead><tr><th>Time</th><th>Event</th><th>Package</th><th>Customer</th><th>Partner</th><th>Driver</th><th>Fee earned</th><th>Current status</th></tr></thead>
                 <tbody>
-                  {report.activity.filter((item) => item.type === 'Delivery fee earned').length ? report.activity.filter((item) => item.type === 'Delivery fee earned').map((item, index) => {
-                    const pkg = report.delivered[index];
-                    return <tr key={item.reference + '-' + index}><td>{timed(item.time)}</td><td>Delivered</td><td>{item.reference}</td><td>{pkg?.customer || pkg?.customer_name || 'Customer'}</td><td>{item.party}</td><td>{pkg?.driver || '—'}</td><td>{currency(item.incoming)}</td></tr>;
-                  }) : <tr><td colSpan="7">No delivery fee activity recorded for this date.</td></tr>}
+                  {report.deliveryEvents.length ? report.deliveryEvents.map((item, index) => (
+                    <tr key={item.reference + '-' + item.type + '-' + index}><td>{timed(item.time)}</td><td>{item.type}</td><td>{item.reference}</td><td>{item.customer}</td><td>{item.partner}</td><td>{item.driver}</td><td>{item.fee ? currency(item.fee) : '—'}</td><td>{item.status}</td></tr>
+                  )) : <tr><td colSpan="8">No package activity was recorded for this date.</td></tr>}
                 </tbody>
               </table>
             </div>

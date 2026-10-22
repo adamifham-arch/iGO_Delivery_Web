@@ -175,7 +175,9 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
   const printReport = () => {
     const body = document.body;
     const previousReport = body.getAttribute('data-print-report');
+    let cleanupTimer;
     const cleanup = () => {
+      if (cleanupTimer) window.clearTimeout(cleanupTimer);
       if (previousReport == null) body.removeAttribute('data-print-report');
       else body.setAttribute('data-print-report', previousReport);
       window.removeEventListener('afterprint', cleanup);
@@ -183,7 +185,7 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
     body.setAttribute('data-print-report', 'day-end');
     window.addEventListener('afterprint', cleanup, { once: true });
     window.requestAnimationFrame(() => window.print());
-    window.setTimeout(cleanup, 60000);
+    cleanupTimer = window.setTimeout(cleanup, 60000);
   };
 
   const exportCsv = () => {

@@ -1,6 +1,7 @@
 import { Component, useEffect, useRef, useState } from 'react';
 import './index.css';
 import { supabase, supabaseConfigured } from './supabase';
+import { StaffOperations } from './StaffOperations';
 import {
   createPackages,
   getDriverIdByName,
@@ -566,13 +567,17 @@ export default function App() {
       }
       try {
         if (session.user.invited_at && session.user.user_metadata?.password_setup_complete !== true) { if (!active) return; setDatabaseUser(null); setDatabaseProfile(null); setIsSuperadmin(false); setLinkedPartnerProfile(null); setLinkedDriverProfile(null); setPartnerLogo(''); setPackages([]); setInvitePasswordSetupRequired(true); setAuthMode('invite-password-setup'); setDatabaseLoading(false); return; }
-        const { user, profile } = await loadCurrentRole();
-        const additionalProfiles = await loadSuperadminLinkedProfiles(user, profile);
-        const rows = await loadPackages();
+        const { user, profile: baseProfile } = await loadCurrentRole();
+        const staffResult = await supabase.from('staff_role_assignments').select('id,department_id,role,active,departments(name)').eq('user_id', user.id).eq('active', true);
+        if (staffResult.error) throw staffResult.error;
+        const profile = baseProfile.role === 'staff' ? { ...baseProfile, staffAssignments: staffResult.data || [] } : baseProfile;
+        const isStaff = profile.role === 'staff';
+        const additionalProfiles = isStaff ? { isSuperadmin: false, partner: null, driver: null } : await loadSuperadminLinkedProfiles(user, profile);
+        const rows = isStaff ? [] : await loadPackages();
         let finance = null;
-        try { finance = await loadFinanceRecords(); } catch {}
+        if (!isStaff) { try { finance = await loadFinanceRecords(); } catch {} }
         if (!active) return;
-        const roleWorkspace = { admin: 'Admin', partner: 'Partner', driver: 'Driver' }[profile.role];
+        const roleWorkspace = { admin: 'Admin', partner: 'Partner', driver: 'Driver', staff: 'Staff' }[profile.role];
         if (!roleWorkspace) throw new Error('This account has no supported iGO role.');
         let approvalStatus = 'approved';
         if (profile.role === 'partner') {
@@ -604,7 +609,7 @@ export default function App() {
         setWorkspace(nextWorkspace);
         setPackages(rows);
         if (finance) applyDatabaseFinanceSnapshot(finance);
-        if (!keepSelectedWorkspace) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
+        if (!keepSelectedWorkspace) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : nextWorkspace === 'Staff' ? 'Staff Operations' : 'Overview', history: [] });
         setDatabaseError('');
       } catch (error) {
         if (!active) return;
@@ -725,12 +730,16 @@ export default function App() {
     if (data.user?.invited_at && data.user.user_metadata?.password_setup_complete !== true) { setInvitePasswordSetupRequired(true); setAuthMode('invite-password-setup'); setLoginBusy(false); return; }
     if (data.session) {
       try {
-        const { profile } = await loadCurrentRole();
-        const additionalProfiles = await loadSuperadminLinkedProfiles(data.user, profile);
-        const rows = await loadPackages();
+        const { profile: baseProfile } = await loadCurrentRole();
+        const staffResult = await supabase.from('staff_role_assignments').select('id,department_id,role,active,departments(name)').eq('user_id', data.user.id).eq('active', true);
+        if (staffResult.error) throw staffResult.error;
+        const profile = baseProfile.role === 'staff' ? { ...baseProfile, staffAssignments: staffResult.data || [] } : baseProfile;
+        const isStaff = profile.role === 'staff';
+        const additionalProfiles = isStaff ? { isSuperadmin: false, partner: null, driver: null } : await loadSuperadminLinkedProfiles(data.user, profile);
+        const rows = isStaff ? [] : await loadPackages();
         let finance = null;
-        try { finance = await loadFinanceRecords(); } catch {}
-        const roleWorkspace = { admin: 'Admin', partner: 'Partner', driver: 'Driver' }[profile.role];
+        if (!isStaff) { try { finance = await loadFinanceRecords(); } catch {} }
+        const roleWorkspace = { admin: 'Admin', partner: 'Partner', driver: 'Driver', staff: 'Staff' }[profile.role];
         if (!roleWorkspace) throw new Error('This account has no supported iGO role.');
         setDatabaseUser(data.user);
         setDatabaseProfile(profile);
@@ -740,7 +749,7 @@ export default function App() {
         setPackages(rows);
         if (finance) applyDatabaseFinanceSnapshot(finance);
         setWorkspace(roleWorkspace);
-        setNavigation({ page: roleWorkspace === 'Admin' ? 'Admin Operations' : roleWorkspace === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
+        setNavigation({ page: roleWorkspace === 'Admin' ? 'Admin Operations' : roleWorkspace === 'Driver' ? 'Driver Overview' : roleWorkspace === 'Staff' ? 'Staff Operations' : 'Overview', history: [] });
       } catch (loadError) {
         await supabase.auth.signOut();
         setDatabaseError(loadError.message || 'This account is not linked to an iGO profile.');
@@ -1044,7 +1053,7 @@ export default function App() {
       item.related_section,
       item.target_section,
     ].find((value) => typeof value === 'string' && value.trim());
-    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Profile', 'About', 'Driver Overview', 'My Deliveries'];
+    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
     let destination = pages.find((page) => page.toLowerCase() === String(explicitPage || '').trim().toLowerCase());
     const notificationText = [item.type, item.category, item.entity_type, item.related_type, item.title, item.message]
       .filter(Boolean).join(' ');
@@ -1111,7 +1120,8 @@ export default function App() {
       if (workspace === 'Admin') targetWorkspace = 'Admin';
     }
 
-    destination = destination || (workspace === 'Admin' ? 'Admin Operations' : workspace === 'Driver' ? 'Driver Overview' : 'Overview');
+    if (!destination && workspace === 'Staff' && /(payment|withdrawal|expense|finance|approval)/.test(details)) { destination = 'Staff Operations'; targetId = targetId || 'staff-payment-status'; targetWorkspace = 'Staff'; }
+    destination = destination || (workspace === 'Admin' ? 'Admin Operations' : workspace === 'Driver' ? 'Driver Overview' : workspace === 'Staff' ? 'Staff Operations' : 'Overview');
     if (!targetId) {
       targetId = destination === 'Packages' ? 'package-list'
         : destination === 'Driver Overview' || destination === 'My Deliveries' ? 'driver-new-jobs'
@@ -1126,6 +1136,7 @@ export default function App() {
       if (['Admin Operations', 'User Management', 'Approvals', 'Finance Management'].includes(destination)) targetWorkspace = 'Admin';
       else if (destination === 'Driver Overview' || destination === 'My Deliveries' || destination === 'About') targetWorkspace = 'Driver';
       else if (destination === 'Invoices & Payments' || destination === 'Register Package') targetWorkspace = 'Partner';
+      else if (destination === 'Staff Operations') targetWorkspace = 'Staff';
     }
 
     const navigate = async () => {
@@ -1724,7 +1735,9 @@ export default function App() {
   );
 
   const navItems =
-    workspace === 'Driver'
+    workspace === 'Staff'
+      ? [['Staff Operations', '▣']]
+      : workspace === 'Driver'
       ? [
           ['Driver Overview', '⌂'],
           ['My Deliveries', '▤'],
@@ -2037,6 +2050,8 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           <div className="eyebrow">
             {workspace === 'Admin'
               ? 'OPERATIONS WORKSPACE'
+              : workspace === 'Staff'
+              ? 'STAFF WORKSPACE'
               : workspace === 'Driver'
               ? 'DRIVER WORKSPACE'
               : 'PARTNER WORKSPACE'}
@@ -2115,6 +2130,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
+              <StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} />
               <AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} />
               <ManagedIgoAccounts />
               <PendingIgoUserApprovals />
@@ -2123,6 +2139,10 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             </section>
           )}
 
+
+          {page === 'Staff Operations' && workspace === 'Staff' && (
+            <StaffOperations user={databaseUser} profile={databaseProfile} />
+          )}
 
           {page === 'Admin Operations' && workspace === 'Admin' && (
             <AdminOperations

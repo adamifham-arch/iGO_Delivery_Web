@@ -93,6 +93,13 @@ const initialPackages = [
 ];
 
 const statusClass = (status) => status.toLowerCase().replaceAll(' ', '-');
+const shortWithdrawalRequestId = (id) => {
+  const value = String(id || '');
+  const compact = value.replace(/[^a-z0-9]/gi, '');
+  return compact.length > 18
+    ? 'WR-' + compact.slice(0, 10).toUpperCase()
+    : value;
+};
 const formatPackageAddedAt = (value) => {
   if (!value) return 'Date unavailable';
   const date = new Date(value);
@@ -4210,7 +4217,7 @@ function DriverWorkflowDashboard({
               .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt))
               .map((request) => (
                 <p key={request.id}>
-                  {request.id} · MVR {Number(request.amount).toFixed(2)} ·{' '}
+                  <span title={request.id}>{shortWithdrawalRequestId(request.id)}</span> · MVR {Number(request.amount).toFixed(2)} ·{' '}
                   <strong>{request.status}</strong>
                 </p>
               ))}
@@ -5602,7 +5609,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       .map((request) => ({
         date: request.paid_at || request.reviewedAt || request.requestedAt,
         type: 'Driver withdrawal',
-        reference: request.id,
+        reference: shortWithdrawalRequestId(request.id),
         party: request.driver,
         details: [
           request.bankDetails?.bankName,
@@ -6083,7 +6090,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             .map((request) => (
               <article className="application-card" key={request.id} style={{ padding: 14, marginBottom: 10 }}>
                 <strong>{request.driver} · MVR {Number(request.amount).toFixed(2)}</strong>
-                <p>{request.id} · Requested {new Date(request.requestedAt).toLocaleString()}</p>
+                <p><span title={request.id}>{shortWithdrawalRequestId(request.id)}</span> · Requested {new Date(request.requestedAt).toLocaleString()}</p>
                 <p>Status: <strong>{request.status}</strong>{request.reviewedAt ? ' · Reviewed ' + new Date(request.reviewedAt).toLocaleString() : ''}</p>
                 <p>Bank: {request.bankDetails?.bankName || 'Not provided'} · Account name: {request.bankDetails?.accountHolder || 'Not provided'}</p>
                 <p>Account number: {request.bankDetails?.accountNumber || 'Not provided'}{request.bankDetails?.branch ? ' · Branch: ' + request.bankDetails.branch : ''}</p>
@@ -6243,7 +6250,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           withdrawalRequests.filter((request) => request.status === 'paid').map((request) => (
             <article className="application-card" key={'out-' + request.id} style={{ padding: 14, marginBottom: 10 }}>
               <strong>{request.driver} · {money(request.amount)}</strong>
-              <p>{request.id} · Paid {new Date(request.paid_at || request.reviewedAt || request.requestedAt).toLocaleString()}</p>
+              <p><span title={request.id}>{shortWithdrawalRequestId(request.id)}</span> · Paid {new Date(request.paid_at || request.reviewedAt || request.requestedAt).toLocaleString()}</p>
               <p>{request.bankDetails?.bankName || 'Bank not recorded'} · {request.bankDetails?.accountHolder || 'Account name missing'} · {request.bankDetails?.accountNumber || 'Account number missing'}{request.bankDetails?.branch ? ' · ' + request.bankDetails.branch : ''}</p>
             </article>
           ))

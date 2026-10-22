@@ -7119,3 +7119,27 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .driver-route-details .driver-delivery-details {
   margin: 0;
 }
+
+
+.notification-scroll-target {
+  scroll-margin-top: 88px;
+  animation: notification-scroll-highlight 1.8s ease-out;
+}
+@keyframes notification-scroll-highlight {
+  0%, 45% {
+    outline: 3px solid #f4ce24;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 6px rgb(244 206 36 / 18%);
+  }
+  100% {
+    outline-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notification-scroll-target {
+    animation: none;
+    outline: 3px solid #f4ce24;
+    outline-offset: 3px;
+  }
+}

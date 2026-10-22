@@ -2116,7 +2116,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             page === 'Accounts & Finance' ||
             page === 'Accounts') &&
             workspace === 'Admin' && (
-              <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} /></SectionErrorBoundary>
+              <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} /><StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} /></SectionErrorBoundary>
             )}
 
           {page === 'Approvals' && workspace === 'Admin' && (

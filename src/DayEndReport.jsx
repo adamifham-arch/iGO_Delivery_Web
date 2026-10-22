@@ -224,7 +224,7 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
       </form>
       {report && (
         <div className="day-end-report-output">
-          <p className="finance-report-meta">Business date: {report.date} · Generated {new Date(report.generatedAt).toLocaleString()}</p>
+          <p className="finance-report-meta">Business date: {report.date} · Generated {new Date(report.generatedAt).toLocaleString([], { timeZone: 'Indian/Maldives' })}</p>
           <h4>Delivery summary</h4>
           <div className="stats-grid finance-report-totals">
             <article className="stat-card"><span>Packages registered</span><strong>{report.registered.length}</strong></article>

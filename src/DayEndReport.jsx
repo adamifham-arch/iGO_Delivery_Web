@@ -29,6 +29,18 @@ const timed = (value) => {
     : date.toLocaleTimeString([], { timeZone: 'Indian/Maldives', hour: 'numeric', minute: '2-digit' });
 };
 
+const businessDateLabel = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number);
+  if (!year || !month || !day) return value || '—';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Indian/Maldives',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(Date.UTC(year, month - 1, day, 12)));
+};
+
 const packageAmount = (item) =>
   Number(item.fee ?? item.delivery_fee ?? item.deliveryFee ?? 0);
 
@@ -190,7 +202,17 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
 
   const exportCsv = () => {
     if (!report) return;
+    const generatedLabel = new Date(report.generatedAt).toLocaleString('en-GB', {
+      timeZone: 'Indian/Maldives',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
     const rows = [
+      ['iGO DELIVERY', 'DAY-END OPERATIONS & CASH RECONCILIATION'],
+      ['Business date', businessDateLabel(report.date)],
+      ['Report reference', 'DER-' + report.date.replaceAll('-', '')],
+      ['Generated', generatedLabel],
+      [],
       ['Section', 'Metric', 'Count', 'Amount MVR', 'Reference', 'Party or customer', 'Details', 'Time'],
       ['Delivery', 'Packages registered', report.registered.length, '', '', '', '', ''],
       ['Delivery', 'Picked up', report.pickedUp.length, '', '', '', '', ''],
@@ -240,7 +262,23 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
       </form>
       {report && (
         <div className="day-end-report-output">
-          <p className="finance-report-meta">Business date: {report.date} · Generated {new Date(report.generatedAt).toLocaleString([], { timeZone: 'Indian/Maldives' })}</p>
+          <header className="day-end-document-header">
+            <div className="day-end-brand-mark" aria-label="iGO Delivery">iGO</div>
+            <div className="day-end-document-title">
+              <p className="day-end-document-kicker">Operations &amp; finance · daily close</p>
+              <h2>Day-end report</h2>
+              <p>Delivery activity and cash reconciliation</p>
+            </div>
+            <div className="day-end-report-number">
+              <span>Report reference</span>
+              <strong>DER-{report.date.replaceAll('-', '')}</strong>
+            </div>
+          </header>
+          <div className="day-end-report-meta-grid">
+            <div><span>Business date</span><strong>{businessDateLabel(report.date)}</strong></div>
+            <div><span>Generated</span><strong>{new Date(report.generatedAt).toLocaleString('en-GB', { timeZone: 'Indian/Maldives', dateStyle: 'medium', timeStyle: 'short' })}</strong></div>
+            <div><span>Currency</span><strong>Maldivian Rufiyaa (MVR)</strong></div>
+          </div>
           <h4>Delivery summary</h4>
           <div className="stats-grid finance-report-totals">
             <article className="stat-card"><span>Packages registered</span><strong>{report.registered.length}</strong></article>
@@ -265,13 +303,18 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
             <article className="stat-card"><span>Packages registered today still open</span><strong>{report.openRegistered.length}</strong></article>
           </div>
           <section className="day-end-reconciliation">
-            <h4>Bank reconciliation</h4>
+            <div className="day-end-section-heading">
+              <div><p className="day-end-section-kicker">Cash control</p><h4>Bank reconciliation</h4></div>
+              <span className={'day-end-reconciliation-badge ' + (report.variance == null ? 'is-pending' : report.variance === 0 ? 'is-balanced' : 'is-variance')}>
+                {report.variance == null ? 'Balances required' : report.variance === 0 ? 'Balanced' : 'Review difference'}
+              </span>
+            </div>
             {report.expectedClosing == null || report.actual == null ? (
               <p>Enter both balances before generating the report to compare the expected and actual closing balance.</p>
             ) : (
               <p>Expected closing: <strong>{currency(report.expectedClosing)}</strong> · Actual closing: <strong>{currency(report.actual)}</strong> · Difference: <strong>{currency(Math.abs(report.variance))} {report.variance > 0 ? 'over' : report.variance < 0 ? 'short' : 'balanced'}</strong></p>
             )}
-            <p>Expected closing balance is opening balance plus recorded money received, less withdrawals and expenses. Compare it with the bank statement; this report does not connect to the bank.</p>
+            <p className="day-end-reconciliation-note">Expected closing balance equals opening balance plus recorded receipts, less paid withdrawals and business expenses. Compare this figure with the bank statement; balances are entered manually.</p>
           </section>
           <div className="finance-report-actions no-print">
             <button type="button" onClick={printReport}>Print report</button>
@@ -316,6 +359,13 @@ export function DayEndReport({ packages = [], invoices = [], payments = [], expe
               </table>
             </div>
           </details>
+          <footer className="day-end-report-footer">
+            <span>Internal business record · Confirm amounts against supporting slips and bank records.</span>
+            <div className="day-end-signoff">
+              <div><span>Prepared by</span><i /></div>
+              <div><span>Reviewed by</span><i /></div>
+            </div>
+          </footer>
         </div>
       )}
     </section>

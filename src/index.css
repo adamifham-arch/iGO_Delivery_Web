@@ -7559,3 +7559,192 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     page-break-inside: avoid;
   }
 }
+
+
+/* Professional day-end report template */
+.day-end-document {
+  overflow: hidden;
+  padding: 0 !important;
+}
+.day-end-document-header {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #3b4b63;
+  background: linear-gradient(120deg, #142239, #1d2e48);
+}
+.day-end-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 2px solid #fbd21a;
+  border-radius: 14px;
+  background: #ffdf00;
+  color: #101827;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: -1.5px;
+}
+.day-end-document-title h2 {
+  margin: 2px 0 3px;
+  color: #f5f7fb;
+  font-size: clamp(21px, 3vw, 28px);
+  line-height: 1.1;
+}
+.day-end-document-title p { margin: 0; color: #bdc9d9; }
+.day-end-document-title .day-end-document-kicker {
+  color: #f5d21b;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.day-end-report-number { display: grid; gap: 5px; text-align: right; }
+.day-end-report-number span,
+.day-end-report-meta-grid span { color: #aebbd0; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.day-end-report-number strong { color: #f5d21b; font-size: 14px; }
+.day-end-report-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #3b4b63;
+}
+.day-end-report-meta-grid > div { display: grid; gap: 4px; min-width: 0; }
+.day-end-report-meta-grid strong { color: #f5f7fb; font-size: 13px; overflow-wrap: anywhere; }
+.day-end-report-output > h4 {
+  margin: 20px 18px 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid #46566d;
+  color: #f5d21b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.day-end-report-output > .stats-grid { padding: 0 18px; }
+.day-end-report .stats-grid.finance-report-totals .stat-card {
+  border-color: #40516a;
+  background: #1a2940;
+  color: #f3f6fb;
+}
+.day-end-report .stats-grid.finance-report-totals .stat-card span { color: #b9c5d5; font-size: 11px; }
+.day-end-report .stats-grid.finance-report-totals .stat-card strong { color: #fff; }
+.day-end-report .stats-grid.finance-report-totals .stat-card small { color: #aebbd0; }
+.day-end-reconciliation {
+  margin: 18px !important;
+  padding: 16px !important;
+  border: 1px solid #40516a !important;
+  border-left: 4px solid #f5d21b !important;
+  border-radius: 12px;
+  background: #17253a;
+}
+.day-end-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.day-end-section-heading h4 { margin: 2px 0 8px; color: #f5f7fb; font-size: 16px; }
+.day-end-section-kicker { margin: 0; color: #f5d21b; font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.day-end-reconciliation-badge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.day-end-reconciliation-badge.is-balanced { color: #65d6a1; background: rgba(35, 142, 94, .16); }
+.day-end-reconciliation-badge.is-variance { color: #ff9b8e; background: rgba(178, 58, 48, .16); }
+.day-end-reconciliation-badge.is-pending { color: #f5d21b; background: rgba(245, 210, 27, .1); }
+.day-end-reconciliation p { color: #d2dbea; }
+.day-end-reconciliation-note { font-size: 11px; }
+.day-end-report-output > details {
+  margin: 10px 18px;
+  border: 1px solid #40516a;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.day-end-report-output > details > summary {
+  padding: 11px 13px;
+  background: #1a2940;
+  color: #f5f7fb;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.day-end-report-output .finance-report-table-wrap { padding: 0 10px 8px; }
+.day-end-report-output .finance-report-table { min-width: 0; font-size: 11px; }
+.day-end-report-output .finance-report-table th { color: #aebbd0; background: #142137; font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
+.day-end-report-output .finance-report-table td { color: #e9eef6; }
+.day-end-report-footer {
+  display: grid;
+  gap: 18px;
+  margin: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #40516a;
+  color: #aebbd0;
+  font-size: 10px;
+}
+.day-end-signoff { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.day-end-signoff > div { display: grid; gap: 18px; max-width: 280px; color: #dce4ef; }
+.day-end-signoff i { display: block; border-bottom: 1px solid #718096; }
+
+@media (max-width: 560px) {
+  .day-end-document-header { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 14px; }
+  .day-end-brand-mark { width: 42px; height: 42px; border-radius: 11px; font-size: 16px; }
+  .day-end-report-number { grid-column: 2; text-align: left; }
+  .day-end-report-meta-grid { grid-template-columns: 1fr; gap: 9px; }
+  .day-end-report-meta-grid > div { grid-template-columns: 110px minmax(0, 1fr); align-items: baseline; }
+  .day-end-report-output > h4 { margin-left: 12px; margin-right: 12px; }
+  .day-end-report-output > .stats-grid { padding: 0 12px; }
+  .day-end-reconciliation { margin: 12px !important; }
+  .day-end-report-output > details, .day-end-report-footer { margin-left: 12px; margin-right: 12px; }
+}
+
+@media print {
+  .day-end-document { border: 0 !important; }
+  .day-end-document-header {
+    grid-template-columns: 48px minmax(0, 1fr) auto !important;
+    padding: 0 0 10px !important;
+    border-bottom: 2px solid #17253a !important;
+    background: #fff !important;
+  }
+  .day-end-brand-mark { width: 42px !important; height: 42px !important; }
+  .day-end-document-title h2,
+  .day-end-document-title p,
+  .day-end-report-number strong,
+  .day-end-report-meta-grid strong,
+  .day-end-section-heading h4,
+  .day-end-report-output .finance-report-table td,
+  .day-end-signoff > div { color: #17253a !important; }
+  .day-end-document-title .day-end-document-kicker,
+  .day-end-report-number span,
+  .day-end-report-meta-grid span,
+  .day-end-section-kicker { color: #475569 !important; }
+  .day-end-report-meta-grid { padding: 9px 0 !important; border-color: #cbd5e1 !important; }
+  .day-end-report-output > h4 { margin: 12px 0 6px !important; color: #17253a !important; border-color: #94a3b8 !important; }
+  .day-end-report .stats-grid.finance-report-totals { padding: 0 !important; gap: 7px !important; }
+  .day-end-report .stats-grid.finance-report-totals .stat-card {
+    padding: 9px !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #f8fafc !important;
+    color: #17253a !important;
+  }
+  .day-end-report .stats-grid.finance-report-totals .stat-card span,
+  .day-end-report .stats-grid.finance-report-totals .stat-card strong,
+  .day-end-report .stats-grid.finance-report-totals .stat-card small { color: #17253a !important; }
+  .day-end-reconciliation { margin: 10px 0 !important; padding: 10px !important; border: 1px solid #94a3b8 !important; border-left: 4px solid #17253a !important; background: #f8fafc !important; }
+  .day-end-reconciliation p { color: #334155 !important; }
+  .day-end-reconciliation-badge { color: #17253a !important; background: #fff !important; }
+  .day-end-report-output > details { margin: 8px 0 !important; border-color: #cbd5e1 !important; }
+  .day-end-report-output > details > summary { padding: 7px 9px !important; background: #eef2f7 !important; color: #17253a !important; }
+  .day-end-report-output .finance-report-table-wrap { padding: 0 6px 5px !important; }
+  .day-end-report-output .finance-report-table { font-size: 8pt !important; }
+  .day-end-report-output .finance-report-table th { background: #e2e8f0 !important; color: #17253a !important; }
+  .day-end-report-output .finance-report-table td { color: #17253a !important; border-color: #cbd5e1 !important; }
+  .day-end-report-footer { margin: 10px 0 0 !important; border-color: #cbd5e1 !important; color: #475569 !important; }
+  .day-end-signoff > div { color: #17253a !important; }
+  .day-end-signoff i { border-color: #64748b !important; }
+}

@@ -1798,6 +1798,13 @@ export default function App() {
           <h1>{isPending ? 'Account awaiting approval' : 'Account access is unavailable'}</h1>
           <p>{isPending ? 'Your account is set up. An admin must approve it before you can access the partner or driver workspace.' : 'Your account is not approved for the iGO workspace. Contact an admin for help.'}</p>
           <p className="muted">Status: {accountApprovalStatus}</p>
+          <p>To use a different account, sign out here, then log in with the other account’s email and password.</p>
+          <button
+            type="button"
+            className="primary-btn"
+            style={{ marginTop: 8 }}
+            onClick={() => { void signOutFromDatabase(); }}
+          >Sign out and switch account</button>
         </section>
       </main>
     );
@@ -2053,7 +2060,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 {databaseProfile && <button type="button" className="profile-signout" role="menuitem" onClick={() => {
                   setShowProfileMenu(false);
                   void signOutFromDatabase();
-                }}>Sign out</button>}
+                }}>Sign out / switch account</button>}
               </div>
             )}
           </div>

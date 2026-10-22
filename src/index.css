@@ -2093,11 +2093,16 @@ header.topbar {
   body[data-print-report="daily-sales"] .daily-sales-report-print *,
   body[data-print-report="financial"] .financial-report-print,
   body[data-print-report="financial"] .financial-report-print *,
+  body[data-print-report="day-end"] .day-end-report-print,
+  body[data-print-report="day-end"] .day-end-report-print *,
   body[data-print-report="monthly"] .monthly-report-print,
   body[data-print-report="monthly"] .monthly-report-print * { visibility: visible !important; }
   body[data-print-report="daily-sales"] .daily-sales-report-print,
   body[data-print-report="financial"] .financial-report-print,
   body[data-print-report="monthly"] .monthly-report-print { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: #fff !important; color: #111 !important; box-shadow: none !important; overflow: visible !important; }
+  body[data-print-report="day-end"] .day-end-report-print { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: #fff !important; color: #111 !important; box-shadow: none !important; overflow: visible !important; }
+  .day-end-report-print .finance-report-table-wrap { overflow: visible !important; }
+  .day-end-report-print details:not([open]) > :not(summary) { display: block !important; }
   .daily-sales-report-print .no-print,
   .financial-report-print .no-print,
   .monthly-report-print .no-print { display: none !important; }

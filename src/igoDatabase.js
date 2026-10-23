@@ -495,7 +495,17 @@ export async function loadCurrentRole() {
   const { data, error } = await client.from('profiles').select('id,full_name,phone,role').eq('id', userResult.user.id).maybeSingle();
   if (error) throw error;
   if (!data) throw new Error('This signed-in account has no iGO profile yet.');
-  return { user: userResult.user, profile: data };
+  let profile = data;
+  if (['admin', 'staff'].includes(data.role)) {
+    const { data: access, error: accessError } = await client.rpc('get_igo_current_workspace_access');
+    if (accessError) throw accessError;
+    profile = {
+      ...data,
+      allowedWorkspaces: access?.workspace_access || (data.role === 'admin' ? ['Admin', 'Partner', 'Driver'] : ['Staff']),
+      workspaceSwitcherVisible: access?.workspace_switcher_visible !== false,
+    };
+  }
+  return { user: userResult.user, profile };
 }
 
 async function loadAccountContactEmails(client = requireClient()) {
@@ -521,26 +531,33 @@ export async function loadApprovalAccounts() {
 
 export async function loadManagedUserAccounts() {
   const client = requireClient();
-  const [accounts, admins, audit, emails] = await Promise.all([
+  const [accounts, admins, audit, accessSettings, emails] = await Promise.all([
     loadApprovalAccounts(),
-    client.from('profiles').select('id,full_name,phone,role,created_at').eq('role', 'admin').order('created_at', { ascending: false }),
+    client.from('profiles').select('id,full_name,phone,role,created_at').in('role', ['admin', 'staff']).order('created_at', { ascending: false }),
     client.rpc('list_igo_admin_invite_audit'),
+    client.rpc('list_igo_admin_access_settings'),
     loadAccountContactEmails(client),
   ]);
   if (admins.error) throw admins.error;
   if (audit.error) throw audit.error;
+  if (accessSettings.error) throw accessSettings.error;
   const auditByUserId = new Map((audit.data || []).map((row) => [row.invited_user_id, row]));
+  const settingsByUserId = new Map((accessSettings.data || []).map((row) => [row.invited_user_id, row]));
   return [
     ...accounts,
-    ...(admins.data || []).map((row) => {
+    ...(admins.data || []).filter((row) => auditByUserId.has(row.id)).map((row) => {
       const inviter = auditByUserId.get(row.id);
+      const access = settingsByUserId.get(row.id);
       return {
         ...row,
         email: emails.get(row.id) || '',
         name: row.full_name,
         type: 'Admin',
         accountId: row.id,
-        status: 'admin',
+        status: row.role,
+        adminRole: row.role,
+        workspaceAccess: access?.workspace_access || (row.role === 'admin' ? ['Admin', 'Partner', 'Driver'] : ['Staff']),
+        workspaceSwitcherVisible: access?.workspace_switcher_visible !== false,
         addedByName: inviter?.invited_by_name || '',
         addedByEmail: inviter?.invited_by_email || '',
         invitedAt: inviter?.invited_at || '',

@@ -370,7 +370,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
 
     {showPeople && canManage && <section style={card}>
       <h3>Departments and staff access</h3>
-      <p>Invite a person through User Management first, then assign their account here. Staff assignments replace broad admin access with the selected department role.</p>
+      <p>Invite a person through User Management first, then assign staff roles here. Roles can be department-specific or company-wide; Payment requester roles need a department.</p>
       <form onSubmit={assignRole} className="finance-expense-form">
         <label>Account<select required value={assignmentDraft.userId} onChange={(event) => setAssignmentDraft({ ...assignmentDraft, userId: event.target.value })}><option value="">Choose invited account</option>{people.filter((person) => person.id !== user.id).map((person) => <option key={person.id} value={person.id}>{person.full_name || person.id.slice(0, 8)} · {person.role}</option>)}</select></label>
         <label>Department<select required={assignmentDraft.role === 'department_requester'} value={assignmentDraft.departmentId} onChange={(event) => setAssignmentDraft({ ...assignmentDraft, departmentId: event.target.value })}><option value="">{assignmentDraft.role === 'department_requester' ? 'Choose department' : 'Company-wide (no department)'}</option>{departments.filter((department) => department.active && (isOwner || roles.has('people_manager') || assignments.some((item) => item.department_id === department.id))).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>

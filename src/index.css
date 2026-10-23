@@ -7955,3 +7955,6 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   .invoice-cutoff-controls { flex-basis: 100%; }
   .invoice-cutoff-actions > button { flex: 1 1 auto; }
 }
+
+.invoice-cutoff-status.is-error { border-color: #fca5a5; color: #991b1b; background: #fee2e2; }
+.app[data-theme="night"] .main .invoice-cutoff-status.is-error { border-color: #7f1d1d; color: #fee2e2; background: #451a1a; }

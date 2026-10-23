@@ -5107,6 +5107,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   const [billing, setBilling] = useState(() => (liveMode ? initialState : readState()));
   const [savedInvoiceCutoff, setSavedInvoiceCutoff] = useState(() => (liveMode ? '' : readState().cutoff || ''));
   const [cutoffSaving, setCutoffSaving] = useState(false);
+  const [cutoffFeedback, setCutoffFeedback] = useState('');
+  const [cutoffFeedbackError, setCutoffFeedbackError] = useState(false);
   const [invoiceCutoffMixed, setInvoiceCutoffMixed] = useState(false);
   const cutoffHasUnsavedChanges = billing.cutoff !== savedInvoiceCutoff;
   const [readyPartnerSearch, setReadyPartnerSearch] = useState('');
@@ -6214,10 +6216,13 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   const persistInvoiceCutoff = async (value = billing.cutoff) => {
     const nextCutoff = String(value || '').trim();
     if (nextCutoff && !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(nextCutoff)) {
-      setNotice('Choose a valid daily cutoff time.');
+      setCutoffFeedback('Choose a valid daily cutoff time.');
+      setCutoffFeedbackError(true);
       return;
     }
     setCutoffSaving(true);
+    setCutoffFeedback('');
+    setCutoffFeedbackError(false);
     try {
       if (liveMode) {
         await saveInvoiceCutoff(nextCutoff || null);
@@ -6229,11 +6234,12 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       setBilling((current) => ({ ...current, cutoff: nextCutoff }));
       setSavedInvoiceCutoff(nextCutoff);
       setInvoiceCutoffMixed(false);
-      setNotice(nextCutoff
+      setCutoffFeedback(nextCutoff
         ? `Daily invoice cutoff saved for all partners: ${nextCutoff} Maldives time.`
         : 'Daily invoice cutoff removed for all partners. Automatic invoice generation is off; admins can still generate invoices manually.');
     } catch (error) {
-      setNotice(error.message || 'Could not save the invoice cutoff.');
+      setCutoffFeedback(error.message || 'Could not save the invoice cutoff.');
+      setCutoffFeedbackError(true);
     } finally {
       setCutoffSaving(false);
     }
@@ -6483,7 +6489,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 10, marginBottom: 14 }}>
             <div className="invoice-cutoff-controls">
               <label>Daily cutoff (Maldives time)
-                <input type="time" step="60" value={billing.cutoff} onChange={(event) => setBilling((current) => ({ ...current, cutoff: event.target.value }))} aria-label="Daily invoice cutoff time in Maldives time" />
+                <input type="time" step="60" value={billing.cutoff} onChange={(event) => { setCutoffFeedback(''); setCutoffFeedbackError(false); setBilling((current) => ({ ...current, cutoff: event.target.value })); }} aria-label="Daily invoice cutoff time in Maldives time" />
               </label>
               <div className="invoice-cutoff-actions">
                 <button type="button" style={buttonStyle} onClick={() => persistInvoiceCutoff()} disabled={cutoffSaving || !billing.cutoff || !cutoffHasUnsavedChanges}>{cutoffSaving ? 'Saving…' : 'Save cutoff'}</button>
@@ -6504,13 +6510,13 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             </button>
             {readyPackages.length === 0 && <span style={{ fontSize: 12, color: '#64748b' }}>No delivered packages ready to invoice.</span>}
           </div>
-          <p className="invoice-cutoff-status" role="status" aria-live="polite">
-            {cutoffSaving ? 'Saving daily cutoff…' : invoiceCutoffMixed
+          <p className={`invoice-cutoff-status${cutoffFeedbackError ? ' is-error' : ''}`} role={cutoffFeedbackError ? 'alert' : 'status'} aria-live="polite">
+            {cutoffFeedback || (cutoffSaving ? 'Saving daily cutoff…' : invoiceCutoffMixed
               ? 'Partner cutoff settings differ. Saving or removing here will apply the setting to all partners.'
               : savedInvoiceCutoff
                 ? `Daily invoice cutoff is saved for all partners at ${savedInvoiceCutoff} Maldives time.`
-                : 'No daily invoice cutoff is set. Automatic invoice generation is off.'}
-            {!cutoffSaving && cutoffHasUnsavedChanges && <strong> Unsaved change — save to apply.</strong>}
+                : 'No daily invoice cutoff is set. Automatic invoice generation is off.')}
+            {!cutoffSaving && !cutoffFeedback && cutoffHasUnsavedChanges && <strong> Unsaved change — save to apply.</strong>}
           </p>
           {readyPartners.length > 0 && (
             <section className="ready-partners" aria-labelledby="ready-partners-heading">

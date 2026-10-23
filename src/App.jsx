@@ -6492,7 +6492,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
                 <input type="time" step="60" value={billing.cutoff} onChange={(event) => { setCutoffFeedback(''); setCutoffFeedbackError(false); setBilling((current) => ({ ...current, cutoff: event.target.value })); }} aria-label="Daily invoice cutoff time in Maldives time" />
               </label>
               <div className="invoice-cutoff-actions">
-                <button type="button" style={buttonStyle} onClick={() => persistInvoiceCutoff()} disabled={cutoffSaving || !billing.cutoff || !cutoffHasUnsavedChanges}>{cutoffSaving ? 'Saving…' : 'Save cutoff'}</button>
+                <button type="button" style={buttonStyle} onClick={() => persistInvoiceCutoff()} disabled={cutoffSaving || !billing.cutoff || (!cutoffHasUnsavedChanges && !invoiceCutoffMixed)}>{cutoffSaving ? 'Saving…' : 'Save cutoff'}</button>
                 <button type="button" style={buttonStyle} onClick={() => persistInvoiceCutoff('')} disabled={cutoffSaving || (!savedInvoiceCutoff && !invoiceCutoffMixed)}>{cutoffSaving ? 'Saving…' : 'Remove cutoff'}</button>
               </div>
             </div>

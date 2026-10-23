@@ -5136,6 +5136,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     liveMode ? [] : readDriverWithdrawalRequests()
   );
   const [paymentReviewDrafts, setPaymentReviewDrafts] = useState({});
+  const [paymentReviewBusyId, setPaymentReviewBusyId] = useState('');
+  const [paymentReviewFeedback, setPaymentReviewFeedback] = useState(null);
   const refreshDatabaseFinance = async (notifyRoot = false) => {
     if (!liveMode) return;
     try {
@@ -5544,30 +5546,34 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     const verifiedAmount = Number(reviewDraft.amount ?? payment.amount);
     const rejectionReason = (reviewDraft.reason || '').trim();
     if (status === 'rejected' && !rejectionReason) {
-      setNotice('Enter a reason before rejecting this payment.');
+      setPaymentReviewFeedback({ type: 'error', message: 'Enter a reason before rejecting this payment.' });
       return;
     }
     if (status === 'confirmed' && (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0 || verifiedAmount > payment.amount)) {
-      setNotice('Enter the amount actually received, up to the amount reported by the partner.');
+      setPaymentReviewFeedback({ type: 'error', message: 'Enter the amount actually received, up to the amount reported by the partner.' });
       return;
     }
     if (liveMode) {
+      setPaymentReviewBusyId(payment.id);
+      setPaymentReviewFeedback({ type: 'progress', message: status === 'confirmed' ? 'Approving payment…' : 'Saving payment decision…' });
       try {
         await reviewPayment(payment.id, status, verifiedAmount, rejectionReason);
         await refreshDatabaseFinance(true);
         if (status === 'confirmed') {
           try {
             await sendPaymentReceipt(payment.id);
-            setNotice('Payment approved. The partner has been notified and emailed an itemized receipt.');
+            setPaymentReviewFeedback({ type: 'success', message: 'Payment approved. The partner has been notified and emailed an itemized receipt.' });
           } catch (emailError) {
-            setNotice('Payment approved and partner notified, but the receipt email failed: ' + (emailError.message || 'Email service unavailable.'));
+            setPaymentReviewFeedback({ type: 'success', message: 'Payment approved and partner notified, but the receipt email failed: ' + (emailError.message || 'Email service unavailable.') });
           }
         } else {
-          setNotice('Payment rejected. The partner has been notified with the rejection reason.');
+          setPaymentReviewFeedback({ type: 'success', message: 'Payment rejected. The partner has been notified with the rejection reason.' });
         }
         setPaymentReviewDrafts((current) => { const next = { ...current }; delete next[payment.id]; return next; });
       } catch (error) {
-        setNotice(error.message || 'Could not update payment.');
+        setPaymentReviewFeedback({ type: 'error', message: error.message || 'Could not update payment.' });
+      } finally {
+        setPaymentReviewBusyId('');
       }
       return;
     }
@@ -6415,6 +6421,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       <>
       <section id="admin-payment-review" style={panel}>
         <h3>Payments awaiting review</h3>
+        {paymentReviewFeedback && <p role={paymentReviewFeedback.type === 'error' ? 'alert' : 'status'} aria-live={paymentReviewFeedback.type === 'error' ? 'assertive' : 'polite'} className="notice" style={paymentReviewFeedback.type === 'error' ? { color: '#7f1d1d', background: '#fee2e2', border: '1px solid #fca5a5' } : undefined}>{paymentReviewFeedback.message}</p>}
         {pendingPayments.length ? (
           pendingPayments.map((payment) => {
             const invoiceDues = (payment.invoiceDues || []).filter((invoice) => invoice?.invoiceId);
@@ -6512,8 +6519,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
                 </div>
                 <p className="payment-review-hint">Any amount above the included invoice balances becomes usable partner credit.</p>
                 <div className="payment-review-actions">
-                  <button type="button" style={buttonStyle} onClick={() => decidePayment(payment, 'confirmed')}>
-                    Approve verified amount
+                  <button type="button" style={buttonStyle} disabled={paymentReviewBusyId === payment.id} onClick={() => decidePayment(payment, 'confirmed')}>
+                    {paymentReviewBusyId === payment.id ? 'Approving…' : 'Approve verified amount'}
                   </button>
                   <button
                     type="button"

@@ -2273,8 +2273,8 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 />
                 <Stat
                   label="Invoices & payments"
-                  value="Not connected"
-                  detail="Official balances are not available yet"
+                  value="View invoices"
+                  detail="Check invoices and payment status"
                   onClick={() => {
                     setPage('Invoices & Payments');
                     setShowForm(false);

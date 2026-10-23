@@ -38,7 +38,8 @@ begin
            profile.role::text,
            case when profile.role::text = 'staff' then array['Staff']::text[]
                 else audit.workspace_access end,
-           audit.workspace_switcher_visible
+           case when profile.role::text = 'staff' then false
+                else audit.workspace_switcher_visible end
     from public.igo_admin_invite_audit audit
     join public.profiles profile on profile.id = audit.invited_user_id
     order by profile.full_name;
@@ -148,6 +149,10 @@ begin
   end if;
   if p_role = 'staff' and v_access <> array['Staff']::text[] then
     raise exception 'Staff mode only grants the Staff workspace'
+      using errcode = '22023';
+  end if;
+  if p_role = 'staff' and coalesce(p_workspace_switcher_visible, false) then
+    raise exception 'The workspace switcher is only available in Admin mode'
       using errcode = '22023';
   end if;
 

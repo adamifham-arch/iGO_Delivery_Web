@@ -3167,13 +3167,14 @@ function ManagedIgoAccounts() {
                     padding: '5px 10px',
                   }}
                 >{isAdmin && superadminIds.includes(account.accountId) ? 'Superadmin' : isAdmin ? (account.adminRole === 'staff' ? 'Staff' : 'Admin') : account.status}</span>
-                {isAdmin && canPromoteAdmins && !superadminIds.includes(account.accountId) && <div className="managed-admin-access" style={{ flex: '1 1 100%', border: '1px solid #64748b', borderRadius: 12, padding: 12 }}>
+                {isAdmin && canPromoteAdmins && !superadminIds.includes(account.accountId) && !account.workspaceAccessReady && <p style={{ flex: '1 1 100%' }}>Apply the admin workspace access database update to manage this account.</p>}
+                {isAdmin && canPromoteAdmins && !superadminIds.includes(account.accountId) && account.workspaceAccessReady && <div className="managed-admin-access" style={{ flex: '1 1 100%', border: '1px solid #64748b', borderRadius: 12, padding: 12 }}>
                   <strong>Admin and staff access</strong>
                   <p style={{ margin: '6px 0' }}>Staff mode keeps only assigned staff tools. Admin mode restores admin functions.</p>
                   <label style={{ display: 'block', marginTop: 8 }}>Account mode
                     <select value={accessDrafts[account.accountId]?.role || account.adminRole || 'admin'} onChange={(event) => {
                       const role = event.target.value;
-                      updateAccessDraft(account.accountId, { role, workspaces: role === 'staff' ? ['Staff'] : ['Admin', 'Partner', 'Driver'] });
+                      updateAccessDraft(account.accountId, { role, workspaces: role === 'staff' ? ['Staff'] : ['Admin', 'Partner', 'Driver'], workspaceSwitcherVisible: role === 'admin' });
                     }}>
                       <option value="admin">Admin functions</option>
                       <option value="staff">Staff roles only</option>
@@ -3194,7 +3195,7 @@ function ManagedIgoAccounts() {
                     })}
                   </fieldset>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                    <input type="checkbox" checked={accessDrafts[account.accountId]?.workspaceSwitcherVisible !== false} onChange={(event) => updateAccessDraft(account.accountId, { workspaceSwitcherVisible: event.target.checked })} />
+                    <input type="checkbox" checked={accessDrafts[account.accountId]?.workspaceSwitcherVisible !== false} disabled={accessDrafts[account.accountId]?.role === 'staff'} onChange={(event) => updateAccessDraft(account.accountId, { workspaceSwitcherVisible: event.target.checked })} />
                     Show workspace switcher
                   </label>
                   <button type="button" className="primary-btn" style={{ marginTop: 8 }} disabled={busyId === account.accountId} onClick={() => saveAdminAccess(account)}>

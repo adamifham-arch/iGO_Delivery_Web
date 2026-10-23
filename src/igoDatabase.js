@@ -5,6 +5,10 @@ const requireClient = () => {
   return supabase;
 };
 
+const isMissingWorkspaceAccessFunction = (error, functionName) =>
+  error?.code === 'PGRST202'
+  || (String(error?.message || '').includes(functionName) && String(error?.message || '').toLowerCase().includes('schema cache'));
+
 export const statusToDb = (status) => ({
   Pending: 'awaiting_collection',
   'Picked Up': 'picked_up',
@@ -498,11 +502,13 @@ export async function loadCurrentRole() {
   let profile = data;
   if (['admin', 'staff'].includes(data.role)) {
     const { data: access, error: accessError } = await client.rpc('get_igo_current_workspace_access');
-    if (accessError) throw accessError;
+    if (accessError && !isMissingWorkspaceAccessFunction(accessError, 'get_igo_current_workspace_access')) throw accessError;
     profile = {
       ...data,
-      allowedWorkspaces: access?.workspace_access || (data.role === 'admin' ? ['Admin', 'Partner', 'Driver'] : ['Staff']),
-      workspaceSwitcherVisible: access?.workspace_switcher_visible !== false,
+      ...(accessError ? {} : {
+        allowedWorkspaces: access?.workspace_access || (data.role === 'admin' ? ['Admin', 'Partner', 'Driver'] : ['Staff']),
+        workspaceSwitcherVisible: access?.workspace_switcher_visible !== false,
+      }),
     };
   }
   return { user: userResult.user, profile };
@@ -540,7 +546,8 @@ export async function loadManagedUserAccounts() {
   ]);
   if (admins.error) throw admins.error;
   if (audit.error) throw audit.error;
-  if (accessSettings.error) throw accessSettings.error;
+  const workspaceAccessReady = !accessSettings.error;
+  if (accessSettings.error && !isMissingWorkspaceAccessFunction(accessSettings.error, 'list_igo_admin_access_settings')) throw accessSettings.error;
   const auditByUserId = new Map((audit.data || []).map((row) => [row.invited_user_id, row]));
   const settingsByUserId = new Map((accessSettings.data || []).map((row) => [row.invited_user_id, row]));
   return [
@@ -558,6 +565,7 @@ export async function loadManagedUserAccounts() {
         adminRole: row.role,
         workspaceAccess: access?.workspace_access || (row.role === 'admin' ? ['Admin', 'Partner', 'Driver'] : ['Staff']),
         workspaceSwitcherVisible: access?.workspace_switcher_visible !== false,
+        workspaceAccessReady,
         addedByName: inviter?.invited_by_name || '',
         addedByEmail: inviter?.invited_by_email || '',
         invitedAt: inviter?.invited_at || '',

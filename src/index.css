@@ -7827,3 +7827,17 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     width: 100%;
   }
 }
+
+/* Keep feedback readable when the app's night-theme text rules apply to all paragraphs. */
+.app[data-theme="night"] .main p.notice[role="status"],
+.app[data-theme="night"] .main div.notice[role="status"] {
+  color: #166534 !important;
+  background-color: #dcfce7 !important;
+  opacity: 1 !important;
+}
+.app[data-theme="night"] .main p.notice[role="alert"],
+.app[data-theme="night"] .main div.notice[role="alert"] {
+  color: #991b1b !important;
+  background-color: #fee2e2 !important;
+  opacity: 1 !important;
+}

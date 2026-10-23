@@ -5086,7 +5086,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   });
   const storageKey = 'igo-finance-workflow-demo-v1';
   const initialState = {
-    cutoff: '18:00',
+    cutoff: liveMode ? '' : '18:00',
     nextInvoice: 105,
     invoices: [],
     payments: [],
@@ -5105,6 +5105,10 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     }
   };
   const [billing, setBilling] = useState(() => (liveMode ? initialState : readState()));
+  const [savedInvoiceCutoff, setSavedInvoiceCutoff] = useState(() => (liveMode ? '' : readState().cutoff || ''));
+  const [cutoffSaving, setCutoffSaving] = useState(false);
+  const [invoiceCutoffMixed, setInvoiceCutoffMixed] = useState(false);
+  const cutoffHasUnsavedChanges = billing.cutoff !== savedInvoiceCutoff;
   const [readyPartnerSearch, setReadyPartnerSearch] = useState('');
   const [overviewDriverRates, setOverviewDriverRates] = useState(() => {
     try {
@@ -5167,9 +5171,12 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       if (workspace === 'Partner') setBilling((current) => ({ ...current, invoices: [], payments: [], partnerCredits: {} }));
       const partnerId = workspace === 'Partner' ? await getCurrentPartnerIdOptional() : undefined;
       const records = await loadFinanceRecords({ workspace, partnerId: partnerId || undefined });
+      const loadedCutoff = records.invoiceCutoff == null ? '' : String(records.invoiceCutoff).slice(0, 5);
+      setSavedInvoiceCutoff(loadedCutoff);
+      setInvoiceCutoffMixed(Boolean(records.invoiceCutoffMixed));
       setBilling((current) => ({
         ...current,
-        cutoff: records.invoiceCutoff || current.cutoff,
+        cutoff: loadedCutoff,
         invoices: records.invoices,
         payments: records.payments,
         partnerCredits: records.partnerCredits,
@@ -6204,16 +6211,31 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       setNotice(error.message || 'Could not save payment account details.');
     }
   };
-  const persistInvoiceCutoff = async () => {
-    if (!liveMode) {
-      setNotice('Daily cutoff saved in this demo.');
+  const persistInvoiceCutoff = async (value = billing.cutoff) => {
+    const nextCutoff = String(value || '').trim();
+    if (nextCutoff && !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(nextCutoff)) {
+      setNotice('Choose a valid daily cutoff time.');
       return;
     }
+    setCutoffSaving(true);
     try {
-      await saveInvoiceCutoff(billing.cutoff);
-      setNotice('Daily invoice cutoff saved. Automatic generation runs at this local time.');
+      if (liveMode) {
+        await saveInvoiceCutoff(nextCutoff || null);
+      } else {
+        const nextBilling = { ...billing, cutoff: nextCutoff };
+        window.localStorage.setItem(storageKey, JSON.stringify(nextBilling));
+        setBilling(nextBilling);
+      }
+      setBilling((current) => ({ ...current, cutoff: nextCutoff }));
+      setSavedInvoiceCutoff(nextCutoff);
+      setInvoiceCutoffMixed(false);
+      setNotice(nextCutoff
+        ? `Daily invoice cutoff saved for all partners: ${nextCutoff} Maldives time.`
+        : 'Daily invoice cutoff removed for all partners. Automatic invoice generation is off; admins can still generate invoices manually.');
     } catch (error) {
       setNotice(error.message || 'Could not save the invoice cutoff.');
+    } finally {
+      setCutoffSaving(false);
     }
   };
   const exportFinancialReport = () => {
@@ -6459,8 +6481,15 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       <section style={panel}>
         <h3>Invoices</h3>{mode === 'management' && <>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 10, marginBottom: 14 }}>
-            <label>Daily cutoff <input type="time" value={billing.cutoff} onChange={(event) => setBilling((current) => ({ ...current, cutoff: event.target.value }))} /></label>
-            <button type="button" style={buttonStyle} onClick={persistInvoiceCutoff}>Save cutoff</button>
+            <div className="invoice-cutoff-controls">
+              <label>Daily cutoff (Maldives time)
+                <input type="time" step="60" value={billing.cutoff} onChange={(event) => setBilling((current) => ({ ...current, cutoff: event.target.value }))} aria-label="Daily invoice cutoff time in Maldives time" />
+              </label>
+              <div className="invoice-cutoff-actions">
+                <button type="button" style={buttonStyle} onClick={() => persistInvoiceCutoff()} disabled={cutoffSaving || !billing.cutoff || !cutoffHasUnsavedChanges}>{cutoffSaving ? 'Saving…' : 'Save cutoff'}</button>
+                <button type="button" style={buttonStyle} onClick={() => persistInvoiceCutoff('')} disabled={cutoffSaving || (!savedInvoiceCutoff && !invoiceCutoffMixed)}>{cutoffSaving ? 'Saving…' : 'Remove cutoff'}</button>
+              </div>
+            </div>
             <span>
               Ready to invoice: <strong>{readyPackages.length}</strong> · {money(readyPackages.reduce((sum, packageItem) => sum + Number(packageItem.fee ?? packageItem.delivery_fee ?? 0), 0))}
             </span>
@@ -6475,6 +6504,14 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             </button>
             {readyPackages.length === 0 && <span style={{ fontSize: 12, color: '#64748b' }}>No delivered packages ready to invoice.</span>}
           </div>
+          <p className="invoice-cutoff-status" role="status" aria-live="polite">
+            {cutoffSaving ? 'Saving daily cutoff…' : invoiceCutoffMixed
+              ? 'Partner cutoff settings differ. Saving or removing here will apply the setting to all partners.'
+              : savedInvoiceCutoff
+                ? `Daily invoice cutoff is saved for all partners at ${savedInvoiceCutoff} Maldives time.`
+                : 'No daily invoice cutoff is set. Automatic invoice generation is off.'}
+            {!cutoffSaving && cutoffHasUnsavedChanges && <strong> Unsaved change — save to apply.</strong>}
+          </p>
           {readyPartners.length > 0 && (
             <section className="ready-partners" aria-labelledby="ready-partners-heading">
               <div className="ready-partners-heading">

@@ -7942,3 +7942,16 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   .ready-partners-table td:last-child { padding-right: 6px; }
   .ready-partners-table td:last-child button { padding: 8px 9px !important; font-size: 11px; }
 }
+
+
+/* Make the invoice cutoff's saved state visible and the save/remove actions clear. */
+.invoice-cutoff-controls { display: grid; gap: 8px; min-width: min(100%, 230px); }
+.invoice-cutoff-controls > label { display: grid; gap: 5px; }
+.invoice-cutoff-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.invoice-cutoff-status { flex-basis: 100%; margin: -4px 0 14px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 9px; color: #334155; background: #f8fafc; font-size: 13px; }
+.app[data-theme="night"] .main .invoice-cutoff-status { border-color: #475569; color: #dbe5f2; background: #172438; }
+.invoice-cutoff-status strong { display: inline; }
+@media (max-width: 560px) {
+  .invoice-cutoff-controls { flex-basis: 100%; }
+  .invoice-cutoff-actions > button { flex: 1 1 auto; }
+}

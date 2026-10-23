@@ -251,7 +251,10 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
   for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult]) {
     if (result.error) throw result.error;
   }
+  const savedCutoffs = [...new Set((partnerResult.data || []).map((row) => row.invoice_cutoff == null ? null : String(row.invoice_cutoff).slice(0, 5)))];
   return {
+    invoiceCutoff: savedCutoffs.length === 1 ? savedCutoffs[0] : null,
+    invoiceCutoffMixed: savedCutoffs.length > 1,
     invoices: (invoiceResult.data || []).map((row) => ({
       id: row.invoice_number,
       dbId: row.id,

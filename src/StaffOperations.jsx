@@ -90,7 +90,26 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
     }
   };
 
-  useEffect(() => { void refresh(); }, [canManage, canReview, canPay, isOwner]);
+  useEffect(() => {
+    let active = true;
+    let inFlight = false;
+    const load = async () => {
+      if (!active || inFlight || document.visibilityState === 'hidden') return;
+      inFlight = true;
+      try { await refresh(); } finally { inFlight = false; }
+    };
+    void load();
+    const interval = window.setInterval(load, 15000);
+    const resume = () => { if (document.visibilityState === 'visible') void load(); };
+    window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', resume);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', resume);
+      document.removeEventListener('visibilitychange', resume);
+    };
+  }, [canManage, canReview, canPay, isOwner]);
 
   const submitRequest = async (event) => {
     event.preventDefault();

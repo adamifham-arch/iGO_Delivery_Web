@@ -988,7 +988,10 @@ export default function App() {
   useEffect(() => {
     if (!supabase || !databaseUser) return undefined;
     let active = true;
+    let refreshing = false;
     const refresh = async () => {
+      if (!active || refreshing || document.visibilityState !== 'visible') return;
+      refreshing = true;
       try {
         const partnerId = databaseProfile?.role === 'admin' && workspace === 'Partner' ? await getCurrentPartnerIdOptional() : null;
         const driverId = databaseProfile?.role === 'admin' && workspace === 'Driver' ? await getCurrentDriverId() : null;
@@ -1003,14 +1006,19 @@ export default function App() {
         } catch {}
       } catch (error) {
         if (active) setDatabaseError(error.message || 'Could not refresh iGO records.');
-      }
+      } finally { refreshing = false; }
     };
+    const refreshOnResume = () => { if (document.visibilityState === 'visible') void refresh(); };
     window.addEventListener('igo-live-finance-updated', refresh);
-    const interval = window.setInterval(refresh, 30000);
+    window.addEventListener('focus', refreshOnResume);
+    document.addEventListener('visibilitychange', refreshOnResume);
+    const interval = window.setInterval(refresh, 15000);
     return () => {
       active = false;
       window.clearInterval(interval);
       window.removeEventListener('igo-live-finance-updated', refresh);
+      window.removeEventListener('focus', refreshOnResume);
+      document.removeEventListener('visibilitychange', refreshOnResume);
     };
   }, [databaseUser, databaseProfile, workspace, partnerSpendPeriod]);
 
@@ -3284,7 +3292,7 @@ function ApprovalDashboard() {
 }
 
 function AdminOperations({ packages, onUpdate, liveMode = false, staffMode = false }) {
-  const [driverNames, setDriverNames] = useState([]); const [activeDriverField, setActiveDriverField] = useState(''); useEffect(() => { if (!liveMode) return undefined; let active = true; const refreshDrivers = async () => { try { const rows = staffMode ? (await supabase.from('drivers').select('name').eq('active', true).eq('approval_status', 'approved').order('name')).data || [] : await loadDriverRoster(); if (active) setDriverNames([...new Set(rows.map((driver) => driver.name).filter(Boolean))]); } catch {} }; void refreshDrivers(); const timer = window.setInterval(() => void refreshDrivers(), 30000); return () => { active = false; window.clearInterval(timer); }; }, [liveMode]); const [query, setQuery] = useState('');
+  const [driverNames, setDriverNames] = useState([]); const [activeDriverField, setActiveDriverField] = useState(''); useEffect(() => { if (!liveMode) return undefined; let active = true; const refreshDrivers = async () => { try { const rows = staffMode ? (await supabase.from('drivers').select('name').eq('active', true).eq('approval_status', 'approved').order('name')).data || [] : await loadDriverRoster(); if (active) setDriverNames([...new Set(rows.map((driver) => driver.name).filter(Boolean))]); } catch {} }; void refreshDrivers(); const timer = window.setInterval(() => void refreshDrivers(), 15000); return () => { active = false; window.clearInterval(timer); }; }, [liveMode]); const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [area, setArea] = useState('All');
   const [drafts, setDrafts] = useState({});
@@ -4771,16 +4779,34 @@ function PendingIgoUserApprovals() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  const loadPendingUsers = async () => {
-    setLoading(true);
+  const loadPendingUsers = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError('');
     const { data, error: loadError } = await supabase.rpc('list_pending_igo_user_approvals');
     if (loadError) setError(loadError.message);
     else setPendingUsers(data || []);
-    setLoading(false);
+    if (showLoading) setLoading(false);
   };
 
-  useEffect(() => { loadPendingUsers(); }, []);
+  useEffect(() => {
+    let active = true;
+    let refreshing = false;
+    const refreshQuietly = async () => {
+      if (!active || refreshing || document.visibilityState !== 'visible') return;
+      refreshing = true;
+      try { await loadPendingUsers(false); } finally { refreshing = false; }
+    };
+    void loadPendingUsers();
+    const interval = window.setInterval(refreshQuietly, 15000);
+    window.addEventListener('focus', refreshQuietly);
+    document.addEventListener('visibilitychange', refreshQuietly);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshQuietly);
+      document.removeEventListener('visibilitychange', refreshQuietly);
+    };
+  }, []);
 
   const reviewUser = async (user, decision) => {
     setBusyId(user.user_id);
@@ -4963,17 +4989,28 @@ function NotificationCenter({ onNavigate }) {
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true;
+    let refreshing = false;
     const refresh = async () => {
+      if (!active || refreshing || document.visibilityState !== 'visible') return;
+      refreshing = true;
       try {
         const rows = await loadNotifications();
         if (active) { setNotifications(rows); setError(''); }
       } catch (loadError) {
         if (active) setError(loadError.message || 'Could not load notifications.');
-      }
+      } finally { refreshing = false; }
     };
+    const refreshOnResume = () => { if (document.visibilityState === 'visible') void refresh(); };
     void refresh();
-    const interval = window.setInterval(refresh, 30000);
-    return () => { active = false; window.clearInterval(interval); };
+    const interval = window.setInterval(refresh, 10000);
+    window.addEventListener('focus', refreshOnResume);
+    document.addEventListener('visibilitychange', refreshOnResume);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshOnResume);
+      document.removeEventListener('visibilitychange', refreshOnResume);
+    };
   }, []);
   const markRead = async (id) => {
     try {

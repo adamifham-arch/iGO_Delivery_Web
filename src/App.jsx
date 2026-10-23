@@ -5194,6 +5194,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   const [selectedPaymentInvoiceId, setSelectedPaymentInvoiceId] = useState('');
   const [drafts, setDrafts] = useState({});
   const [notice, setNotice] = useState('');
+  const [paymentError, setPaymentError] = useState('');
   const [expenseDraft, setExpenseDraft] = useState(() => ({
     date: localDateKey(new Date()),
     category: 'Fuel / petrol',
@@ -5443,6 +5444,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   };
   const submitPayment = async (event, invoices) => {
     event.preventDefault();
+    setPaymentError('');
     const paymentForm = event.currentTarget;
     const payable = invoices.filter((invoice) => invoice.amount - getPaid(invoice.id) > 0);
     const dueTotal = payable.reduce((sum, invoice) => sum + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
@@ -5450,7 +5452,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     const draft = drafts[paymentKey] || {};
     const amount = Number(draft.amount ?? dueTotal);
     if (!draft.slipName || dueTotal <= 0 || !Number.isFinite(amount) || amount <= 0) {
-      setNotice(dueTotal <= 0 ? 'There is no outstanding balance to pay.' : !draft.slipName ? 'Attach the payment slip before submitting.' : 'Enter the amount you transferred.');
+      setPaymentError(dueTotal <= 0 ? 'There is no outstanding balance to pay.' : !draft.slipName ? 'Attach the payment slip before submitting.' : 'Enter the amount you transferred.');
       return;
     }
     const reference = (draft.reference || 'Payment for all outstanding invoices').trim();
@@ -5493,7 +5495,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         setNotice('Payment submitted successfully. It is waiting for admin review.');
         await refreshDatabaseFinance(true);
       } catch (error) {
-        setNotice(error.message || 'Could not submit the payment.');
+        setPaymentError(error.message || 'Could not submit the payment.');
       }
       return;
     }
@@ -5762,6 +5764,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           </div>
 
           {notice && !pendingPartnerPayments.length && <p role="status" className="notice" aria-live="polite">{notice}</p>}
+          {paymentError && <p role="alert" style={{ background: '#fee2e2', color: '#7f1d1d', border: '1px solid #fca5a5', borderRadius: 8, padding: 12, margin: '8px 0' }}>{paymentError}</p>}
           {pendingPartnerPayments.length ? (
             <div className="notice" role="status" aria-live="polite">
               <strong>Payment submitted · Awaiting admin review</strong>

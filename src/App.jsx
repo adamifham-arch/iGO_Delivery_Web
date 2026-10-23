@@ -5790,7 +5790,36 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
               <p style={{ fontSize: 13, margin: 0 }}>All outstanding invoices are included. Enter the total actually transferred; the admin will verify it against the payment slip.</p>
               {partnerCredit > 0 && <p style={{ margin: 0 }}>Usable partner credit: <strong>{money(partnerCredit)}</strong>. Credit is applied automatically to new invoices.</p>}
               <label>Amount transferred (MVR)<input required type="number" min="0.01" step="0.01" value={drafts['all-outstanding-invoices']?.amount ?? totalOutstanding} onChange={(event) => setDrafts((current) => ({ ...current, 'all-outstanding-invoices': { ...current['all-outstanding-invoices'], amount: event.target.value } }))} /></label>
-              <label>Payment slip<input required type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => { setPaymentError(''); setDrafts((current) => ({ ...current, 'all-outstanding-invoices': { ...current['all-outstanding-invoices'], slipName: event.target.files?.[0]?.name || '', file: event.target.files?.[0] || null } })); }} /><small>JPG, PNG, WebP, or PDF · maximum 10 MB</small></label>
+              <div className="payment-slip-field">
+                <label htmlFor="partner-payment-slip">Payment slip</label>
+                <input
+                  id="partner-payment-slip"
+                  className="payment-slip-input"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                  aria-describedby="partner-payment-slip-help"
+                  onChange={(event) => {
+                    setPaymentError('');
+                    setDrafts((current) => ({
+                      ...current,
+                      'all-outstanding-invoices': {
+                        ...current['all-outstanding-invoices'],
+                        slipName: event.target.files?.[0]?.name || '',
+                        file: event.target.files?.[0] || null,
+                      },
+                    }));
+                  }}
+                />
+                <label className="payment-slip-trigger" htmlFor="partner-payment-slip">
+                  {drafts['all-outstanding-invoices']?.slipName ? 'Change payment slip' : 'Choose payment slip'}
+                </label>
+                <span className="payment-slip-status" role="status" aria-live="polite">
+                  {drafts['all-outstanding-invoices']?.slipName
+                    ? 'Selected: ' + drafts['all-outstanding-invoices'].slipName
+                    : 'No file selected yet'}
+                </span>
+                <small id="partner-payment-slip-help">Choose a JPG, PNG, WebP, or PDF file · maximum 10 MB</small>
+              </div>
               <button style={buttonStyle} type="submit">Submit payment for review</button>
             </form>
           ) : <p>There are no outstanding invoices to pay.{partnerCredit > 0 ? ' Your usable credit will apply automatically to new invoices.' : ''}</p>}

@@ -6215,7 +6215,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   };
   const persistInvoiceCutoff = async (value = billing.cutoff) => {
     const nextCutoff = String(value || '').trim();
-    if (nextCutoff && !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(nextCutoff)) {
+    if (nextCutoff && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(nextCutoff)) {
       setCutoffFeedback('Choose a valid daily cutoff time.');
       setCutoffFeedbackError(true);
       return;

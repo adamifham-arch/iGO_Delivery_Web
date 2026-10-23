@@ -412,6 +412,10 @@ export default function App() {
   }, [notificationScrollRequest, page, workspace]);
   const [databaseUser, setDatabaseUser] = useState(null);
   const [databaseProfile, setDatabaseProfile] = useState(null);
+  const availableWorkspaces = databaseProfile?.allowedWorkspaces || (databaseProfile?.role === 'admin' ? ['Admin', 'Partner', 'Driver'] : databaseProfile?.role === 'staff' ? ['Staff'] : []);
+  const canShowWorkspaceSwitcher = databaseProfile?.role === 'admin'
+    && databaseProfile?.workspaceSwitcherVisible !== false
+    && availableWorkspaces.length > 1;
   const [accountApprovalStatus, setAccountApprovalStatus] = useState(null);
   const [databaseLoading, setDatabaseLoading] = useState(Boolean(supabaseConfigured));
   const [databaseError, setDatabaseError] = useState('');
@@ -777,6 +781,10 @@ export default function App() {
   };
 
   const switchWorkspace = async (next) => {
+    if (databaseProfile?.role === 'admin' && !availableWorkspaces.includes(next)) {
+      setNotice('This account does not have access to that workspace.');
+      return;
+    }
     setNotice('');
     setDatabaseError('');
     setShowForm(false);
@@ -1974,21 +1982,19 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             </div>
           )}
           {databaseProfile ? (
-            databaseProfile.role === 'admin' ? (
+            canShowWorkspaceSwitcher ? (
               <label className="workspace-switch">
-                <span>View profile</span>
+                <span>View workspace</span>
                 <select
-                  aria-label="View profile"
+                  aria-label="View workspace"
                   value={workspace}
                   onChange={(event) => void switchWorkspace(event.target.value)}
                 >
-                  <option value="Admin">Admin profile</option>
-                  <option value="Partner">Partner workspace</option>
-                  <option value="Driver">Driver workspace</option>
+                  {availableWorkspaces.map((name) => <option key={name} value={name}>{name === 'Admin' ? 'Admin workspace' : name + ' workspace'}</option>)}
                 </select>
               </label>
             ) : (
-              <div className="workspace-switch"><span></span><strong>{databaseProfile.role} · {databaseProfile.full_name || databaseUser?.email}</strong></div>
+              <div className="workspace-switch"><span></span><strong>{workspace} · {databaseProfile.full_name || databaseUser?.email}</strong></div>
             )
           ) : (
             <label className="workspace-switch">
@@ -2036,7 +2042,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   <strong>{viewedProfileName}</strong>
                   <span>{databaseUser?.email || workspace + ' profile'}</span>
                 </div>
-                {databaseProfile?.role === 'admin' && (
+                {canShowWorkspaceSwitcher && (
                   <label className="profile-workspace-switch">
                     <span>View workspace</span>
                     <select
@@ -2047,9 +2053,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                         void switchWorkspace(event.target.value);
                       }}
                     >
-                      <option value="Admin">Admin workspace</option>
-                      <option value="Partner">Partner workspace</option>
-                      <option value="Driver">Driver workspace</option>
+                      {availableWorkspaces.map((name) => <option key={name} value={name}>{name === 'Admin' ? 'Admin workspace' : name + ' workspace'}</option>)}
                     </select>
                   </label>
                 )}
@@ -2977,12 +2981,19 @@ function ManagedIgoAccounts() {
   const [error, setError] = useState('');
   const [canPromoteAdmins, setCanPromoteAdmins] = useState(false);
   const [superadminIds, setSuperadminIds] = useState([]);
+  const [accessDrafts, setAccessDrafts] = useState({});
 
   const refresh = async () => {
     setLoading(true);
     setError('');
     try {
-      setAccounts(await loadManagedUserAccounts());
+      const loadedAccounts = await loadManagedUserAccounts();
+      setAccounts(loadedAccounts);
+      setAccessDrafts(Object.fromEntries(loadedAccounts.filter((account) => account.type === 'Admin').map((account) => [account.accountId, {
+        role: account.adminRole || 'admin',
+        workspaces: account.workspaceAccess || (account.adminRole === 'staff' ? ['Staff'] : ['Admin', 'Partner', 'Driver']),
+        workspaceSwitcherVisible: account.workspaceSwitcherVisible !== false,
+      }])));
       const { data: isSuperadmin, error: roleError } = await supabase.rpc('is_igo_superadmin');
       if (roleError) throw roleError;
       setCanPromoteAdmins(isSuperadmin === true);
@@ -3013,6 +3024,34 @@ function ManagedIgoAccounts() {
       setMessage(`${account.type === 'Driver' ? 'Rider' : 'Partner'} account ${nextStatus === 'approved' ? 'reactivated' : 'suspended'}.`);
     } catch (changeError) {
       setError(changeError.message || 'Could not update this account.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const updateAccessDraft = (accountId, patch) => setAccessDrafts((current) => ({
+    ...current,
+    [accountId]: { ...(current[accountId] || {}), ...patch },
+  }));
+
+  const saveAdminAccess = async (account) => {
+    const draft = accessDrafts[account.accountId];
+    if (!draft) return;
+    setBusyId(account.accountId);
+    setMessage('');
+    setError('');
+    try {
+      const { error: saveError } = await supabase.rpc('set_igo_managed_admin_access', {
+        p_user_id: account.accountId,
+        p_role: draft.role,
+        p_workspace_access: draft.workspaces,
+        p_workspace_switcher_visible: draft.workspaceSwitcherVisible,
+      });
+      if (saveError) throw saveError;
+      await refresh();
+      setMessage(`${account.name || 'Account'} access updated.`);
+    } catch (saveError) {
+      setError(saveError.message || 'Could not update this account access.');
     } finally {
       setBusyId('');
     }
@@ -3127,8 +3166,43 @@ function ManagedIgoAccounts() {
                     fontSize: 12,
                     padding: '5px 10px',
                   }}
-                >{isAdmin && superadminIds.includes(account.accountId) ? 'Superadmin' : isAdmin ? 'Admin' : account.status}</span>
-                {isAdmin && canPromoteAdmins && !superadminIds.includes(account.accountId) && <button
+                >{isAdmin && superadminIds.includes(account.accountId) ? 'Superadmin' : isAdmin ? (account.adminRole === 'staff' ? 'Staff' : 'Admin') : account.status}</span>
+                {isAdmin && canPromoteAdmins && !superadminIds.includes(account.accountId) && !account.workspaceAccessReady && <p style={{ flex: '1 1 100%' }}>Apply the admin workspace access database update to manage this account.</p>}
+                {isAdmin && canPromoteAdmins && !superadminIds.includes(account.accountId) && account.workspaceAccessReady && <div className="managed-admin-access" style={{ flex: '1 1 100%', border: '1px solid #64748b', borderRadius: 12, padding: 12 }}>
+                  <strong>Admin and staff access</strong>
+                  <p style={{ margin: '6px 0' }}>Staff mode keeps only assigned staff tools. Admin mode restores admin functions.</p>
+                  <label style={{ display: 'block', marginTop: 8 }}>Account mode
+                    <select value={accessDrafts[account.accountId]?.role || account.adminRole || 'admin'} onChange={(event) => {
+                      const role = event.target.value;
+                      updateAccessDraft(account.accountId, { role, workspaces: role === 'staff' ? ['Staff'] : ['Admin', 'Partner', 'Driver'], workspaceSwitcherVisible: role === 'admin' });
+                    }}>
+                      <option value="admin">Admin functions</option>
+                      <option value="staff">Staff roles only</option>
+                    </select>
+                  </label>
+                  <fieldset style={{ display: 'flex', gap: 12, flexWrap: 'wrap', border: 0, padding: '8px 0 0' }}>
+                    <legend>Workspaces they can use</legend>
+                    {(accessDrafts[account.accountId]?.role === 'staff'
+                      ? [['Staff', true]]
+                      : [['Admin', true], ['Partner', false], ['Driver', false]]
+                    ).map(([name, required]) => {
+                      const draft = accessDrafts[account.accountId] || {};
+                      const checked = (draft.workspaces || []).includes(name);
+                      return <label key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <input type="checkbox" checked={checked} disabled={required} onChange={(event) => updateAccessDraft(account.accountId, { workspaces: event.target.checked ? [...(draft.workspaces || []), name] : (draft.workspaces || []).filter((item) => item !== name) })} />
+                        {name}{required ? ' (required)' : ''}
+                      </label>;
+                    })}
+                  </fieldset>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                    <input type="checkbox" checked={accessDrafts[account.accountId]?.workspaceSwitcherVisible !== false} disabled={accessDrafts[account.accountId]?.role === 'staff'} onChange={(event) => updateAccessDraft(account.accountId, { workspaceSwitcherVisible: event.target.checked })} />
+                    Show workspace switcher
+                  </label>
+                  <button type="button" className="primary-btn" style={{ marginTop: 8 }} disabled={busyId === account.accountId} onClick={() => saveAdminAccess(account)}>
+                    {busyId === account.accountId ? 'Saving…' : 'Save access'}
+                  </button>
+                </div>}
+                {isAdmin && canPromoteAdmins && account.adminRole === 'admin' && !superadminIds.includes(account.accountId) && <button
                   type="button"
                   className="primary-btn"
                   disabled={busyId === account.accountId}

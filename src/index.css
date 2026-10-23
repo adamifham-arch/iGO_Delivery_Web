@@ -7882,8 +7882,34 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   min-height: 48px;
   width: 100%;
   box-sizing: border-box;
+  padding: 11px 16px;
+  border: 1px solid #64748b;
+  border-radius: 10px;
+  color: #f8fafc;
+  background: #334155;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, .2);
   cursor: pointer;
+  font: inherit;
+  font-weight: 700;
   text-align: center;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 100ms ease;
+}
+.payment-slip-trigger:hover {
+  background: #40536d;
+  border-color: #94a3b8;
+}
+.payment-slip-trigger:active {
+  transform: translateY(1px);
+}
+.app[data-theme="day"] .payment-slip-trigger {
+  color: #1f2937;
+  background: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .12);
+}
+.app[data-theme="day"] .payment-slip-trigger:hover {
+  background: #e2e8f0;
+  border-color: #64748b;
 }
 .payment-slip-status {
   overflow-wrap: anywhere;

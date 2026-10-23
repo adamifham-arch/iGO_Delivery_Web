@@ -55,6 +55,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
   const canReview = isOwner || roles.has('finance_approver');
   const canPay = isOwner || roles.has('payment_officer');
   const canRequest = isOwner || roles.has('department_requester') || roles.has('operations_manager');
+  const canViewPaymentStatus = isOwner || /(^|\\s)nadhih($|\\s)/i.test(String(profile?.full_name || '').trim());
 
   const refresh = async () => {
     setError('');
@@ -300,7 +301,7 @@ export function StaffOperations({ user, profile, isOwner = false, view = 'all' }
       </form>
     </section>}
 
-    {showFinance && <section id="staff-payment-status" style={card}>
+    {showFinance && canViewPaymentStatus && <section id="staff-payment-status" style={card}>
       <div className="staff-payment-status-heading">
         <div><h3>Payment status</h3><p>Finance can review requests. Payment officers see finance-approved payouts only.</p></div>
         <button type="button" onClick={() => void refresh()}>Refresh</button>

@@ -3461,6 +3461,7 @@ function AdminOperations({ packages, onUpdate, liveMode = false, staffMode = fal
                 <div>
                   <strong>{p.id}</strong>
                   <span>{p.customer}</span>
+                  <span className="ops-package-registered">Registered · {formatPackageAddedAt(p.createdAt || p.created_at)}</span>
                 </div>
                 <div className="ops-destination">
                   <strong>{p.area}</strong>

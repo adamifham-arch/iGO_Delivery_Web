@@ -5360,7 +5360,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       (partnerId ? 'Partner ' + partnerId.slice(0, 8) : 'Partner not identified')
     ).trim();
     const key = partnerId || partnerName.toLocaleLowerCase();
-    const total = totals.get(key) || { key, name: partnerName, count: 0, amount: 0 };
+    const total = totals.get(key) || { key, id: partnerId, name: partnerName, count: 0, amount: 0 };
     total.count += 1;
     total.amount += Number(packageItem.fee ?? packageItem.delivery_fee ?? 0);
     totals.set(key, total);
@@ -5433,6 +5433,10 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       return;
     }
     if (liveMode) {
+      if (!partnerId && partnerName) {
+        setLiveError(`Could not identify ${partnerName}'s partner account. Refresh the page and try again.`);
+        return;
+      }
       await generateLiveInvoices(partnerId || null);
       return;
     }
@@ -6451,7 +6455,51 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       {mode === 'management' && <h2>Invoices &amp; collections</h2>}
       {!liveMode && <div className="notice">Demo mode.</div>}
       <section style={panel}>
-        <h3>Invoices</h3>{mode === 'management' && <><div style={{display:"flex",flexWrap:"wrap",alignItems:"end",gap:10,marginBottom:14}}><label>Daily cutoff <input type="time" value={billing.cutoff} onChange={(e)=>setBilling((current)=>({...current,cutoff:e.target.value}))}/></label><button type="button" style={buttonStyle} onClick={persistInvoiceCutoff}>Save cutoff</button><span>Ready to invoice: <strong>{readyPackages.length}</strong> · {money(readyPackages.reduce((sum,p)=>sum+Number(p.fee??p.delivery_fee??0),0))}</span><button type="button" style={buttonStyle} onClick={() => generateInvoices()} disabled={liveBusy||(liveMode&&!adminUser)||readyPackages.length===0} title={readyPackages.length === 0 ? 'No delivered packages are ready to invoice' : undefined}>{liveBusy?"Generating…":liveMode?"Generate invoice now":"Generate demo invoice now"}</button>{readyPackages.length===0&&<span style={{fontSize:12,color:'#64748b'}}>No delivered packages ready to invoice.</span>}</div>{readyPartners.length > 0 && <div aria-label="Partners ready to invoice" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}><strong>Partners ready to invoice:</strong>{readyPartners.map((partner) => <span key={partner.key} style={{ border: '1px solid #405169', borderRadius: 8, padding: '6px 9px', fontSize: 13 }}>{partner.name} · {partner.count} {partner.count === 1 ? 'package' : 'packages'} · {money(partner.amount)}</span>)}</div>}{!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Working…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}</>}
+        <h3>Invoices</h3>{mode === 'management' && <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 10, marginBottom: 14 }}>
+            <label>Daily cutoff <input type="time" value={billing.cutoff} onChange={(event) => setBilling((current) => ({ ...current, cutoff: event.target.value }))} /></label>
+            <button type="button" style={buttonStyle} onClick={persistInvoiceCutoff}>Save cutoff</button>
+            <span>
+              Ready to invoice: <strong>{readyPackages.length}</strong> · {money(readyPackages.reduce((sum, packageItem) => sum + Number(packageItem.fee ?? packageItem.delivery_fee ?? 0), 0))}
+            </span>
+            <button
+              type="button"
+              style={buttonStyle}
+              onClick={() => generateInvoices()}
+              disabled={liveBusy || (liveMode && !adminUser) || readyPackages.length === 0}
+              title={readyPackages.length === 0 ? 'No delivered packages are ready to invoice' : undefined}
+            >
+              {liveBusy ? 'Generating…' : liveMode ? 'Generate for all partners' : 'Generate demo invoices for all'}
+            </button>
+            {readyPackages.length === 0 && <span style={{ fontSize: 12, color: '#64748b' }}>No delivered packages ready to invoice.</span>}
+          </div>
+          {readyPartners.length > 0 && (
+            <section aria-labelledby="ready-partners-heading" style={{ marginBottom: 14 }}>
+              <h4 id="ready-partners-heading" style={{ margin: '0 0 8px' }}>Ready to invoice by partner</h4>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {readyPartners.map((partner) => (
+                  <div
+                    key={partner.key}
+                    style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid #405169', borderRadius: 8, padding: '9px 11px' }}
+                  >
+                    <span>
+                      <strong>{partner.name}</strong> · {partner.count} {partner.count === 1 ? 'package' : 'packages'} · {money(partner.amount)}
+                      {liveMode && !partner.id && <small style={{ display: 'block', color: '#8a2d2d' }}>Partner account could not be identified; refresh before generating.</small>}
+                    </span>
+                    <button
+                      type="button"
+                      style={buttonStyle}
+                      onClick={() => generateInvoices(partner.id || null, partner.name)}
+                      disabled={liveBusy || (liveMode && (!adminUser || !partner.id))}
+                      title={liveMode && !partner.id ? 'Partner account ID is missing' : undefined}
+                    >
+                      {liveBusy ? 'Generating…' : liveMode ? `Generate only for ${partner.name}` : `Generate demo for ${partner.name}`}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          }/>}{!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Working…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}</>}
         {invoiceList(false)}
       </section>
       {mode === 'management' && (

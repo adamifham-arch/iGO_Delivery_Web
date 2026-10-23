@@ -8106,3 +8106,76 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   border-color: #cbd5e1;
   color: #202b36;
 }
+
+
+/* Subtle workspace motion: short entrances, tactile controls, and gentle card lift. */
+@keyframes igo-content-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.app .main section.content > * {
+  animation: igo-content-enter 300ms cubic-bezier(.2, .7, .25, 1) both;
+}
+.app .main section.content > *:nth-child(2) { animation-delay: 25ms; }
+.app .main section.content > *:nth-child(3) { animation-delay: 50ms; }
+.app .main section.content > *:nth-child(4) { animation-delay: 75ms; }
+.app .main section.content > *:nth-child(5) { animation-delay: 100ms; }
+.app .main section.content > *:nth-child(n+6) { animation-delay: 125ms; }
+
+.app button:not(:disabled),
+.app .profile-trigger,
+.app .mobile-nav-dropdown,
+.app .profile-dropdown {
+  transition: transform 160ms ease, box-shadow 180ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+.app :is(.stat-card, .portal-card, .payment-review-card, .driver-delivery-card, .ops-package, .invoice-card, .staff-package-card, .summary-card) {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .app button:not(:disabled):hover,
+  .app .profile-trigger:hover {
+    transform: translateY(-1px);
+  }
+  .app :is(.stat-card, .portal-card, .payment-review-card, .driver-delivery-card, .ops-package, .invoice-card, .staff-package-card, .summary-card):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgb(15 23 42 / 12%);
+  }
+}
+.app button:not(:disabled):active,
+.app .profile-trigger:active {
+  transform: translateY(0) scale(.985);
+}
+.app .main input:not([type="checkbox"]):not([type="radio"]),
+.app .main select,
+.app .main textarea {
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.app .main :is(input, select, textarea):focus-visible {
+  outline: 2px solid #e2b900;
+  outline-offset: 1px;
+}
+
+/* Respect system accessibility settings. */
+@media (prefers-reduced-motion: reduce) {
+  .app .main section.content > *,
+  .app .main section.content > *:nth-child(n) {
+    animation: none;
+  }
+  .app button:not(:disabled),
+  .app .profile-trigger,
+  .app .mobile-nav-dropdown,
+  .app .profile-dropdown,
+  .app :is(.stat-card, .portal-card, .payment-review-card, .driver-delivery-card, .ops-package, .invoice-card, .staff-package-card, .summary-card),
+  .app .main input:not([type="checkbox"]):not([type="radio"]),
+  .app .main select,
+  .app .main textarea {
+    transition: none;
+  }
+  .app button:not(:disabled):hover,
+  .app .profile-trigger:hover,
+  .app :is(.stat-card, .portal-card, .payment-review-card, .driver-delivery-card, .ops-package, .invoice-card, .staff-package-card, .summary-card):hover,
+  .app button:not(:disabled):active,
+  .app .profile-trigger:active {
+    transform: none;
+  }
+}

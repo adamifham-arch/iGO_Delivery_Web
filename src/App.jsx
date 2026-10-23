@@ -2172,12 +2172,12 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
-              <StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} view="people" />
               <AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} />
               <ManagedIgoAccounts />
               <PendingIgoUserApprovals />
               <SuperadminUserManagementAccess />
               <ProfileChangeRequests profile={databaseProfile} user={databaseUser} workspace={workspace} setNotice={setNotice} />
+              <StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} view="people" />
             </section>
           )}
 

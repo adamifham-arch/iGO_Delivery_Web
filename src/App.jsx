@@ -5761,7 +5761,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             </div>
           </div>
 
-          {notice && <p role="status" className="notice" aria-live="polite">{notice}</p>}
+          {notice && !pendingPartnerPayments.length && <p role="status" className="notice" aria-live="polite">{notice}</p>}
           {pendingPartnerPayments.length ? (
             <div className="notice" role="status" aria-live="polite">
               <strong>Payment submitted · Awaiting admin review</strong>

@@ -7958,3 +7958,122 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 
 .invoice-cutoff-status.is-error { border-color: #fca5a5; color: #991b1b; background: #fee2e2; }
 .app[data-theme="night"] .main .invoice-cutoff-status.is-error { border-color: #7f1d1d; color: #fee2e2; background: #451a1a; }
+
+
+/* Color consistency corrections for both signed-in themes. */
+.app[data-theme="day"] {
+  color-scheme: light;
+}
+.app[data-theme="night"] {
+  color-scheme: dark;
+}
+
+/* These components were originally styled only for the dark palette. */
+.app[data-theme="day"] .ops-driver-suggestions {
+  background: #fff;
+  border-color: #cbd5e1;
+  color: #172033;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, .18);
+}
+.app[data-theme="day"] .ops-driver-suggestions .secondary-btn,
+.app[data-theme="day"] .ops-driver-suggestions .secondary-btn:hover,
+.app[data-theme="day"] .ops-driver-suggestions .secondary-btn:focus-visible {
+  background: #f8fafc;
+  border-color: #d7dee8;
+  color: #172033;
+}
+.app[data-theme="day"] .ops-driver-suggestions > span {
+  color: #64748b;
+}
+
+.app[data-theme="day"] .staff-package-card,
+.app[data-theme="day"] .staff-package-table tbody tr {
+  background: #fff;
+  border-color: #d7dee8;
+  color: #202b36;
+}
+.app[data-theme="day"] .staff-package-card > summary::marker {
+  color: #806700;
+}
+.app[data-theme="day"] .staff-package-summary-meta strong {
+  color: #806700;
+}
+.app[data-theme="day"] .staff-package-detail-grid > div {
+  border-color: #e2e8f0;
+}
+.app[data-theme="day"] .staff-package-detail-grid dt,
+.app[data-theme="day"] .staff-package-result-count,
+.app[data-theme="day"] .staff-payment-queue-count {
+  color: #64748b;
+}
+
+.app[data-theme="day"] .workspace-setup-card {
+  background: #fff;
+  border-color: #d7dee8;
+  color: #172033;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, .2);
+}
+.app[data-theme="day"] .workspace-setup-card input,
+.app[data-theme="day"] .workspace-setup-card textarea {
+  background: #fff;
+  border-color: #cbd5e1;
+  color: #172033;
+}
+.app[data-theme="day"] .workspace-setup-card input::placeholder,
+.app[data-theme="day"] .workspace-setup-card textarea::placeholder {
+  color: #64748b;
+}
+
+/* Day-end report panels now follow the selected workspace theme. */
+.app[data-theme="day"] .day-end-report .stats-grid.finance-report-totals .stat-card {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #17253a !important;
+}
+.app[data-theme="day"] .day-end-report .stats-grid.finance-report-totals .stat-card span,
+.app[data-theme="day"] .day-end-report .stats-grid.finance-report-totals .stat-card strong,
+.app[data-theme="day"] .day-end-report .stats-grid.finance-report-totals .stat-card small,
+.app[data-theme="day"] .day-end-section-heading h4,
+.app[data-theme="day"] .day-end-report-output > details > summary,
+.app[data-theme="day"] .day-end-report-output .finance-report-table th,
+.app[data-theme="day"] .day-end-report-output .finance-report-table td {
+  color: #17253a !important;
+}
+.app[data-theme="day"] .day-end-report .stats-grid.finance-report-totals .stat-card span,
+.app[data-theme="day"] .day-end-report .stats-grid.finance-report-totals .stat-card small {
+  color: #475569 !important;
+}
+.app[data-theme="day"] .day-end-reconciliation {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+.app[data-theme="day"] .day-end-reconciliation p,
+.app[data-theme="day"] .day-end-reconciliation-badge {
+  color: #334155 !important;
+}
+.app[data-theme="day"] .day-end-report-output > details {
+  border-color: #cbd5e1 !important;
+}
+.app[data-theme="day"] .day-end-report-output > details > summary {
+  background: #eef2f7 !important;
+}
+.app[data-theme="day"] .day-end-report-output .finance-report-table th {
+  background: #e2e8f0 !important;
+}
+.app[data-theme="day"] .day-end-report-output .finance-report-table td {
+  border-color: #cbd5e1 !important;
+}
+
+/* Keep the public light-theme control on the same palette as its header. */
+@media (max-width: 600px) {
+  .public-site[data-theme="day"] .public-header nav .theme-toggle {
+    background: #fff !important;
+    color: #17202a !important;
+    border-color: #d8dee8 !important;
+  }
+  .public-site[data-theme="night"] .public-header nav .theme-toggle {
+    background: #263244 !important;
+    color: #fbbf24 !important;
+    border-color: #4b5563 !important;
+  }
+}

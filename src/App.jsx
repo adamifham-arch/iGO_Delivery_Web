@@ -5443,6 +5443,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   };
   const submitPayment = async (event, invoices) => {
     event.preventDefault();
+    const paymentForm = event.currentTarget;
     const payable = invoices.filter((invoice) => invoice.amount - getPaid(invoice.id) > 0);
     const dueTotal = payable.reduce((sum, invoice) => sum + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
     const paymentKey = 'all-outstanding-invoices';
@@ -5459,7 +5460,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     if (liveMode) {
       try {
         const partnerId = await getCurrentPartnerId();
-        await submitInvoicePayment({
+        const submitted = await submitInvoicePayment({
           partnerId,
           invoices: payable.map((invoice) => ({
             invoiceId: invoice.dbId,
@@ -5471,9 +5472,26 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           note,
           file: draft.file,
         });
-        await refreshDatabaseFinance(true);
+        const pendingPayment = {
+          id: submitted.id,
+          invoiceId: invoiceLabels.join(', '),
+          invoiceIds: submitted.invoice_ids || payable.map((invoice) => invoice.dbId),
+          partnerId,
+          partner: payable[0]?.partner || '',
+          amount,
+          reportedAmount: amount,
+          reference,
+          status: 'pending_verification',
+          submittedAt: submitted.submitted_at || new Date().toISOString(),
+        };
+        setBilling((current) => ({
+          ...current,
+          payments: [pendingPayment, ...current.payments.filter((payment) => payment.id !== submitted.id)],
+        }));
         setDrafts((current) => ({ ...current, [paymentKey]: {} }));
-        setNotice('Payment submitted for all listed invoices and sent to admin for review.');
+        paymentForm.reset();
+        setNotice('Payment submitted successfully. It is waiting for admin review.');
+        await refreshDatabaseFinance(true);
       } catch (error) {
         setNotice(error.message || 'Could not submit the payment.');
       }
@@ -5482,6 +5500,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     const payment = {
       id: 'PAY-' + Date.now(),
       invoiceId: invoiceIds.join(', '),
+      invoiceIds: payable.map((invoice) => invoice.dbId || invoice.id),
       invoiceDues: payable.map((invoice) => ({
         invoiceId: invoice.id,
         amount: Math.max(0, invoice.amount - getPaid(invoice.id)),
@@ -5504,8 +5523,9 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       ),
     }));
     setDrafts((current) => ({ ...current, [paymentKey]: {} }));
+    paymentForm.reset();
     setNotice(
-      'Full payment details were added to this demo. The selected slip file was not uploaded.'
+      'Demo payment submitted for review. The selected slip file was not uploaded.'
     );
   };
   const decidePayment = async (payment, status) => {
@@ -5685,6 +5705,13 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   if (workspace === 'Partner') {
     const partnerInvoices = liveMode ? billing.invoices : billing.invoices.filter((invoice) => invoice.partner === 'Style Hub');
     const payableInvoices = partnerInvoices.filter((invoice) => getInvoiceStatus(invoice) !== 'Paid');
+    const payableInvoiceKeys = new Set(payableInvoices.flatMap((invoice) => [invoice.dbId, invoice.id]).filter(Boolean));
+    const pendingPartnerPayments = billing.payments.filter((payment) =>
+      payment.status === 'pending_verification' &&
+      ((payment.invoiceIds || []).some((invoiceId) => payableInvoiceKeys.has(invoiceId)) ||
+        (payment.invoiceDues || []).some((due) => payableInvoiceKeys.has(due.invoiceId)) ||
+        payableInvoices.some((invoice) => String(payment.invoiceId || '').includes(invoice.id)))
+    );
     const totalOutstanding = partnerInvoices.reduce((total, invoice) => total + Math.max(0, invoice.amount - getPaid(invoice.id)), 0);
     const partnerCredit = liveMode
       ? Number(billing.partnerCredits?.[partnerInvoices[0]?.partnerId] || 0)
@@ -5734,7 +5761,19 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             </div>
           </div>
 
-          {totalOutstanding > 0 ? (
+          {notice && <p role="status" className="notice" aria-live="polite">{notice}</p>}
+          {pendingPartnerPayments.length ? (
+            <div className="notice" role="status" aria-live="polite">
+              <strong>Payment submitted · Awaiting admin review</strong>
+              {pendingPartnerPayments.map((payment) => (
+                <p key={payment.id} style={{ marginBottom: 0 }}>
+                  {money(payment.amount)} for {payment.invoiceId || 'your outstanding invoices'}
+                  {payment.submittedAt ? ' · Submitted ' + new Date(payment.submittedAt).toLocaleString() : ''}.
+                  {' '}Your payment slip was received. You can submit another payment after this one is reviewed.
+                </p>
+              ))}
+            </div>
+          ) : totalOutstanding > 0 ? (
             <form onSubmit={(event) => submitPayment(event, payableInvoices)} style={{ display: 'grid', gap: 10 }}>
               <p style={{ fontSize: 13, margin: 0 }}>All outstanding invoices are included. Enter the total actually transferred; the admin will verify it against the payment slip.</p>
               {partnerCredit > 0 && <p style={{ margin: 0 }}>Usable partner credit: <strong>{money(partnerCredit)}</strong>. Credit is applied automatically to new invoices.</p>}
@@ -6687,7 +6726,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       </>
       )}
       {liveMode && databaseFinanceError && <p role="alert" className="notice">{databaseFinanceError}</p>}
-      {notice && (
+      {notice && workspace !== 'Partner' && (
         <p role="status" className="notice">
           {notice}
         </p>

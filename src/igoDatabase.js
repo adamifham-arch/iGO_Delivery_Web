@@ -499,12 +499,14 @@ export async function savePaymentAccount({ id, bankName = '', accountName, accou
 
 export async function saveInvoiceCutoff(time) {
   const client = requireClient();
-  const { data: partners, error: listError } = await client.from('partners').select('id');
-  if (listError) throw listError;
-  if (!partners?.length) throw new Error('No partner records are available.');
-  const results = await Promise.all(partners.map(({ id }) => client.from('partners').update({ invoice_cutoff: time }).eq('id', id)));
-  const failed = results.find((result) => result.error);
-  if (failed) throw failed.error;
+  const { data, error } = await client.rpc('save_invoice_cutoff', {
+    p_cutoff: time,
+  });
+  if (error) throw error;
+  if (!Number(data)) {
+    throw new Error('The cutoff was not saved. No partner records were updated.');
+  }
+  return Number(data);
 }
 
 export async function loadCurrentRole() {

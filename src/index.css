@@ -7841,3 +7841,17 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   background-color: #fee2e2 !important;
   opacity: 1 !important;
 }
+
+/* Theme paragraph and strong rules also need an explicit color inside feedback notices. */
+.app[data-theme="night"] .main .notice[role="status"] *,
+.app[data-theme="night"] .main .notice[role="status"] *::before,
+.app[data-theme="night"] .main .notice[role="status"] *::after {
+  color: #166534 !important;
+  opacity: 1 !important;
+}
+.app[data-theme="night"] .main .notice[role="alert"] *,
+.app[data-theme="night"] .main .notice[role="alert"] *::before,
+.app[data-theme="night"] .main .notice[role="alert"] *::after {
+  color: #991b1b !important;
+  opacity: 1 !important;
+}

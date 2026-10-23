@@ -5139,6 +5139,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   const refreshDatabaseFinance = async (notifyRoot = false) => {
     if (!liveMode) return;
     try {
+      if (workspace === 'Partner') setBilling((current) => ({ ...current, invoices: [], payments: [], partnerCredits: {} }));
       const partnerId = workspace === 'Partner' ? await getCurrentPartnerIdOptional() : undefined;
       const records = await loadFinanceRecords({ workspace, partnerId: partnerId || undefined });
       setBilling((current) => ({

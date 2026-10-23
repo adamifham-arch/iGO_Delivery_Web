@@ -6499,7 +6499,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
                 ))}
               </div>
             </section>
-          }/>}{!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Working…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}</>}
+          )}
+        {!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Working…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}</>}
         {invoiceList(false)}
       </section>
       {mode === 'management' && (

@@ -253,8 +253,6 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
   }
   const savedCutoffs = [...new Set((partnerResult.data || []).map((row) => row.invoice_cutoff == null ? null : String(row.invoice_cutoff).slice(0, 5)))];
   return {
-    invoiceCutoff: savedCutoffs.length === 1 ? savedCutoffs[0] : null,
-    invoiceCutoffMixed: savedCutoffs.length > 1,
     invoices: (invoiceResult.data || []).map((row) => ({
       id: row.invoice_number,
       dbId: row.id,

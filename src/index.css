@@ -8179,3 +8179,11 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     transform: none;
   }
 }
+
+
+/* Preserve the logo centering transform during mobile press feedback. */
+@media (max-width: 768px) {
+  .app header.topbar > .dashboard-logo:active {
+    transform: translate(-50%, -50%) scale(.985);
+  }
+}

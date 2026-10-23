@@ -142,16 +142,31 @@ export async function uploadIgoFile(file, kind, recordId) {
   if (!file) throw new Error('Choose a file first.');
   const { data: userData, error: userError } = await client.auth.getUser();
   if (userError || !userData.user) throw userError || new Error('Sign in first.');
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  const inferredType = ({
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    pdf: 'application/pdf',
+  })[extension] || '';
+  const reportedType = String(file.type || '').toLowerCase();
+  const contentType = reportedType === 'image/jpg'
+    ? 'image/jpeg'
+    : (!reportedType || reportedType === 'application/octet-stream' ? inferredType : reportedType);
   const allowed = kind === 'proof'
     ? ['image/jpeg', 'image/png', 'image/webp']
     : ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-  if (!allowed.includes(file.type) || file.size > 10 * 1024 * 1024) {
-    throw new Error('Use a JPG, PNG, WebP, or PDF file under 10 MB.');
+  if (!allowed.includes(contentType)) {
+    throw new Error('Choose a JPG, PNG, WebP, or PDF file. HEIC photos are not supported.');
+  }
+  if (!file.size || file.size > 10 * 1024 * 1024) {
+    throw new Error('The file must be non-empty and under 10 MB.');
   }
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const path = `${userData.user.id}/${kind}/${recordId}/${Date.now()}-${safeName}`;
   const { error } = await client.storage.from('igo-delivery-files').upload(path, file, {
-    contentType: file.type,
+    contentType,
     upsert: false,
   });
   if (error) throw error;

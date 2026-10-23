@@ -8077,3 +8077,32 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     border-color: #4b5563 !important;
   }
 }
+
+
+/* Keep the required boat handover upload readable in both workspace themes. */
+.app[data-theme="night"] .ops-photo-upload {
+  background: #1e293b;
+  border-color: #64748b;
+  color: #e2e8f0;
+}
+.app[data-theme="night"] .ops-photo-upload small {
+  color: #cbd5e1;
+}
+.app[data-theme="night"] .ops-photo-upload input[type="file"] {
+  background: #172235;
+  border-color: #475569;
+  color: #f8fafc;
+}
+.app[data-theme="day"] .ops-photo-upload {
+  background: #fffdf3;
+  border-color: #a2860c;
+  color: #202b36;
+}
+.app[data-theme="day"] .ops-photo-upload small {
+  color: #526070;
+}
+.app[data-theme="day"] .ops-photo-upload input[type="file"] {
+  background: #fff;
+  border-color: #cbd5e1;
+  color: #202b36;
+}

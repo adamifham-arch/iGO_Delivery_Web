@@ -319,7 +319,8 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
       totals[row.partner_id] = (totals[row.partner_id] || 0) + Number(row.amount || 0);
       return totals;
     }, {}),
-    invoiceCutoff: partnerResult.data?.[0]?.invoice_cutoff || '18:00',
+    invoiceCutoff: savedCutoffs.length === 1 ? savedCutoffs[0] || null : null,
+    invoiceCutoffMixed: savedCutoffs.length > 1,
   };
 }
 

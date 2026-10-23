@@ -597,7 +597,7 @@ export default function App() {
         const canOperatePackages = (profile.staffAssignments || []).some((item) => ['operations_manager', 'operations_staff'].includes(item.role));
         const rows = isStaff ? (canOperatePackages ? await loadPackages() : []) : await loadPackages();
         let finance = null;
-        if (!isStaff) { try { finance = await loadFinanceRecords(); } catch {} }
+        if (profile.role === 'admin' || profile.role === 'partner') { try { const partnerId = profile.role === 'partner' ? await getCurrentPartnerIdOptional() : undefined; const financeWorkspace = profile.role === 'partner' ? 'Partner' : 'Admin'; finance = await loadFinanceRecords({ workspace: financeWorkspace, partnerId: partnerId || undefined }); } catch {} }
         if (!active) return;
         const roleWorkspace = { admin: 'Admin', partner: 'Partner', driver: 'Driver', staff: 'Staff' }[profile.role];
         if (!roleWorkspace) throw new Error('This account has no supported iGO role.');
@@ -761,7 +761,7 @@ export default function App() {
         const canOperatePackages = (profile.staffAssignments || []).some((item) => ['operations_manager', 'operations_staff'].includes(item.role));
         const rows = isStaff ? (canOperatePackages ? await loadPackages() : []) : await loadPackages();
         let finance = null;
-        if (!isStaff) { try { finance = await loadFinanceRecords(); } catch {} }
+        if (profile.role === 'admin' || profile.role === 'partner') { try { const partnerId = profile.role === 'partner' ? await getCurrentPartnerIdOptional() : undefined; const financeWorkspace = profile.role === 'partner' ? 'Partner' : 'Admin'; finance = await loadFinanceRecords({ workspace: financeWorkspace, partnerId: partnerId || undefined }); } catch {} }
         const roleWorkspace = { admin: 'Admin', partner: 'Partner', driver: 'Driver', staff: 'Staff' }[profile.role];
         if (!roleWorkspace) throw new Error('This account has no supported iGO role.');
         setDatabaseUser(data.user);
@@ -996,17 +996,17 @@ export default function App() {
       if (!active || refreshing || document.visibilityState !== 'visible') return;
       refreshing = true;
       try {
-        const partnerId = databaseProfile?.role === 'admin' && workspace === 'Partner' ? await getCurrentPartnerIdOptional() : null;
+        const partnerId = workspace === 'Partner' && ['admin', 'partner'].includes(databaseProfile?.role) ? await getCurrentPartnerIdOptional() : undefined;
         const driverId = databaseProfile?.role === 'admin' && workspace === 'Driver' ? await getCurrentDriverId() : null;
         const rows = databaseProfile?.role === 'admin' && workspace === 'Partner' && !partnerId ? [] : await loadPackages({ partnerId: partnerId || undefined, driverId: driverId || undefined });
         if (active) setPackages(rows);
         try {
-          const finance = await loadFinanceRecords({ workspace, partnerId: partnerId || undefined });
+          if (workspace === 'Admin' || workspace === 'Partner') { const finance = await loadFinanceRecords({ workspace, partnerId: partnerId || undefined });
           if (active) {
             applyDatabaseFinanceSnapshot(finance);
             window.dispatchEvent(new Event('igo-live-data-refreshed'));
           }
-        } catch {}
+        } } catch {}
       } catch (error) {
         if (active) setDatabaseError(error.message || 'Could not refresh iGO records.');
       } finally { refreshing = false; }
@@ -5139,7 +5139,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
   const refreshDatabaseFinance = async (notifyRoot = false) => {
     if (!liveMode) return;
     try {
-      const records = await loadFinanceRecords({ workspace });
+      const partnerId = workspace === 'Partner' ? await getCurrentPartnerIdOptional() : undefined;
+      const records = await loadFinanceRecords({ workspace, partnerId: partnerId || undefined });
       setBilling((current) => ({
         ...current,
         cutoff: records.invoiceCutoff || current.cutoff,

@@ -5105,6 +5105,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     }
   };
   const [billing, setBilling] = useState(() => (liveMode ? initialState : readState()));
+  const [readyPartnerSearch, setReadyPartnerSearch] = useState('');
   const [overviewDriverRates, setOverviewDriverRates] = useState(() => {
     try {
       return JSON.parse(window.localStorage.getItem('igo-driver-share-percent-v1') || '{}');
@@ -5367,6 +5368,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     return totals;
   }, new Map());
   const readyPartners = [...readyPartnerTotals.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const visibleReadyPartners = readyPartners.filter((partner) => partner.name.toLocaleLowerCase().includes(readyPartnerSearch.trim().toLocaleLowerCase()));
   const getPaid = (invoiceId) =>
     (liveMode
       ? Number(billing.invoices.find((invoice) => invoice.id === invoiceId)?.paidAmount || 0)
@@ -6474,29 +6476,29 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             {readyPackages.length === 0 && <span style={{ fontSize: 12, color: '#64748b' }}>No delivered packages ready to invoice.</span>}
           </div>
           {readyPartners.length > 0 && (
-            <section aria-labelledby="ready-partners-heading" style={{ marginBottom: 14 }}>
-              <h4 id="ready-partners-heading" style={{ margin: '0 0 8px' }}>Ready to invoice by partner</h4>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {readyPartners.map((partner) => (
-                  <div
-                    key={partner.key}
-                    style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid #405169', borderRadius: 8, padding: '9px 11px' }}
-                  >
-                    <span>
-                      <strong>{partner.name}</strong> · {partner.count} {partner.count === 1 ? 'package' : 'packages'} · {money(partner.amount)}
-                      {liveMode && !partner.id && <small style={{ display: 'block', color: '#8a2d2d' }}>Partner account could not be identified; refresh before generating.</small>}
-                    </span>
-                    <button
-                      type="button"
-                      style={buttonStyle}
-                      onClick={() => generateInvoices(partner.id || null, partner.name)}
-                      disabled={liveBusy || (liveMode && (!adminUser || !partner.id))}
-                      title={liveMode && !partner.id ? 'Partner account ID is missing' : undefined}
-                    >
-                      {liveBusy ? 'Generating…' : liveMode ? `Generate only for ${partner.name}` : `Generate demo for ${partner.name}`}
-                    </button>
-                  </div>
-                ))}
+            <section className="ready-partners" aria-labelledby="ready-partners-heading">
+              <div className="ready-partners-heading">
+                <h4 id="ready-partners-heading">Ready to invoice by partner</h4>
+                <label className="ready-partner-search">
+                  <span className="visually-hidden">Search partners ready to invoice</span>
+                  <input type="search" value={readyPartnerSearch} onChange={(event) => setReadyPartnerSearch(event.target.value)} placeholder="Search partners" aria-label="Search partners ready to invoice" />
+                </label>
+              </div>
+              <div className="ready-partners-table-wrap">
+                <table className="ready-partners-table">
+                  <thead><tr><th scope="col">Partner</th><th scope="col">Packages</th><th scope="col">Amount</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
+                  <tbody>
+                    {visibleReadyPartners.map((partner) => (
+                      <tr key={partner.key}>
+                        <th scope="row">{partner.name}{liveMode && !partner.id && <small className="ready-partner-warning">Partner account could not be identified; refresh before generating.</small>}</th>
+                        <td>{partner.count}</td>
+                        <td>{money(partner.amount)}</td>
+                        <td><button type="button" style={buttonStyle} onClick={() => generateInvoices(partner.id || null, partner.name)} disabled={liveBusy || (liveMode && (!adminUser || !partner.id))} title={liveMode && !partner.id ? 'Partner account ID is missing' : undefined}>{liveBusy ? 'Generating…' : 'Generate invoice'}</button></td>
+                      </tr>
+                    ))}
+                    {visibleReadyPartners.length === 0 && <tr><td colSpan="4" className="ready-partners-empty">No partners match “{readyPartnerSearch}”.</td></tr>}
+                  </tbody>
+                </table>
               </div>
             </section>
           )}

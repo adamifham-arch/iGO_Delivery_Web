@@ -3773,13 +3773,35 @@ function PackageTable({ packages }) {
 function PackageProofLink({ path, label = 'View proof of delivery' }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
+  const [opening, setOpening] = useState(false);
   useEffect(() => {
     let active = true;
     getPrivateFileUrl(path).then((signed) => active && setUrl(signed)).catch((loadError) => active && setError(loadError.message || 'Could not load proof image.'));
     return () => { active = false; };
   }, [path]);
-  if (error) return <small>{error}</small>;
-  return url ? <a href={url} target="_blank" rel="noreferrer">{label}</a> : <small>Loading file…</small>;
+  const openLatestFile = async (event) => {
+    event.preventDefault();
+    setOpening(true);
+    setError('');
+    const popup = window.open('about:blank', '_blank');
+    if (!popup) {
+      setError('Your browser blocked the receipt window. Allow pop-ups for this site and try again.');
+      setOpening(false);
+      return;
+    }
+    try {
+      const signed = await getPrivateFileUrl(path);
+      setUrl(signed);
+      popup.location.href = signed;
+    } catch (loadError) {
+      popup.close();
+      setError(loadError.message || 'Could not open this file. Try again.');
+    } finally {
+      setOpening(false);
+    }
+  };
+  if (!url) return <small>{error || 'Loading file…'}</small>;
+  return <><a href={url} target="_blank" rel="noreferrer" onClick={openLatestFile}>{opening ? 'Opening…' : label}</a>{error && <small role="alert"> {error}</small>}</>;
 }
 
 function PaymentSlipLink({ path, name }) {

@@ -495,6 +495,7 @@ export default function App() {
   const [partnerAmountDue, setPartnerAmountDue] = useState(
     getPartnerDueFromStorage
   );
+  const [partnerPendingPaymentCount, setPartnerPendingPaymentCount] = useState(0);
   const [partnerSpendPeriod, setPartnerSpendPeriod] = useState('all');
   const [partnerTotalSpent, setPartnerTotalSpent] = useState(() =>
     getPartnerSpentFromStorage('all')
@@ -963,6 +964,7 @@ export default function App() {
     setLinkedPartnerProfile(null);
     setLinkedDriverProfile(null);
     setPackages(supabaseConfigured ? [] : initialPackages);
+    setPartnerPendingPaymentCount(0);
     setDatabaseError('');
     setAuthNotice('');
     setAuthMode('landing');
@@ -972,6 +974,7 @@ export default function App() {
     const packageIds = records.invoices.flatMap((invoice) => invoice.lines.map((line) => String(line.packageId)));
     setInvoicedPackageIds([...new Set(packageIds)]);
     setPartnerAmountDue(records.invoices.reduce((sum, invoice) => sum + Math.max(0, Number(invoice.amount || 0) - Number(invoice.paidAmount || 0)), 0));
+    setPartnerPendingPaymentCount((records.payments || []).filter((payment) => payment.status === 'pending_verification').length);
     const now = new Date();
     const start = new Date(now);
     if (partnerSpendPeriod === 'week') start.setDate(start.getDate() - 7);
@@ -2273,8 +2276,12 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 />
                 <Stat
                   label="Invoices & payments"
-                  value="View invoices"
-                  detail="Check invoices and payment status"
+                  value={partnerPendingPaymentCount > 0
+                    ? partnerPendingPaymentCount + ' pending payment' + (partnerPendingPaymentCount === 1 ? '' : 's')
+                    : 'View invoices'}
+                  detail={partnerPendingPaymentCount > 0
+                    ? 'Awaiting admin review'
+                    : 'No payments awaiting review'}
                   onClick={() => {
                     setPage('Invoices & Payments');
                     setShowForm(false);

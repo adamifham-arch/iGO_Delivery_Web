@@ -382,12 +382,34 @@ class SectionErrorBoundary extends Component {
   }
 }
 
+function readSavedIgoNavigation() {
+  try {
+    const historyRoute = window.history.state?.igoNavigation;
+    if (historyRoute) return historyRoute;
+    const savedRoute = window.sessionStorage.getItem('igo-navigation');
+    return savedRoute ? JSON.parse(savedRoute) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveIgoNavigation(route) {
+  try {
+    window.sessionStorage.setItem('igo-navigation', JSON.stringify(route));
+  } catch {
+    // Navigation still works for this session even if storage is unavailable.
+  }
+}
+
 export default function App() {
   const customerNameInputRef = useRef(null);
   const customerMessageInputRef = useRef(null);
-  const [navigation, setNavigation] = useState({
-    page: 'Overview',
-    history: [],
+  const [navigation, setNavigation] = useState(() => {
+    const route = readSavedIgoNavigation();
+    return {
+      page: route?.page || 'Overview',
+      history: Array.isArray(route?.pageHistory) ? route.pageHistory : [],
+    };
   });
   const browserNavigationIndexRef = useRef(0);
   const page = navigation.page;
@@ -446,7 +468,8 @@ export default function App() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [authMode, setAuthMode] = useState(() => {
     const recoveryParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    return recoveryParams.get('type') === 'recovery' ? 'reset-password' : 'landing';
+    if (recoveryParams.get('type') === 'recovery') return 'reset-password';
+    return readSavedIgoNavigation()?.authMode || 'landing';
   });
   const [authNotice, setAuthNotice] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -552,36 +575,42 @@ export default function App() {
     return () =>
       window.removeEventListener('igo-finance-updated', syncInvoicedPackages);
   }, [partnerSpendPeriod, databaseProfile]);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [search, setSearch] = useState(() => readSavedIgoNavigation()?.search || '');
+  const [statusFilter, setStatusFilter] = useState(() => readSavedIgoNavigation()?.statusFilter || 'All');
   useEffect(() => {
+    const savedRoute = readSavedIgoNavigation();
     const initialRoute = window.history.state?.igoNavigation;
     if (initialRoute) {
       browserNavigationIndexRef.current = Number(initialRoute.index) || 0;
     } else {
-      browserNavigationIndexRef.current = 0;
-      window.history.pushState({
-        igoNavigation: {
-          index: 0,
-          page: navigation.page,
-          pageDepth: navigation.history.length,
-          search,
-          statusFilter,
-          authMode,
-        },
-      }, '', window.location.href);
+      const route = {
+        index: Number(savedRoute?.index) || 0,
+        page: savedRoute?.page || navigation.page,
+        pageDepth: Number(savedRoute?.pageDepth) || navigation.history.length,
+        pageHistory: Array.isArray(savedRoute?.pageHistory) ? savedRoute.pageHistory : navigation.history,
+        search: savedRoute?.search || search,
+        statusFilter: savedRoute?.statusFilter || statusFilter,
+        ...(savedRoute?.authMode ? { authMode: savedRoute.authMode } : { authMode }),
+      };
+      browserNavigationIndexRef.current = route.index;
+      window.history.pushState({ igoNavigation: route }, '', window.location.href);
+      saveIgoNavigation(route);
     }
 
     const restoreInternalRoute = (event) => {
       const route = event.state?.igoNavigation;
       if (!route) return;
       browserNavigationIndexRef.current = Number(route.index) || 0;
+      saveIgoNavigation(route);
       if (typeof route.authMode === 'string') setAuthMode(route.authMode);
       if (typeof route.page === 'string') {
-        setNavigation((current) => ({
+        const restoredHistory = Array.isArray(route.pageHistory)
+          ? route.pageHistory
+          : [];
+        setNavigation({
           page: route.page,
-          history: current.history.slice(0, Math.max(0, Number(route.pageDepth) || 0)),
-        }));
+          history: restoredHistory.slice(0, Math.max(0, Number(route.pageDepth) || 0)),
+        });
         setSearch(route.search || '');
         setStatusFilter(route.statusFilter || 'All');
         setShowForm(route.page === 'Register Package');
@@ -597,7 +626,7 @@ export default function App() {
   const [partnerFilter, setPartnerFilter] = useState('All');
   const [driverFilter, setDriverFilter] = useState('All');
   const [areaFilter, setAreaFilter] = useState('All');
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(() => (readSavedIgoNavigation()?.page || '') === 'Register Package');
   const [notice, setNotice] = useState('');
   const [bulkNotice, setBulkNotice] = useState('');
   const [messageDraft, setMessageDraft] = useState('');
@@ -1252,16 +1281,20 @@ export default function App() {
   function pushInternalRoute(route) {
     const index = (Number(window.history.state?.igoNavigation?.index) || browserNavigationIndexRef.current || 0) + 1;
     browserNavigationIndexRef.current = index;
-    window.history.pushState({
-      igoNavigation: {
-        index,
-        page: navigation.page,
-        pageDepth: navigation.history.length,
-        search,
-        statusFilter,
-        ...route,
-      },
-    }, '', window.location.href);
+    const nextRoute = {
+      index,
+      page: navigation.page,
+      pageDepth: navigation.history.length,
+      pageHistory: route.page
+        ? [...navigation.history, { page: navigation.page, search, statusFilter }]
+        : navigation.history,
+      search,
+      statusFilter,
+      authMode,
+      ...route,
+    };
+    window.history.pushState({ igoNavigation: nextRoute }, '', window.location.href);
+    saveIgoNavigation(nextRoute);
   }
 
   function navigateAuthMode(nextMode) {

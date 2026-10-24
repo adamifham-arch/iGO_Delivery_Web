@@ -1287,7 +1287,7 @@ export default function App() {
       item.related_section,
       item.target_section,
     ].find((value) => typeof value === 'string' && value.trim());
-    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
+    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Website controls', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
     let destination = pages.find((page) => page.toLowerCase() === String(explicitPage || '').trim().toLowerCase());
     const notificationText = [item.type, item.category, item.entity_type, item.related_type, item.title, item.message]
       .filter(Boolean).join(' ');
@@ -2029,6 +2029,7 @@ export default function App() {
           ['Approvals', '✓', 'Pending user approvals'],
           ['User Management', '♙'],
           ['Send Notifications', '✉'],
+          ...(isSuperadmin ? [['Website controls', '▧']] : []),
         ]
       : [
           ['Overview', '⌂'],
@@ -2466,36 +2467,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           )}
           {page === 'Overview' && (
             <>
-              {workspace === 'Admin' && isSuperadmin && (
-                <>
-                <section className="card" style={{ marginTop: 20, padding: 20, display: 'grid', gap: 12 }}>
-                  <div>
-                    <p className="eyebrow">PUBLIC WEBSITE</p>
-                    <h2 style={{ margin: '4px 0 6px' }}>Landing page visibility</h2>
-                    <p style={{ margin: 0, color: '#748094' }}>Show or hide the rider application card on the public landing page.</p>
-                  </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
-                    <input type="checkbox" checked={showRiderCard} disabled={riderCardSaving} onChange={async (event) => {
-                      const visible = event.target.checked;
-                      setRiderCardSaving(true);
-                      setRiderCardFeedback('');
-                      try {
-                        await saveRiderCardVisibility(visible);
-                        setShowRiderCard(visible);
-                        setRiderCardFeedback(visible ? 'Rider card is visible on the public landing page.' : 'Rider card is hidden from the public landing page.');
-                      } catch (error) {
-                        setRiderCardFeedback(error.message || 'Could not update rider card visibility.');
-                      } finally {
-                        setRiderCardSaving(false);
-                      }
-                    }} />
-                    Show rider card
-                  </label>
-                  {riderCardFeedback && <p role="status" style={{ margin: 0 }}>{riderCardFeedback}</p>}
-                </section>
-                <SuperadminLandingSlideshowManager visible={showSlideshowCard} onVisibilityChange={setShowSlideshowCard} />
-                </>
-              )}
+
               <div className="welcome-card">
                 <div>
                   <h2>Packages at a glance</h2>
@@ -2585,6 +2557,37 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               </div>
               <PackageTable packages={newestPackages.slice(0, 5)} />
             </>
+          )}
+
+          {page === 'Website controls' && workspace === 'Admin' && isSuperadmin && (
+            <div style={{ display: 'grid', gap: 18, marginTop: 20 }}>
+              <section className="card" style={{ padding: 20, display: 'grid', gap: 12 }}>
+                <div>
+                  <p className="eyebrow">PUBLIC WEBSITE</p>
+                  <h2 style={{ margin: '4px 0 6px' }}>Rider application card</h2>
+                  <p style={{ margin: 0, color: '#748094' }}>Choose whether visitors can see the rider application card on the landing page.</p>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
+                  <input type="checkbox" checked={showRiderCard} disabled={riderCardSaving} onChange={async (event) => {
+                    const visible = event.target.checked;
+                    setRiderCardSaving(true);
+                    setRiderCardFeedback('');
+                    try {
+                      await saveRiderCardVisibility(visible);
+                      setShowRiderCard(visible);
+                      setRiderCardFeedback(visible ? 'Rider card is visible on the public landing page.' : 'Rider card is hidden from the public landing page.');
+                    } catch (error) {
+                      setRiderCardFeedback(error.message || 'Could not update rider card visibility.');
+                    } finally {
+                      setRiderCardSaving(false);
+                    }
+                  }} />
+                  Show rider card
+                </label>
+                {riderCardFeedback && <p role="status" style={{ margin: 0 }}>{riderCardFeedback}</p>}
+              </section>
+              <SuperadminLandingSlideshowManager visible={showSlideshowCard} onVisibilityChange={setShowSlideshowCard} />
+            </div>
           )}
 
           {page === 'Register Package' && (

@@ -861,6 +861,7 @@ export async function uploadLandingPageSlide({ file, altText, caption = '' }) {
     image_path: imagePath,
     alt_text: cleanAltText.slice(0, 240),
     caption: String(caption || '').trim().slice(0, 160),
+    is_visible: false,
     updated_by: userData.user.id,
   }).select(landingSlideFields).single();
   if (error) {

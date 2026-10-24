@@ -29,6 +29,7 @@ Run each SQL file separately in Supabase SQL Editor, in this order:
 14. `migrations/202610220008_operations_dispatch_permissions.sql`
 15. `migrations/202610220009_finance_withdrawal_approval_scope.sql`
 16. `migrations/202610240001_telegram_alerts.sql`
+17. `migrations/202610240002_manual_notifications.sql`
 
 The first file adds enum values, which must commit before the next migration refers to them. The third file enables Supabase Cron (`pg_cron`) and schedules a once-per-minute check; invoices are generated once the configured Maldives-local cutoff passes. If Supabase says the extension is unavailable or cannot be enabled through SQL, enable **pg_cron** in the project dashboard under Integrations → Cron, then run migration 3 again. Manual invoice generation works independently of the scheduler.
 
@@ -45,6 +46,10 @@ The app looks up the signed-in user's `profiles.role`. Admin, partner, and drive
 ## Email itemized partner receipts
 
 Deploy the `send-payment-receipt` Edge Function after applying migrations 4 and 5. Configure the project secrets `RESEND_API_KEY` and `RESEND_FROM_EMAIL` with a verified sender address in Resend, then deploy with `supabase functions deploy send-payment-receipt`. The function emails an itemized PDF receipt to the partner email saved on their account. The payment decision and in-app notification are saved even if email delivery is unavailable; the admin gets an error so delivery can be retried.
+
+## Manual notifications
+
+Deploy the `manual-notification-dispatch` Edge Function and redeploy `telegram-notify` after applying migration 17. The admin-only **Send Notifications** page lets a full admin target individual accounts or groups and send through the in-site inbox, Telegram, or both. The migration restricts recipient listing, sending, retry, and history to full admins; delivery history records each recipient's in-site and Telegram result.
 
 ## What is stored in Supabase
 

@@ -10,13 +10,15 @@ alter table public.public_site_settings
     'show_rider_card',
     'show_slideshow_card',
     'landing_hero_copy',
-    'slideshow_transition'
+    'slideshow_transition',
+    'slideshow_duration_seconds'
   ));
 
 insert into public.public_site_settings (key, value)
 values
   ('landing_hero_copy', '{"title":"Focus on your business. We’ll handle the deliveries.","subtitle":"Best rates. Fast delivery."}'::jsonb),
-  ('slideshow_transition', '"fade"'::jsonb)
+  ('slideshow_transition', '"fade"'::jsonb),
+  ('slideshow_duration_seconds', '6'::jsonb)
 on conflict (key) do nothing;
 
 drop policy if exists "Public can read rider card visibility" on public.public_site_settings;
@@ -26,7 +28,8 @@ create policy "Public can read rider card visibility"
     'show_rider_card',
     'show_slideshow_card',
     'landing_hero_copy',
-    'slideshow_transition'
+    'slideshow_transition',
+    'slideshow_duration_seconds'
   ));
 
 drop policy if exists "Superadmin can insert rider card visibility" on public.public_site_settings;
@@ -37,7 +40,8 @@ create policy "Superadmin can insert rider card visibility"
       'show_rider_card',
       'show_slideshow_card',
       'landing_hero_copy',
-      'slideshow_transition'
+      'slideshow_transition',
+      'slideshow_duration_seconds'
     )
     and public.is_igo_superadmin()
   );
@@ -50,7 +54,8 @@ create policy "Superadmin can update rider card visibility"
       'show_rider_card',
       'show_slideshow_card',
       'landing_hero_copy',
-      'slideshow_transition'
+      'slideshow_transition',
+      'slideshow_duration_seconds'
     )
     and public.is_igo_superadmin()
   )
@@ -59,7 +64,8 @@ create policy "Superadmin can update rider card visibility"
       'show_rider_card',
       'show_slideshow_card',
       'landing_hero_copy',
-      'slideshow_transition'
+      'slideshow_transition',
+      'slideshow_duration_seconds'
     )
     and public.is_igo_superadmin()
   );

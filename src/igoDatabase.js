@@ -700,3 +700,130 @@ export async function saveRiderCardVisibility(visible) {
   }, { onConflict: 'key' });
   if (error) throw error;
 }
+
+const landingSlideBucket = 'landing-page-slides';
+const landingSlideFields = 'id,image_path,alt_text,caption,display_order,is_visible,created_at,updated_at';
+
+async function requireLandingSlideshowSuperadmin() {
+  const client = requireClient();
+  const { data: isSuperadmin, error } = await client.rpc('is_igo_superadmin');
+  if (error) throw error;
+  if (isSuperadmin !== true) throw new Error('Only the superadmin can manage the public landing page slideshow.');
+  return client;
+}
+
+function landingSlideWithPublicUrl(client, row) {
+  const { data } = client.storage.from(landingSlideBucket).getPublicUrl(row.image_path);
+  return { ...row, imageUrl: data.publicUrl };
+}
+
+export async function loadLandingSlideshowVisibility() {
+  const { data, error } = await requireClient()
+    .from('public_site_settings')
+    .select('value')
+    .eq('key', 'show_slideshow_card')
+    .maybeSingle();
+  if (error) throw error;
+  return data?.value === true;
+}
+
+export async function saveLandingSlideshowVisibility(visible) {
+  const client = await requireLandingSlideshowSuperadmin();
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) throw userError || new Error('Sign in first.');
+  const { error } = await client.from('public_site_settings').upsert({
+    key: 'show_slideshow_card',
+    value: Boolean(visible),
+    updated_at: new Date().toISOString(),
+    updated_by: userData.user.id,
+  }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export async function loadLandingPageSlides(includeHidden = false) {
+  const client = requireClient();
+  let query = client.from('landing_page_slides')
+    .select(landingSlideFields)
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (!includeHidden) query = query.eq('is_visible', true);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map((row) => landingSlideWithPublicUrl(client, row));
+}
+
+export async function uploadLandingPageSlide({ file, altText, caption = '' }) {
+  const client = await requireLandingSlideshowSuperadmin();
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) throw userError || new Error('Sign in first.');
+  if (!file) throw new Error('Choose an image to upload.');
+  const extensionsByType = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/jpg': 'jpg' };
+  const type = String(file.type || '').toLowerCase();
+  const contentType = type === 'image/jpg' ? 'image/jpeg' : type;
+  if (!extensionsByType[contentType]) throw new Error('Choose a JPG, PNG, or WebP image.');
+  if (!file.size || file.size > 8 * 1024 * 1024) throw new Error('Choose an image smaller than 8 MB.');
+  const cleanAltText = String(altText || '').trim();
+  if (!cleanAltText) throw new Error('Add alternative text to describe the image.');
+  const imagePath = `${crypto.randomUUID()}.${extensionsByType[contentType]}`;
+  const { error: uploadError } = await client.storage.from(landingSlideBucket).upload(imagePath, file, {
+    cacheControl: '3600',
+    contentType,
+    upsert: false,
+  });
+  if (uploadError) throw uploadError;
+  const { data, error } = await client.from('landing_page_slides').insert({
+    image_path: imagePath,
+    alt_text: cleanAltText.slice(0, 240),
+    caption: String(caption || '').trim().slice(0, 160),
+    updated_by: userData.user.id,
+  }).select(landingSlideFields).single();
+  if (error) {
+    await client.storage.from(landingSlideBucket).remove([imagePath]);
+    throw error;
+  }
+  return landingSlideWithPublicUrl(client, data);
+}
+
+export async function updateLandingPageSlide(id, changes) {
+  const client = await requireLandingSlideshowSuperadmin();
+  const update = { updated_at: new Date().toISOString() };
+  if (Object.hasOwn(changes, 'alt_text')) {
+    const altText = String(changes.alt_text || '').trim();
+    if (!altText) throw new Error('Alternative text cannot be empty.');
+    update.alt_text = altText.slice(0, 240);
+  }
+  if (Object.hasOwn(changes, 'caption')) update.caption = String(changes.caption || '').trim().slice(0, 160);
+  if (Object.hasOwn(changes, 'is_visible')) update.is_visible = Boolean(changes.is_visible);
+  const { data, error } = await client.from('landing_page_slides')
+    .update(update)
+    .eq('id', id)
+    .select(landingSlideFields)
+    .single();
+  if (error) throw error;
+  return landingSlideWithPublicUrl(client, data);
+}
+
+export async function reorderLandingPageSlides(slideIds) {
+  const client = await requireLandingSlideshowSuperadmin();
+  if (!Array.isArray(slideIds)) throw new Error('Invalid slide order.');
+  for (const [index, id] of slideIds.entries()) {
+    const { error } = await client.from('landing_page_slides')
+      .update({ display_order: index, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+  }
+}
+
+export async function deleteLandingPageSlide(id) {
+  const client = await requireLandingSlideshowSuperadmin();
+  const { data: slide, error: loadError } = await client.from('landing_page_slides')
+    .select('image_path')
+    .eq('id', id)
+    .single();
+  if (loadError) throw loadError;
+  const { error } = await client.from('landing_page_slides').delete().eq('id', id);
+  if (error) throw error;
+  const { error: storageError } = await client.storage.from(landingSlideBucket).remove([slide.image_path]);
+  if (storageError) console.warn('Slideshow image cleanup failed:', storageError);
+}
+

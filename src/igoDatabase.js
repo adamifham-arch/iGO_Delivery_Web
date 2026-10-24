@@ -673,3 +673,30 @@ export async function savePartnerLogo(logoDataUrl) {
   });
   if (error) throw error;
 }
+
+
+export async function loadRiderCardVisibility() {
+  const { data, error } = await requireClient()
+    .from('public_site_settings')
+    .select('value')
+    .eq('key', 'show_rider_card')
+    .maybeSingle();
+  if (error) throw error;
+  return data?.value === true;
+}
+
+export async function saveRiderCardVisibility(visible) {
+  const client = requireClient();
+  const { data: isSuperadmin, error: roleError } = await client.rpc('is_igo_superadmin');
+  if (roleError) throw roleError;
+  if (isSuperadmin !== true) throw new Error('Only the superadmin can change public landing page settings.');
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) throw userError || new Error('Sign in first.');
+  const { error } = await client.from('public_site_settings').upsert({
+    key: 'show_rider_card',
+    value: Boolean(visible),
+    updated_at: new Date().toISOString(),
+    updated_by: userData.user.id,
+  }, { onConflict: 'key' });
+  if (error) throw error;
+}

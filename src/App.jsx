@@ -5375,8 +5375,8 @@ function ManualNotificationsManagement() {
                   In-site {batch.in_app_delivered}/{batch.recipient_count}
                   {batch.channels.includes('telegram') && ` · Telegram: ${batch.telegram_sent} sent, ${batch.telegram_failed} failed, ${batch.telegram_not_connected} not connected, ${batch.telegram_pending} pending`}
                 </small>
-                {batch.telegram_failed > 0 && (
-                  <button type="button" className="secondary-btn" onClick={() => void retry(batch)} disabled={busy}>Retry Telegram failures</button>
+                {(batch.telegram_failed > 0 || batch.telegram_pending > 0) && (
+                  <button type="button" className="secondary-btn" onClick={() => void retry(batch)} disabled={busy}>Retry Telegram delivery</button>
                 )}
                 {expandedBatch === batch.batch_id && (
                   <div className="manual-notification-delivery-list">

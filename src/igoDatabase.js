@@ -727,6 +727,65 @@ export async function loadLandingSlideshowVisibility() {
   return data?.value === true;
 }
 
+const defaultLandingHeroCopy = {
+  title: 'Focus on your business. We’ll handle the deliveries.',
+  subtitle: 'Best rates. Fast delivery.',
+};
+
+export async function loadLandingHeroCopy() {
+  const { data, error } = await requireClient()
+    .from('public_site_settings')
+    .select('value')
+    .eq('key', 'landing_hero_copy')
+    .maybeSingle();
+  if (error) throw error;
+  const value = data?.value && typeof data.value === 'object' ? data.value : {};
+  return {
+    title: String(value.title || defaultLandingHeroCopy.title),
+    subtitle: String(value.subtitle || defaultLandingHeroCopy.subtitle),
+  };
+}
+
+export async function saveLandingHeroCopy({ title, subtitle }) {
+  const client = await requireLandingSlideshowSuperadmin();
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) throw userError || new Error('Sign in first.');
+  const cleanTitle = String(title || '').trim();
+  const cleanSubtitle = String(subtitle || '').trim();
+  if (!cleanTitle || !cleanSubtitle) throw new Error('Enter both the heading and supporting line.');
+  const { error } = await client.from('public_site_settings').upsert({
+    key: 'landing_hero_copy',
+    value: { title: cleanTitle.slice(0, 120), subtitle: cleanSubtitle.slice(0, 180) },
+    updated_at: new Date().toISOString(),
+    updated_by: userData.user.id,
+  }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export async function loadLandingSlideshowTransition() {
+  const { data, error } = await requireClient()
+    .from('public_site_settings')
+    .select('value')
+    .eq('key', 'slideshow_transition')
+    .maybeSingle();
+  if (error) throw error;
+  return ['fade', 'slide', 'zoom'].includes(data?.value) ? data.value : 'fade';
+}
+
+export async function saveLandingSlideshowTransition(transition) {
+  const client = await requireLandingSlideshowSuperadmin();
+  if (!['fade', 'slide', 'zoom'].includes(transition)) throw new Error('Choose a valid slide transition.');
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) throw userError || new Error('Sign in first.');
+  const { error } = await client.from('public_site_settings').upsert({
+    key: 'slideshow_transition',
+    value: transition,
+    updated_at: new Date().toISOString(),
+    updated_by: userData.user.id,
+  }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
 export async function saveLandingSlideshowVisibility(visible) {
   const client = await requireLandingSlideshowSuperadmin();
   const { data: userData, error: userError } = await client.auth.getUser();

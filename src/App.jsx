@@ -382,6 +382,31 @@ class SectionErrorBoundary extends Component {
   }
 }
 
+function formFieldFingerprint(field, useDefault = false) {
+  const type = String(field.type || '').toLowerCase();
+  let value;
+  if (type === 'checkbox' || type === 'radio') {
+    value = useDefault ? field.defaultChecked : field.checked;
+  } else if (type === 'file') {
+    value = useDefault ? '' : Array.from(field.files || [])
+      .map((file) => [file.name, file.size, file.lastModified].join(':'))
+      .join('|');
+  } else if (field.tagName === 'SELECT' && field.multiple) {
+    value = useDefault
+      ? Array.from(field.options).filter((option) => option.defaultSelected).map((option) => option.value).join('|')
+      : Array.from(field.selectedOptions).map((option) => option.value).join('|');
+  } else {
+    value = useDefault ? field.defaultValue : field.value;
+  }
+  const text = String(value ?? '');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return text.length + ':' + (hash >>> 0);
+}
+
 function readSavedIgoNavigation() {
   try {
     const historyRoute = window.history.state?.igoNavigation;
@@ -628,6 +653,54 @@ export default function App() {
     window.addEventListener('popstate', restoreInternalRoute);
     return () => window.removeEventListener('popstate', restoreInternalRoute);
   }, []);
+  useEffect(() => {
+    const initialValues = new WeakMap();
+    const isEditableField = (target) => target instanceof HTMLElement
+      && target.matches('input, textarea, select')
+      && !['button', 'submit', 'reset', 'image'].includes(String(target.type || '').toLowerCase());
+    const captureInitialValues = (event) => {
+      if (!isEditableField(event.target)) return;
+      const target = event.target;
+      if (!initialValues.has(target)) initialValues.set(target, formFieldFingerprint(target));
+    };
+    const captureDefaultIfNeeded = (event) => {
+      if (!isEditableField(event.target)) return;
+      const target = event.target;
+      if (!initialValues.has(target)) initialValues.set(target, formFieldFingerprint(target, true));
+    };
+    const hasUnsavedChanges = () => Array.from(document.querySelectorAll('input, textarea, select'))
+      .some((field) => initialValues.has(field) && initialValues.get(field) !== formFieldFingerprint(field));
+    const confirmBeforeLeaving = (event) => {
+      if (!hasUnsavedChanges()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    const resetFormBaseline = (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      window.setTimeout(() => {
+        form.querySelectorAll('input, textarea, select').forEach((field) => {
+          initialValues.set(field, formFieldFingerprint(field));
+        });
+      }, 0);
+    };
+
+    document.addEventListener('focusin', captureInitialValues, true);
+    document.addEventListener('beforeinput', captureInitialValues, true);
+    document.addEventListener('input', captureDefaultIfNeeded, true);
+    document.addEventListener('change', captureDefaultIfNeeded, true);
+    document.addEventListener('reset', resetFormBaseline, true);
+    window.addEventListener('beforeunload', confirmBeforeLeaving);
+    return () => {
+      document.removeEventListener('focusin', captureInitialValues, true);
+      document.removeEventListener('beforeinput', captureInitialValues, true);
+      document.removeEventListener('input', captureDefaultIfNeeded, true);
+      document.removeEventListener('change', captureDefaultIfNeeded, true);
+      document.removeEventListener('reset', resetFormBaseline, true);
+      window.removeEventListener('beforeunload', confirmBeforeLeaving);
+    };
+  }, []);
+
   const [partnerFilter, setPartnerFilter] = useState('All');
   const [driverFilter, setDriverFilter] = useState('All');
   const [areaFilter, setAreaFilter] = useState('All');

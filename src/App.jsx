@@ -998,11 +998,33 @@ export default function App() {
     setShowMobileNav(false);
     setStatusFilter('All');
     setSearch('');
+    const persistWorkspaceRoute = (workspaceName, pageName) => {
+      const currentRoute = readSavedIgoNavigation() || {};
+      const index = Number(
+        window.history.state?.igoNavigation?.index
+        ?? currentRoute.index
+        ?? browserNavigationIndexRef.current
+      ) || 0;
+      const route = {
+        index,
+        page: pageName,
+        pageDepth: 0,
+        pageHistory: [],
+        search: '',
+        statusFilter: 'All',
+        workspace: workspaceName,
+        authMode,
+      };
+      window.history.replaceState({ igoNavigation: route }, '', window.location.href);
+      saveIgoNavigation(route);
+      workspaceRef.current = workspaceName;
+    };
     if (databaseProfile?.role === 'admin' && next === 'Partner') {
       try {
         const partnerId = await getCurrentPartnerIdOptional();
         setWorkspace('Partner');
         setNavigation({ page: 'Overview', history: [] });
+        persistWorkspaceRoute('Partner', 'Overview');
         if (!partnerId) {
           setPackages([]);
           setPartnerBusinessName('');
@@ -1033,8 +1055,10 @@ export default function App() {
         applyDatabaseFinanceSnapshot(await loadFinanceRecords({ workspace: 'Admin' }));
       } catch (error) { setNotice(error.message || 'Could not load admin operations.'); }
     }
+    const nextPage = next === 'Admin' ? 'Admin Operations' : next === 'Driver' ? 'Driver Overview' : 'Overview';
     setWorkspace(next);
-    setNavigation({ page: next === 'Admin' ? 'Admin Operations' : next === 'Driver' ? 'Driver Overview' : 'Overview', history: [] });
+    setNavigation({ page: nextPage, history: [] });
+    persistWorkspaceRoute(next, nextPage);
   };
 
   const saveAdminPartnerSetup = async (event) => {

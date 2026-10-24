@@ -2467,6 +2467,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           {page === 'Overview' && (
             <>
               {workspace === 'Admin' && isSuperadmin && (
+                <>
                 <section className="card" style={{ marginTop: 20, padding: 20, display: 'grid', gap: 12 }}>
                   <div>
                     <p className="eyebrow">PUBLIC WEBSITE</p>
@@ -2493,6 +2494,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   {riderCardFeedback && <p role="status" style={{ margin: 0 }}>{riderCardFeedback}</p>}
                 </section>
                 <SuperadminLandingSlideshowManager visible={showSlideshowCard} onVisibilityChange={setShowSlideshowCard} />
+                </>
               )}
               <div className="welcome-card">
                 <div>

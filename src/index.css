@@ -8106,3 +8106,45 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   border-color: #cbd5e1;
   color: #202b36;
 }
+
+/* Light transitions: brief reveals, gentle hover feedback, and no continuous motion. */
+.public-site.scroll-motion-ready [data-scroll-motion] {
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 320ms ease, transform 320ms ease;
+}
+.public-site.scroll-motion-ready [data-scroll-motion].scroll-motion-visible {
+  opacity: 1;
+  transform: none;
+}
+.public-site.scroll-motion-ready .public-feature-grid article:nth-child(2) { transition-delay: 45ms; }
+.public-site.scroll-motion-ready .public-feature-grid article:nth-child(3) { transition-delay: 90ms; }
+
+.app button:not(:disabled):not(.dashboard-logo),
+.app .profile-trigger,
+.public-site button {
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .app button:not(:disabled):not(.dashboard-logo):hover,
+  .app .profile-trigger:hover,
+  .public-site button:hover {
+    transform: translateY(-1px);
+  }
+  .app :is(.stat-card, .portal-card, .payment-review-card, .driver-delivery-card, .ops-package, .invoice-card, .summary-card):hover {
+    box-shadow: 0 6px 16px rgb(15 23 42 / 9%);
+  }
+}
+.app button:not(:disabled):not(.dashboard-logo):active,
+.public-site button:active {
+  transform: scale(.99);
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-site.scroll-motion-ready [data-scroll-motion],
+  .app button:not(:disabled):not(.dashboard-logo),
+  .app .profile-trigger,
+  .public-site button {
+    transition: none;
+    transform: none;
+  }
+}

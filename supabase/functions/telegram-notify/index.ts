@@ -53,6 +53,18 @@ Deno.serve(async (request) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  if (notification.id) {
+    const { data: manualDelivery, error: manualDeliveryError } = await admin
+      .from('manual_notification_deliveries')
+      .select('id')
+      .eq('notification_id', notification.id)
+      .maybeSingle();
+    if (manualDeliveryError) {
+      console.error('Could not check manual notification delivery', manualDeliveryError.message);
+      return new Response('Could not check manual notification delivery', { status: 500 });
+    }
+    if (manualDelivery) return Response.json({ ok: true, skipped: true, manual_dispatch: true });
+  }
   const { data: connection, error: connectionError } = await admin
     .from('telegram_connections')
     .select('telegram_chat_id')

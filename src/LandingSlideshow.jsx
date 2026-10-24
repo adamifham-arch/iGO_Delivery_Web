@@ -185,7 +185,7 @@ export function SuperadminLandingSlideshowManager({ visible, onVisibilityChange,
         caption: String(values.get('caption') || '').trim(),
       });
       form.reset();
-      setMessage('Image added to the slideshow.');
+      setMessage('Image added as hidden. Select “Show this slide” when it is ready.');
       await refresh();
     } catch (uploadError) {
       setError(uploadError.message || 'Could not add the image.');

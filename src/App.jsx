@@ -48,6 +48,9 @@ import {
   loadRiderCardVisibility,
   saveRiderCardVisibility,
   loadLandingSlideshowVisibility,
+  loadLandingHeroCopy,
+  saveLandingHeroCopy,
+  loadLandingSlideshowTransition,
 } from './igoDatabase';
 
 const partnerOperatingLocation = 'Malé'; // Admin-configured partner operating location
@@ -481,6 +484,11 @@ export default function App() {
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [showRiderCard, setShowRiderCard] = useState(false);
   const [showSlideshowCard, setShowSlideshowCard] = useState(false);
+  const [heroTitle, setHeroTitle] = useState('Focus on your business. We’ll handle the deliveries.');
+  const [heroSubtitle, setHeroSubtitle] = useState('Best rates. Fast delivery.');
+  const [heroCopySaving, setHeroCopySaving] = useState(false);
+  const [heroCopyFeedback, setHeroCopyFeedback] = useState('');
+  const [slideshowTransition, setSlideshowTransition] = useState('fade');
   const [riderCardSaving, setRiderCardSaving] = useState(Boolean(supabaseConfigured));
   const [riderCardFeedback, setRiderCardFeedback] = useState('');
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
@@ -526,9 +534,15 @@ export default function App() {
   useEffect(() => {
     let active = true;
     if (!supabaseConfigured) return () => { active = false; };
-    loadLandingSlideshowVisibility()
-      .then((visible) => { if (active) setShowSlideshowCard(visible); })
-      .catch((error) => console.error('Slideshow visibility setting unavailable:', error));
+    Promise.all([loadLandingSlideshowVisibility(), loadLandingHeroCopy(), loadLandingSlideshowTransition()])
+      .then(([visible, copy, transition]) => {
+        if (!active) return;
+        setShowSlideshowCard(visible);
+        setHeroTitle(copy.title);
+        setHeroSubtitle(copy.subtitle);
+        setSlideshowTransition(transition);
+      })
+      .catch((error) => console.error('Public website settings unavailable:', error));
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -2081,11 +2095,12 @@ export default function App() {
           </header>
           <main id="home">
             <section className="public-hero">
-              <div className="public-hero-copy"><h1>Focus on your business. We’ll handle the deliveries.</h1><p>Best rates. Fast delivery.</p><button className="primary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-partner'); }}>Become a partner <span aria-hidden="true">→</span></button><small>Partner applications are reviewed before account access is enabled.</small></div>
+              <div className="public-hero-copy"><h1>{heroTitle}</h1><p>{heroSubtitle}</p><button className="primary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-partner'); }}>Become a partner <span aria-hidden="true">→</span></button><small>Partner applications are reviewed before account access is enabled.</small></div>
               <div className="public-hero-art">
                 <PublicLandingSlideshow
                   visible={showSlideshowCard}
                   placement="hero"
+                  transition={slideshowTransition}
                   fallback={(
                     <div className="public-route-card" aria-hidden="true">
                       <div className="public-route-heading"><img className="public-route-pin-logo" src="/igo-logo.jpg" alt="" /></div>
@@ -2601,7 +2616,32 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 </label>
                 {riderCardFeedback && <p role="status" style={{ margin: 0 }}>{riderCardFeedback}</p>}
               </section>
-              <SuperadminLandingSlideshowManager visible={showSlideshowCard} onVisibilityChange={setShowSlideshowCard} />
+              <section className="card" style={{ padding: 20, display: 'grid', gap: 12 }}>
+                <div>
+                  <p className="eyebrow">PUBLIC WEBSITE</p>
+                  <h2 style={{ margin: '4px 0 6px' }}>Landing page hero text</h2>
+                  <p style={{ margin: 0, color: '#748094' }}>Edit the main heading and supporting line shown on the landing page.</p>
+                </div>
+                <form style={{ display: 'grid', gap: 12 }} onSubmit={async (event) => {
+                  event.preventDefault();
+                  setHeroCopySaving(true);
+                  setHeroCopyFeedback('');
+                  try {
+                    await saveLandingHeroCopy({ title: heroTitle, subtitle: heroSubtitle });
+                    setHeroCopyFeedback('Landing page text saved.');
+                  } catch (error) {
+                    setHeroCopyFeedback(error.message || 'Could not save landing page text.');
+                  } finally {
+                    setHeroCopySaving(false);
+                  }
+                }}>
+                  <label>Main heading<input value={heroTitle} maxLength={120} required onChange={(event) => setHeroTitle(event.target.value)} /></label>
+                  <label>Supporting line<input value={heroSubtitle} maxLength={180} required onChange={(event) => setHeroSubtitle(event.target.value)} /></label>
+                  <button className="primary-btn" type="submit" disabled={heroCopySaving}>{heroCopySaving ? 'Saving…' : 'Save landing page text'}</button>
+                </form>
+                {heroCopyFeedback && <p role="status" style={{ margin: 0 }}>{heroCopyFeedback}</p>}
+              </section>
+              <SuperadminLandingSlideshowManager visible={showSlideshowCard} onVisibilityChange={setShowSlideshowCard} transition={slideshowTransition} onTransitionChange={setSlideshowTransition} />
             </div>
           )}
 

@@ -1,5 +1,6 @@
 import { Component, useEffect, useRef, useState } from 'react';
 import './index.css';
+import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
 import { supabase, supabaseConfigured, setAuthRememberMe } from './supabase';
 import { StaffOperations } from './StaffOperations';
 import { DayEndReport } from './DayEndReport';
@@ -44,6 +45,9 @@ import {
   sendPaymentReceipt,
   uploadIgoFile,
   updatePackage,
+  loadRiderCardVisibility,
+  saveRiderCardVisibility,
+  loadLandingSlideshowVisibility,
 } from './igoDatabase';
 
 const partnerOperatingLocation = 'Malé'; // Admin-configured partner operating location
@@ -475,6 +479,10 @@ export default function App() {
   const [databaseLoading, setDatabaseLoading] = useState(Boolean(supabaseConfigured));
   const [databaseError, setDatabaseError] = useState('');
   const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [showRiderCard, setShowRiderCard] = useState(false);
+  const [showSlideshowCard, setShowSlideshowCard] = useState(false);
+  const [riderCardSaving, setRiderCardSaving] = useState(Boolean(supabaseConfigured));
+  const [riderCardFeedback, setRiderCardFeedback] = useState('');
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
   const [partnerSetupOpen, setPartnerSetupOpen] = useState(false);
@@ -503,6 +511,26 @@ export default function App() {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showGoToTop, setShowGoToTop] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (!supabaseConfigured) {
+      setRiderCardSaving(false);
+      return () => { active = false; };
+    }
+    loadRiderCardVisibility()
+      .then((visible) => { if (active) setShowRiderCard(visible); })
+      .catch((error) => { if (active) setRiderCardFeedback(`Rider card setting unavailable: ${error.message}`); })
+      .finally(() => { if (active) setRiderCardSaving(false); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    if (!supabaseConfigured) return () => { active = false; };
+    loadLandingSlideshowVisibility()
+      .then((visible) => { if (active) setShowSlideshowCard(visible); })
+      .catch((error) => console.error('Slideshow visibility setting unavailable:', error));
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
     if (!showMobileNav && !showProfileMenu) return undefined;
     const closeOnOutsidePointer = (event) => {
@@ -1259,7 +1287,7 @@ export default function App() {
       item.related_section,
       item.target_section,
     ].find((value) => typeof value === 'string' && value.trim());
-    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
+    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Website controls', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
     let destination = pages.find((page) => page.toLowerCase() === String(explicitPage || '').trim().toLowerCase());
     const notificationText = [item.type, item.category, item.entity_type, item.related_type, item.title, item.message]
       .filter(Boolean).join(' ');
@@ -2001,6 +2029,7 @@ export default function App() {
           ['Approvals', '✓', 'Pending user approvals'],
           ['User Management', '♙'],
           ['Send Notifications', '✉'],
+          ...(isSuperadmin ? [['Website controls', '▧']] : []),
         ]
       : [
           ['Overview', '⌂'],
@@ -2052,11 +2081,14 @@ export default function App() {
           </header>
           <main id="home">
             <section className="public-hero">
-              <div className="public-hero-copy"><p className="approval-kicker">DELIVERY THAT MOVES BUSINESS FORWARD</p><h1>Focus on your business. We’ll handle the deliveries.</h1><p>Best rates. Fast delivery.</p><button className="primary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-partner'); }}>Become a partner <span aria-hidden="true">→</span></button><small>Partner applications are reviewed before account access is enabled.</small></div>
+              <div className="public-hero-copy"><h1>Focus on your business. We’ll handle the deliveries.</h1><p>Best rates. Fast delivery.</p><button className="primary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-partner'); }}>Become a partner <span aria-hidden="true">→</span></button><small>Partner applications are reviewed before account access is enabled.</small></div>
               <div className="public-hero-art" aria-hidden="true"><div className="public-route-card"><div className="public-route-heading"><img className="public-route-pin-logo" src="/igo-logo.jpg" alt="iGO" /></div><ol className="public-journey"><li className="journey-order"><span>01</span><strong>Package registered</strong></li><li className="journey-pickup"><span>02</span><strong>Picked up</strong></li><li className="journey-delivered"><span>03</span><strong>Delivered</strong></li></ol></div></div>
             </section>
-            <section className="public-how" id="how-it-works"><p className="approval-kicker">WHY CHOOSE US!</p><h2>Why choose iGO?</h2><p className="public-section-intro">Great rates, fast delivery, and easy package tracking.</p><div className="public-feature-grid"><article><span>01</span><h3>Best rates</h3><p>Keep delivery costs low as your business grows.</p></article><article><span>02</span><h3>Fast delivery</h3><p>We pick up and deliver your packages promptly.</p></article><article><span>03</span><h3>Easy tracking</h3><p>Check each package’s status whenever you need.</p></article></div><div className="public-delivery-coverage"><h3>Where we deliver</h3><p>Malé · Hulhumalé Phase 1 · Hulhumalé Phase 2 · Boat deliveries</p></div></section>
-            <section className="public-rider"><div><p className="approval-kicker">FOR RIDERS</p><h2>Interested in delivering with iGO?</h2><p>Join the rider network. Rider applications are reviewed by the iGO team.</p></div><button className="secondary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-driver'); }}>Become a rider</button></section>
+            <section className="public-how" id="how-it-works"><h2>Why choose iGO?</h2><p className="public-section-intro">Great rates, fast delivery, and easy package tracking.</p><div className="public-feature-grid"><article><span>01</span><h3>Best rates</h3><p>Keep delivery costs low as your business grows.</p></article><article><span>02</span><h3>Fast delivery</h3><p>We pick up and deliver your packages promptly.</p></article><article><span>03</span><h3>Easy tracking</h3><p>Check each package’s status whenever you need.</p></article></div><div className="public-delivery-coverage"><h3>Where we deliver</h3><p>Malé · Hulhumalé Phase 1 · Hulhumalé Phase 2 · Boat deliveries</p></div></section>
+            <PublicLandingSlideshow visible={showSlideshowCard} />
+            {showRiderCard && (
+              <section className="public-rider"><div><p className="approval-kicker">FOR RIDERS</p><h2>Interested in delivering with iGO?</h2><p>Join the rider network. Rider applications are reviewed by the iGO team.</p></div><button className="secondary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-driver'); }}>Become a rider</button></section>
+            )}
           </main>
           <footer className="public-footer"><span>© {new Date().getFullYear()} iGO Delivery</span><button type="button" onClick={() => navigateAuthMode('signin')}>Account sign in</button></footer>
         </div>
@@ -2435,6 +2467,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           )}
           {page === 'Overview' && (
             <>
+
               <div className="welcome-card">
                 <div>
                   <h2>Packages at a glance</h2>
@@ -2524,6 +2557,37 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               </div>
               <PackageTable packages={newestPackages.slice(0, 5)} />
             </>
+          )}
+
+          {page === 'Website controls' && workspace === 'Admin' && isSuperadmin && (
+            <div style={{ display: 'grid', gap: 18, marginTop: 20 }}>
+              <section className="card" style={{ padding: 20, display: 'grid', gap: 12 }}>
+                <div>
+                  <p className="eyebrow">PUBLIC WEBSITE</p>
+                  <h2 style={{ margin: '4px 0 6px' }}>Rider application card</h2>
+                  <p style={{ margin: 0, color: '#748094' }}>Choose whether visitors can see the rider application card on the landing page.</p>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
+                  <input type="checkbox" checked={showRiderCard} disabled={riderCardSaving} onChange={async (event) => {
+                    const visible = event.target.checked;
+                    setRiderCardSaving(true);
+                    setRiderCardFeedback('');
+                    try {
+                      await saveRiderCardVisibility(visible);
+                      setShowRiderCard(visible);
+                      setRiderCardFeedback(visible ? 'Rider card is visible on the public landing page.' : 'Rider card is hidden from the public landing page.');
+                    } catch (error) {
+                      setRiderCardFeedback(error.message || 'Could not update rider card visibility.');
+                    } finally {
+                      setRiderCardSaving(false);
+                    }
+                  }} />
+                  Show rider card
+                </label>
+                {riderCardFeedback && <p role="status" style={{ margin: 0 }}>{riderCardFeedback}</p>}
+              </section>
+              <SuperadminLandingSlideshowManager visible={showSlideshowCard} onVisibilityChange={setShowSlideshowCard} />
+            </div>
           )}
 
           {page === 'Register Package' && (

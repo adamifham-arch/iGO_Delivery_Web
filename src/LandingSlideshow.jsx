@@ -7,6 +7,8 @@ import {
   uploadLandingPageSlide,
   reorderLandingPageSlides,
   saveLandingSlideshowTransition,
+  loadLandingSlideshowDuration,
+  saveLandingSlideshowDuration,
 } from './igoDatabase';
 import './LandingSlideshow.css';
 
@@ -16,6 +18,7 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
   const [slides, setSlides] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [durationMs, setDurationMs] = useState(6000);
 
   useEffect(() => {
     let active = true;
@@ -24,10 +27,11 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
       setActiveIndex(0);
       return () => { active = false; };
     }
-    loadLandingPageSlides(false)
-      .then((items) => {
+    Promise.all([loadLandingPageSlides(false), loadLandingSlideshowDuration()])
+      .then(([items, durationSeconds]) => {
         if (!active) return;
         setSlides(items);
+        setDurationMs(durationSeconds * 1000);
         setActiveIndex(0);
       })
       .catch((error) => console.error('Could not load public landing slides:', error));
@@ -40,7 +44,7 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
       setActiveIndex((index) => advanceSlide(index, 1, slides.length));
     }, 6000);
     return () => window.clearInterval(timer);
-  }, [visible, paused, slides.length]);
+  }, [visible, paused, slides.length, durationMs, activeIndex]);
 
   if (!visible || !slides.length) return fallback;
   const slide = slides[activeIndex];
@@ -72,6 +76,8 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
 
 export function SuperadminLandingSlideshowManager({ visible, onVisibilityChange, transition = 'fade', onTransitionChange }) {
   const [slides, setSlides] = useState([]);
+  const [durationSeconds, setDurationSeconds] = useState(6);
+  const [durationDraft, setDurationDraft] = useState('6');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [busySlideId, setBusySlideId] = useState('');
@@ -82,7 +88,13 @@ export function SuperadminLandingSlideshowManager({ visible, onVisibilityChange,
     setLoading(true);
     setError('');
     try {
-      setSlides(await loadLandingPageSlides(true));
+      const [loadedSlides, loadedDuration] = await Promise.all([
+        loadLandingPageSlides(true),
+        loadLandingSlideshowDuration(),
+      ]);
+      setSlides(loadedSlides);
+      setDurationSeconds(loadedDuration);
+      setDurationDraft(String(loadedDuration));
     } catch (loadError) {
       setError(loadError.message || 'Could not load slideshow images.');
     } finally {
@@ -103,6 +115,28 @@ export function SuperadminLandingSlideshowManager({ visible, onVisibilityChange,
       setMessage('Slide transition saved.');
     } catch (saveError) {
       setError(saveError.message || 'Could not update the slide transition.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveDuration = async () => {
+    const nextValue = Number(durationDraft);
+    if (!Number.isInteger(nextValue) || nextValue < 2 || nextValue > 30) {
+      setError('Choose a duration from 2 to 30 seconds.');
+      setMessage('');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await saveLandingSlideshowDuration(nextValue);
+      setDurationSeconds(nextValue);
+      setDurationDraft(String(nextValue));
+      setMessage('Slide duration saved.');
+    } catch (saveError) {
+      setError(saveError.message || 'Could not update the slide duration.');
     } finally {
       setBusy(false);
     }
@@ -235,6 +269,25 @@ export function SuperadminLandingSlideshowManager({ visible, onVisibilityChange,
           <option value="zoom">Zoom</option>
         </select>
       </label>
+      <div className="landing-slide-duration">
+        <label htmlFor="landing-slide-duration">Seconds per image</label>
+        <div>
+          <input
+            id="landing-slide-duration"
+            type="number"
+            min="2"
+            max="30"
+            step="1"
+            value={durationDraft}
+            disabled={busy}
+            onChange={(event) => setDurationDraft(event.target.value)}
+          />
+          <button className="secondary-btn" type="button" disabled={busy || Number(durationDraft) === durationSeconds} onClick={() => void saveDuration()}>
+            Save duration
+          </button>
+        </div>
+        <small>Choose 2–30 seconds. The same duration applies to every image.</small>
+      </div>
       <form className="landing-slide-upload" onSubmit={addSlide}>
         <label>Slide image
           <input name="slide_image" type="file" accept="image/jpeg,image/png,image/webp" required disabled={busy} />

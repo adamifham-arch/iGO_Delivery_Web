@@ -2082,10 +2082,25 @@ export default function App() {
           <main id="home">
             <section className="public-hero">
               <div className="public-hero-copy"><h1>Focus on your business. We’ll handle the deliveries.</h1><p>Best rates. Fast delivery.</p><button className="primary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-partner'); }}>Become a partner <span aria-hidden="true">→</span></button><small>Partner applications are reviewed before account access is enabled.</small></div>
-              <div className="public-hero-art" aria-hidden="true"><div className="public-route-card"><div className="public-route-heading"><img className="public-route-pin-logo" src="/igo-logo.jpg" alt="iGO" /></div><ol className="public-journey"><li className="journey-order"><span>01</span><strong>Package registered</strong></li><li className="journey-pickup"><span>02</span><strong>Picked up</strong></li><li className="journey-delivered"><span>03</span><strong>Delivered</strong></li></ol></div></div>
+              <div className="public-hero-art">
+                <PublicLandingSlideshow
+                  visible={showSlideshowCard}
+                  placement="hero"
+                  fallback={(
+                    <div className="public-route-card" aria-hidden="true">
+                      <div className="public-route-heading"><img className="public-route-pin-logo" src="/igo-logo.jpg" alt="" /></div>
+                      <ol className="public-journey">
+                        <li className="journey-order"><span>01</span><strong>Package registered</strong></li>
+                        <li className="journey-pickup"><span>02</span><strong>Picked up</strong></li>
+                        <li className="journey-delivered"><span>03</span><strong>Delivered</strong></li>
+                      </ol>
+                    </div>
+                  )}
+                />
+              </div>
             </section>
             <section className="public-how" id="how-it-works"><h2>Why choose iGO?</h2><p className="public-section-intro">Great rates, fast delivery, and easy package tracking.</p><div className="public-feature-grid"><article><span>01</span><h3>Best rates</h3><p>Keep delivery costs low as your business grows.</p></article><article><span>02</span><h3>Fast delivery</h3><p>We pick up and deliver your packages promptly.</p></article><article><span>03</span><h3>Easy tracking</h3><p>Check each package’s status whenever you need.</p></article></div><div className="public-delivery-coverage"><h3>Where we deliver</h3><p>Malé · Hulhumalé Phase 1 · Hulhumalé Phase 2 · Boat deliveries</p></div></section>
-            <PublicLandingSlideshow visible={showSlideshowCard} />
+            
             {showRiderCard && (
               <section className="public-rider"><div><p className="approval-kicker">FOR RIDERS</p><h2>Interested in delivering with iGO?</h2><p>Join the rider network. Rider applications are reviewed by the iGO team.</p></div><button className="secondary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-driver'); }}>Become a rider</button></section>
             )}

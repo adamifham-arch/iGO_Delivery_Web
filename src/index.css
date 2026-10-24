@@ -8108,15 +8108,66 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 }
 
 
-/* Optional Telegram delivery from the notification panel. */
+/* Telegram notification preference switch. */
 .notification-panel .telegram-alert-settings {
   border-top: 1px solid rgba(127, 127, 127, .35);
   margin-top: 12px;
   padding-top: 10px;
 }
-.notification-panel .telegram-alert-settings h4 {
-  margin: 0 0 6px;
+.telegram-notification-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 36px;
+  font-weight: 600;
 }
-.notification-panel .telegram-alert-settings p {
-  margin: 6px 0 10px;
+.telegram-notification-switch {
+  position: relative;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 26px;
+  padding: 3px;
+  border: 1px solid #8791a1;
+  border-radius: 999px;
+  background: #aeb6c2;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.telegram-notification-switch[aria-checked='true'] {
+  background: #16825d;
+  border-color: #16825d;
+}
+.telegram-notification-switch:focus-visible {
+  outline: 3px solid #77aaff;
+  outline-offset: 2px;
+}
+.telegram-notification-switch:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+.telegram-notification-switch-thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0003;
+  transform: translateX(0);
+  transition: transform 160ms ease;
+}
+.telegram-notification-switch[aria-checked='true'] .telegram-notification-switch-thumb {
+  transform: translateX(20px);
+}
+.telegram-notification-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+}
+.telegram-notification-setup p {
+  margin: 0;
+}
+.telegram-notification-setup a {
+  font-weight: 700;
 }

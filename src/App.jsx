@@ -414,7 +414,7 @@ export default function App() {
   const browserNavigationIndexRef = useRef(0);
   const page = navigation.page;
   const [notificationScrollRequest, setNotificationScrollRequest] = useState(null);
-  const [workspace, setWorkspace] = useState('Partner');
+  const [workspace, setWorkspace] = useState(() => readSavedIgoNavigation()?.workspace || 'Partner');
   const workspaceRef = useRef('Partner');
   const activeUserIdRef = useRef(null);
   useEffect(() => {
@@ -590,6 +590,7 @@ export default function App() {
         pageHistory: Array.isArray(savedRoute?.pageHistory) ? savedRoute.pageHistory : navigation.history,
         search: savedRoute?.search || search,
         statusFilter: savedRoute?.statusFilter || statusFilter,
+        workspace: savedRoute?.workspace || workspace,
         ...(savedRoute?.authMode ? { authMode: savedRoute.authMode } : { authMode }),
       };
       browserNavigationIndexRef.current = route.index;
@@ -603,6 +604,10 @@ export default function App() {
       browserNavigationIndexRef.current = Number(route.index) || 0;
       saveIgoNavigation(route);
       if (typeof route.authMode === 'string') setAuthMode(route.authMode);
+      if (typeof route.workspace === 'string') {
+        setWorkspace(route.workspace);
+        workspaceRef.current = route.workspace;
+      }
       if (typeof route.page === 'string') {
         const restoredHistory = Array.isArray(route.pageHistory)
           ? route.pageHistory
@@ -699,18 +704,24 @@ export default function App() {
         setLinkedPartnerProfile(additionalProfiles.partner);
         setLinkedDriverProfile(additionalProfiles.driver);
         const selectedWorkspace = workspaceRef.current;
+        const savedRoute = readSavedIgoNavigation();
+        const savedWorkspace = savedRoute?.workspace || roleWorkspace;
+        const savedWorkspaceAllowed = savedWorkspace === roleWorkspace
+          || (additionalProfiles.isSuperadmin && savedWorkspace === 'Partner' && additionalProfiles.partner?.approval_status === 'approved')
+          || (additionalProfiles.isSuperadmin && savedWorkspace === 'Driver' && additionalProfiles.driver?.approval_status === 'approved');
+        const restoreSavedRoute = Boolean(savedRoute?.page && savedWorkspaceAllowed);
         const keepSelectedWorkspace = activeUserIdRef.current === user.id && (
           selectedWorkspace === roleWorkspace
           || (additionalProfiles.isSuperadmin && selectedWorkspace === 'Partner' && additionalProfiles.partner?.approval_status === 'approved')
           || (additionalProfiles.isSuperadmin && selectedWorkspace === 'Driver' && additionalProfiles.driver?.approval_status === 'approved')
         );
-        const nextWorkspace = keepSelectedWorkspace ? selectedWorkspace : roleWorkspace;
+        const nextWorkspace = keepSelectedWorkspace ? selectedWorkspace : restoreSavedRoute ? savedWorkspace : roleWorkspace;
         activeUserIdRef.current = user.id;
         workspaceRef.current = nextWorkspace;
         setWorkspace(nextWorkspace);
         setPackages(rows);
         if (finance) applyDatabaseFinanceSnapshot(finance);
-        if (!keepSelectedWorkspace) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : nextWorkspace === 'Staff' ? getStaffLandingPage(profile) : 'Overview', history: [] });
+        if (!keepSelectedWorkspace && !restoreSavedRoute) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : nextWorkspace === 'Staff' ? getStaffLandingPage(profile) : 'Overview', history: [] });
         setDatabaseError('');
       } catch (error) {
         if (!active) return;
@@ -1290,6 +1301,7 @@ export default function App() {
         : navigation.history,
       search,
       statusFilter,
+      workspace,
       authMode,
       ...route,
     };
@@ -5506,7 +5518,38 @@ function ManualNotificationsManagement() {
 }
 
 function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = false, mode = 'management' }) {
-  const [activeFinanceTab, setActiveFinanceTab] = useState('Invoices');
+  const financeTabs = workspace === 'Admin'
+    ? ['Invoices', 'Expenses', 'Day-end', 'Settings']
+    : ['Invoices', 'Expenses', 'Reports', 'Settings'];
+  const [activeFinanceTab, setActiveFinanceTab] = useState(() => {
+    try {
+      const savedTab = window.sessionStorage.getItem('igo-finance-tab');
+      return financeTabs.includes(savedTab) ? savedTab : 'Invoices';
+    } catch {
+      return 'Invoices';
+    }
+  });
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem('igo-finance-tab', activeFinanceTab);
+    } catch {
+      // Keep the selected tab for the current render if storage is unavailable.
+    }
+    if (mode !== 'management') return undefined;
+    const target = {
+      Invoices: 'Invoices & collections',
+      Expenses: 'Record business expense',
+      'Day-end': 'Day-end report',
+      Reports: 'Daily sales report',
+      Settings: 'Payment account settings',
+    }[activeFinanceTab];
+    const timer = window.setTimeout(() => {
+      const heading = Array.from(document.querySelectorAll('h2, h3'))
+        .find((item) => item.textContent.trim().includes(target));
+      heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [activeFinanceTab, workspace, mode]);
   const [overviewMonth, setOverviewMonth] = useState(() => {
     const now = new Date();
     return String(now.getFullYear()) + '-' + String(now.getMonth() + 1).padStart(2, '0');
@@ -6898,11 +6941,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
               key={target}
               type="button"
               style={{ flex: '0 0 auto', padding: '12px 15px', background: 'transparent', color: activeFinanceTab === label ? '#155b43' : '#65736c', border: 0, borderBottom: activeFinanceTab === label ? '3px solid #17634b' : '3px solid transparent', borderRadius: 0, boxShadow: 'none', fontSize: 13, fontWeight: activeFinanceTab === label ? 700 : 600, cursor: 'pointer' }}
-              onClick={() => {
-                setActiveFinanceTab(label);
-                const sectionHeading = Array.from(document.querySelectorAll('h2, h3')).find((heading) => heading.textContent.trim().includes(target));
-                sectionHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
+              onClick={() => setActiveFinanceTab(label)}
             >
               {label}
             </button>

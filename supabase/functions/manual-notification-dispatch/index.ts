@@ -126,7 +126,7 @@ Deno.serve(async (request) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: chatId,
-              text: `iGO Delivery\\n${prepared.title}\\n\\n${prepared.message}\\n\\nOpen: https://igomv.com/`.slice(0, 3900),
+              text: `iGO Delivery\n${prepared.title}\n\n${prepared.message}\n\nOpen: https://igomv.com/`.slice(0, 3900),
               disable_web_page_preview: true,
             }),
           });

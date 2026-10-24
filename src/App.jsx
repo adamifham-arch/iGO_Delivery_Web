@@ -438,37 +438,6 @@ export default function App() {
     const recoveryParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     return recoveryParams.get('type') === 'recovery' ? 'reset-password' : 'landing';
   });
-  useEffect(() => {
-    if (authMode !== 'landing') return undefined;
-    const site = document.querySelector('.public-site');
-    if (!site || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
-
-    const revealItems = site.querySelectorAll(
-      '.public-how, .public-feature-grid article, .public-delivery-coverage, .public-rider, .public-footer'
-    );
-    if (!('IntersectionObserver' in window)) return undefined;
-
-    revealItems.forEach((item) => item.setAttribute('data-scroll-reveal', ''));
-    site.classList.add('scroll-reveal-ready');
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add('scroll-revealed');
-        observer.unobserve(entry.target);
-      });
-    }, { threshold: 0.12, rootMargin: '0px 0px -24px 0px' });
-
-    revealItems.forEach((item) => observer.observe(item));
-    return () => {
-      observer.disconnect();
-      site.classList.remove('scroll-reveal-ready');
-      revealItems.forEach((item) => {
-        item.removeAttribute('data-scroll-reveal');
-        item.classList.remove('scroll-revealed');
-      });
-    };
-  }, [authMode]);
   const [authNotice, setAuthNotice] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');

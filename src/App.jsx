@@ -1,6 +1,6 @@
 import { Component, useEffect, useRef, useState } from 'react';
 import './index.css';
-import { supabase, supabaseConfigured } from './supabase';
+import { supabase, supabaseConfigured, setAuthRememberMe } from './supabase';
 import { StaffOperations } from './StaffOperations';
 import { DayEndReport } from './DayEndReport';
 import {
@@ -440,6 +440,8 @@ export default function App() {
   const [logoFeedbackKind, setLogoFeedbackKind] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('igo-remember-me') === 'true');
   const [loginBusy, setLoginBusy] = useState(false);
   const [authMode, setAuthMode] = useState(() => {
     const recoveryParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -749,6 +751,7 @@ export default function App() {
     if (!supabase) return;
     setLoginBusy(true);
     setDatabaseError('');
+    setAuthRememberMe(rememberMe);
     const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail.trim(), password: loginPassword });
     if (error) {
       setDatabaseError(error.message);
@@ -1884,7 +1887,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
     }
 
     return (
-      <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={signInToDatabase}><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Sign in</h1><p>Use your approved partner, rider, or admin account.</p>{authNotice && <p className="notice" role="status">{authNotice}</p>}{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Email<input type="email" autoComplete="username" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><label>Password<input type="password" autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /></label><button className="public-forgot-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('forgot-password'); }}>Forgot password?</button><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Signing in…' : 'Sign in'}</button><p className="public-auth-switch">Need a partner account? <button type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('register-partner'); }}>Register as a partner</button></p></form></main>
+      <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={signInToDatabase}><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Sign in</h1><p>Use your approved partner, rider, or admin account.</p>{authNotice && <p className="notice" role="status">{authNotice}</p>}{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Email<input type="email" autoComplete="username" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><label className="public-password-field">Password<div className="public-password-control"><input type={showLoginPassword ? 'text' : 'password'} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /><button type="button" className="public-password-toggle" aria-label={showLoginPassword ? 'Hide password' : 'Show password'} aria-pressed={showLoginPassword} onClick={() => setShowLoginPassword((visible) => !visible)}>{showLoginPassword ? 'Hide' : 'Show'}</button></div></label><label className="public-remember-option"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />Remember me</label><button className="public-forgot-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('forgot-password'); }}>Forgot password?</button><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Signing in…' : 'Sign in'}</button><p className="public-auth-switch">Need a partner account? <button type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('register-partner'); }}>Register as a partner</button></p></form></main>
     );
   }
 

@@ -21,6 +21,9 @@ import {
   loadWithdrawalRequests,
   loadNotifications,
   markNotificationRead,
+  loadTelegramConnection,
+  createTelegramLink,
+  disconnectTelegram,
   loadPackages,
   createBusinessExpense,
   reviewPayment,
@@ -5017,6 +5020,10 @@ function NotificationCenter({ onNavigate }) {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
+  const [telegramConnection, setTelegramConnection] = useState(undefined);
+  const [telegramLink, setTelegramLink] = useState('');
+  const [telegramBusy, setTelegramBusy] = useState(false);
+  const [telegramMessage, setTelegramMessage] = useState('');
   useEffect(() => {
     let active = true;
     let refreshing = false;
@@ -5042,6 +5049,50 @@ function NotificationCenter({ onNavigate }) {
       document.removeEventListener('visibilitychange', refreshOnResume);
     };
   }, []);
+  const refreshTelegramConnection = async () => {
+    try {
+      const connection = await loadTelegramConnection();
+      setTelegramConnection(connection || null);
+      setTelegramMessage('');
+      return connection || null;
+    } catch (connectionError) {
+      setTelegramMessage(connectionError.message || 'Could not load Telegram connection.');
+      return null;
+    }
+  };
+  useEffect(() => {
+    if (!open) return undefined;
+    void refreshTelegramConnection();
+    return undefined;
+  }, [open]);
+  const startTelegramLink = async () => {
+    setTelegramBusy(true);
+    setTelegramMessage('');
+    setTelegramLink('');
+    try {
+      const url = await createTelegramLink();
+      setTelegramLink(url);
+      setTelegramMessage('This secure link expires in 10 minutes. Open it in Telegram, then return here.');
+    } catch (linkError) {
+      setTelegramMessage(linkError.message || 'Could not create a Telegram link.');
+    } finally {
+      setTelegramBusy(false);
+    }
+  };
+  const stopTelegramLink = async () => {
+    setTelegramBusy(true);
+    setTelegramMessage('');
+    try {
+      await disconnectTelegram();
+      setTelegramConnection(null);
+      setTelegramLink('');
+      setTelegramMessage('Telegram alerts disconnected.');
+    } catch (disconnectError) {
+      setTelegramMessage(disconnectError.message || 'Could not disconnect Telegram.');
+    } finally {
+      setTelegramBusy(false);
+    }
+  };
   const markRead = async (id) => {
     try {
       await markNotificationRead(id);
@@ -5066,6 +5117,25 @@ function NotificationCenter({ onNavigate }) {
       {open && <section className="notification-panel" style={{ position: 'fixed', zIndex: 1000, right: 12, top: 'calc(env(safe-area-inset-top, 0px) + 68px)', width: 'min(360px, calc(100vw - 24px))', maxHeight: 'min(70vh, 420px)', overflowY: 'auto', background: localStorage.getItem('igo-theme') === 'night' ? '#1e293b' : '#fff', color: localStorage.getItem('igo-theme') === 'night' ? '#f3f4f6' : '#111827', border: `1px solid ${localStorage.getItem('igo-theme') === 'night' ? '#334155' : '#ddd'}`, borderRadius: 12, padding: 14, boxShadow: '0 8px 24px #0002' }}>
         <h3 style={{ marginTop: 0 }}>Notifications</h3>
         {error && <p role="alert">{error}</p>}
+        <section className="telegram-alert-settings" aria-label="Telegram alert settings">
+          <h4>Telegram alerts</h4>
+          {telegramConnection ? (
+            <>
+              <p>Connected{telegramConnection.telegram_username ? ` as @${telegramConnection.telegram_username}` : ''}. New iGO notifications will also be sent to Telegram.</p>
+              <button type="button" className="secondary-btn" onClick={stopTelegramLink} disabled={telegramBusy}>Disconnect Telegram</button>
+            </>
+          ) : (
+            <>
+              <p>Get new iGO notifications in Telegram, even when this site is closed.</p>
+              <button type="button" className="secondary-btn" onClick={startTelegramLink} disabled={telegramBusy}>
+                {telegramBusy ? 'Please wait…' : 'Connect Telegram'}
+              </button>
+              {telegramLink && <p><a href={telegramLink} target="_blank" rel="noreferrer">Open Telegram to connect</a></p>}
+            </>
+          )}
+          {telegramMessage && <p role="status">{telegramMessage}</p>}
+          {!telegramConnection && telegramLink && <button type="button" className="secondary-btn" onClick={() => void refreshTelegramConnection()} disabled={telegramBusy}>Check connection</button>}
+        </section>
         {notifications.length ? notifications.map((item) => <article key={item.id} style={{ borderTop: '1px solid #eee', padding: '10px 0' }}>
           <button type="button" className="notification-item" onClick={() => handleNotificationClick(item)} style={{ display: 'block', width: '100%', background: 'transparent', border: 0, color: 'inherit', textAlign: 'left', font: 'inherit', padding: '6px 0', cursor: 'pointer' }}>
             <strong>{item.title}</strong><span style={{ display: 'block', margin: '4px 0' }}>{item.message}</span>

@@ -8187,3 +8187,19 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     transform: translate(-50%, -50%) scale(.985);
   }
 }
+
+/* A quiet, one-time reveal as the public landing page scrolls into view. */
+.public-site.scroll-reveal-ready [data-scroll-reveal] {
+  opacity: 0;
+  translate: 0 10px;
+  transition: opacity 460ms ease, translate 460ms cubic-bezier(.2, .7, .2, 1);
+}
+.public-site.scroll-reveal-ready [data-scroll-reveal].scroll-revealed {
+  opacity: 1;
+  translate: 0 0;
+}
+.public-site.scroll-reveal-ready .public-feature-grid article:nth-child(2) { transition-delay: 70ms; }
+.public-site.scroll-reveal-ready .public-feature-grid article:nth-child(3) { transition-delay: 140ms; }
+@media (prefers-reduced-motion: reduce) {
+  .public-site.scroll-reveal-ready [data-scroll-reveal] { opacity: 1; translate: none; transition: none; }
+}

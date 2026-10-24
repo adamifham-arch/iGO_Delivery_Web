@@ -2071,6 +2071,23 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                     </select>
                   </label>
                 )}
+                {databaseProfile && <button type="button" role="menuitem" onClick={async () => {
+                  try {
+                    const connection = await loadTelegramConnection();
+                    if (!connection) {
+                      setShowProfileMenu(false);
+                      window.alert('No Telegram account is connected. Turn on Telegram notifications from the Notifications menu first.');
+                      return;
+                    }
+                    if (!window.confirm('Disconnect the current Telegram account? You can then turn notifications back on and connect a different account.')) return;
+                    await disconnectTelegram();
+                    setShowProfileMenu(false);
+                    window.alert('Telegram account disconnected. Turn Telegram notifications back on to connect another account.');
+                  } catch (accountError) {
+                    setShowProfileMenu(false);
+                    window.alert(accountError.message || 'Could not change the Telegram account.');
+                  }
+                }}>Change Telegram account</button>}
                 <button type="button" role="menuitem" onClick={() => {
                   setPage(workspace === 'Driver' ? 'About' : 'Profile');
                   setShowProfileMenu(false);
@@ -5022,6 +5039,7 @@ function NotificationCenter({ onNavigate }) {
   const [error, setError] = useState('');
   const [telegramConnection, setTelegramConnection] = useState(undefined);
   const [telegramLink, setTelegramLink] = useState('');
+  const [telegramSetupOpen, setTelegramSetupOpen] = useState(false);
   const [telegramBusy, setTelegramBusy] = useState(false);
   const [telegramMessage, setTelegramMessage] = useState('');
   useEffect(() => {
@@ -5069,6 +5087,7 @@ function NotificationCenter({ onNavigate }) {
     setTelegramBusy(true);
     setTelegramMessage('');
     setTelegramLink('');
+    setTelegramSetupOpen(true);
     try {
       const url = await createTelegramLink();
       setTelegramLink(url);
@@ -5079,19 +5098,29 @@ function NotificationCenter({ onNavigate }) {
       setTelegramBusy(false);
     }
   };
-  const stopTelegramLink = async () => {
+  const stopTelegramLink = async (confirmed = false) => {
+    if (!confirmed && !window.confirm('Turn off Telegram notifications?')) return;
     setTelegramBusy(true);
     setTelegramMessage('');
     try {
       await disconnectTelegram();
       setTelegramConnection(null);
       setTelegramLink('');
-      setTelegramMessage('Telegram alerts disconnected.');
+      setTelegramSetupOpen(false);
+      setTelegramMessage('Telegram notifications turned off.');
     } catch (disconnectError) {
       setTelegramMessage(disconnectError.message || 'Could not disconnect Telegram.');
     } finally {
       setTelegramBusy(false);
     }
+  };
+  const toggleTelegramNotifications = async () => {
+    if (telegramConnection) {
+      await stopTelegramLink();
+      return;
+    }
+    setTelegramSetupOpen(true);
+    await startTelegramLink();
   };
   const markRead = async (id) => {
     try {
@@ -5117,24 +5146,30 @@ function NotificationCenter({ onNavigate }) {
       {open && <section className="notification-panel" style={{ position: 'fixed', zIndex: 1000, right: 12, top: 'calc(env(safe-area-inset-top, 0px) + 68px)', width: 'min(360px, calc(100vw - 24px))', maxHeight: 'min(70vh, 420px)', overflowY: 'auto', background: localStorage.getItem('igo-theme') === 'night' ? '#1e293b' : '#fff', color: localStorage.getItem('igo-theme') === 'night' ? '#f3f4f6' : '#111827', border: `1px solid ${localStorage.getItem('igo-theme') === 'night' ? '#334155' : '#ddd'}`, borderRadius: 12, padding: 14, boxShadow: '0 8px 24px #0002' }}>
         <h3 style={{ marginTop: 0 }}>Notifications</h3>
         {error && <p role="alert">{error}</p>}
-        <section className="telegram-alert-settings" aria-label="Telegram alert settings">
-          <h4>Telegram alerts</h4>
-          {telegramConnection ? (
-            <>
-              <p>Connected{telegramConnection.telegram_username ? ` as @${telegramConnection.telegram_username}` : ''}. New iGO notifications will also be sent to Telegram.</p>
-              <button type="button" className="secondary-btn" onClick={stopTelegramLink} disabled={telegramBusy}>Disconnect Telegram</button>
-            </>
-          ) : (
-            <>
-              <p>Get new iGO notifications in Telegram, even when this site is closed.</p>
-              <button type="button" className="secondary-btn" onClick={startTelegramLink} disabled={telegramBusy}>
-                {telegramBusy ? 'Please wait…' : 'Connect Telegram'}
-              </button>
-              {telegramLink && <p><a href={telegramLink} target="_blank" rel="noreferrer">Open Telegram to connect</a></p>}
-            </>
+        <section className="telegram-alert-settings" aria-label="Telegram notification settings">
+          <div className="telegram-notification-toggle-row">
+            <label htmlFor="telegram-notifications-switch">Telegram notifications</label>
+            <button
+              id="telegram-notifications-switch"
+              type="button"
+              role="switch"
+              aria-checked={Boolean(telegramConnection)}
+              className="telegram-notification-switch"
+              onClick={toggleTelegramNotifications}
+              disabled={telegramBusy}
+            >
+              <span className="telegram-notification-switch-thumb" />
+            </button>
+          </div>
+          {telegramSetupOpen && !telegramConnection && (
+            <div className="telegram-notification-setup">
+              {telegramBusy ? <p role="status">Opening Telegram setup…</p> : telegramLink ? <>
+                <a href={telegramLink} target="_blank" rel="noreferrer">Open Telegram to connect</a>
+                <button type="button" className="secondary-btn" onClick={() => void refreshTelegramConnection()} disabled={telegramBusy}>Check connection</button>
+              </> : <button type="button" className="secondary-btn" onClick={startTelegramLink} disabled={telegramBusy}>Start Telegram setup</button>}
+            </div>
           )}
           {telegramMessage && <p role="status">{telegramMessage}</p>}
-          {!telegramConnection && telegramLink && <button type="button" className="secondary-btn" onClick={() => void refreshTelegramConnection()} disabled={telegramBusy}>Check connection</button>}
         </section>
         {notifications.length ? notifications.map((item) => <article key={item.id} style={{ borderTop: '1px solid #eee', padding: '10px 0' }}>
           <button type="button" className="notification-item" onClick={() => handleNotificationClick(item)} style={{ display: 'block', width: '100%', background: 'transparent', border: 0, color: 'inherit', textAlign: 'left', font: 'inherit', padding: '6px 0', cursor: 'pointer' }}>

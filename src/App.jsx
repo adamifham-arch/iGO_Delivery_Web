@@ -21,6 +21,10 @@ import {
   loadWithdrawalRequests,
   loadNotifications,
   markNotificationRead,
+  loadManualNotificationRecipients,
+  loadManualNotificationHistory,
+  sendManualNotification,
+  retryManualNotification,
   loadTelegramConnection,
   createTelegramLink,
   disconnectTelegram,
@@ -1803,6 +1807,7 @@ export default function App() {
           ['Finance Management', '♙'],
           ['Approvals', '✓', 'Pending user approvals'],
           ['User Management', '♙'],
+          ['Send Notifications', '✉'],
         ]
       : [
           ['Overview', '⌂'],
@@ -2216,6 +2221,10 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             </section>
           )}
 
+
+          {page === 'Send Notifications' && workspace === 'Admin' && databaseProfile?.role === 'admin' && (
+            <ManualNotificationsManagement />
+          )}
 
           {page === 'Staff Operations' && workspace === 'Staff' && (
             <>
@@ -5180,6 +5189,211 @@ function NotificationCenter({ onNavigate }) {
         </article>) : <p>No notifications.</p>}
       </section>}
     </div>
+  );
+}
+
+function ManualNotificationsManagement() {
+  const [recipients, setRecipients] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [scope, setScope] = useState('all');
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [channels, setChannels] = useState(['in_app', 'telegram']);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [expandedBatch, setExpandedBatch] = useState(null);
+
+  const refreshHistory = async () => {
+    const rows = await loadManualNotificationHistory();
+    setHistory(rows);
+  };
+  useEffect(() => {
+    let active = true;
+    Promise.all([loadManualNotificationRecipients(), loadManualNotificationHistory()])
+      .then(([userRows, historyRows]) => {
+        if (!active) return;
+        setRecipients(userRows);
+        setHistory(historyRows);
+        setError('');
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message || 'Could not load notification tools.');
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const visibleRecipients = recipients.filter((user) => {
+    const query = search.trim().toLowerCase();
+    return !query || [user.display_name, user.email, user.role].some((value) => String(value || '').toLowerCase().includes(query));
+  });
+  const targetCount = scope === 'selected'
+    ? selectedUsers.length
+    : scope === 'all'
+      ? recipients.length
+      : recipients.filter((user) => user.role === scope).length;
+  const toggleChannel = (channel) => setChannels((current) => current.includes(channel)
+    ? current.filter((value) => value !== channel)
+    : [...current, channel]);
+  const toggleRecipient = (userId) => setSelectedUsers((current) => current.includes(userId)
+    ? current.filter((value) => value !== userId)
+    : [...current, userId]);
+
+  const send = async (event) => {
+    event.preventDefault();
+    if (!channels.length || !targetCount || !title.trim() || !message.trim()) return;
+    const audienceLabel = scope === 'all' ? 'all users' : scope === 'selected' ? `${selectedUsers.length} selected users` : `all ${scope}s`;
+    if (!window.confirm(`Send this notification to ${audienceLabel}?`)) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await sendManualNotification({
+        title,
+        message,
+        scope,
+        userIds: scope === 'selected' ? selectedUsers : [],
+        channels,
+      });
+      setNotice(`Sent to ${result.recipient_count || targetCount} users. Telegram: ${result.telegram_sent || 0} sent, ${result.telegram_failed || 0} failed, ${result.telegram_not_connected || 0} not connected.`);
+      setTitle('');
+      setMessage('');
+      setSelectedUsers([]);
+      await refreshHistory();
+    } catch (sendError) {
+      setError(sendError.message || 'Could not send notification.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const retry = async (batch) => {
+    if (!window.confirm('Retry Telegram delivery for failed or pending recipients?')) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await retryManualNotification(batch.batch_id);
+      setNotice(`Telegram retry complete. ${result.telegram_sent || 0} sent, ${result.telegram_failed || 0} failed, ${result.telegram_not_connected || 0} not connected.`);
+      await refreshHistory();
+    } catch (retryError) {
+      setError(retryError.message || 'Could not retry Telegram delivery.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const scopeLabels = { all: 'All users', partner: 'Partners', driver: 'Drivers', staff: 'Staff', admin: 'Admins', selected: 'Selected users' };
+  return (
+    <section className="manual-notifications-page" aria-label="Send notifications">
+      <header>
+        <p className="eyebrow">ADMIN WORKSPACE</p>
+        <h2>Send notifications</h2>
+        <p>Create an in-site notification and optionally send it to linked Telegram accounts.</p>
+      </header>
+      {error && <p className="manual-notification-error" role="alert">{error}</p>}
+      {notice && <p className="manual-notification-notice" role="status">{notice}</p>}
+      {loading ? <p>Loading notification tools…</p> : (
+        <>
+          <form className="manual-notification-form" onSubmit={send}>
+            <label>
+              Recipients
+              <select value={scope} onChange={(event) => { setScope(event.target.value); setSelectedUsers([]); }}>
+                <option value="all">All users ({recipients.length})</option>
+                <option value="partner">Partners ({recipients.filter((user) => user.role === 'partner').length})</option>
+                <option value="driver">Drivers ({recipients.filter((user) => user.role === 'driver').length})</option>
+                <option value="staff">Staff ({recipients.filter((user) => user.role === 'staff').length})</option>
+                <option value="admin">Admins ({recipients.filter((user) => user.role === 'admin').length})</option>
+                <option value="selected">Choose users…</option>
+              </select>
+            </label>
+            {scope === 'selected' && (
+              <div className="manual-notification-recipient-picker">
+                <label>
+                  Find a user
+                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, or role" />
+                </label>
+                <div className="manual-notification-user-list">
+                  {visibleRecipients.map((user) => (
+                    <label key={user.user_id} className="manual-notification-user">
+                      <input type="checkbox" checked={selectedUsers.includes(user.user_id)} onChange={() => toggleRecipient(user.user_id)} />
+                      <span><strong>{user.display_name}</strong><small>{user.email} · {user.role}</small></span>
+                    </label>
+                  ))}
+                  {!visibleRecipients.length && <p>No matching accounts.</p>}
+                </div>
+                <small>{selectedUsers.length} selected</small>
+              </div>
+            )}
+            <label>
+              Title
+              <input value={title} maxLength={100} onChange={(event) => setTitle(event.target.value)} required placeholder="Notification title" />
+            </label>
+            <label>
+              Message
+              <textarea value={message} maxLength={2000} onChange={(event) => setMessage(event.target.value)} required rows={4} placeholder="Write your message" />
+              <small>{message.length}/2000</small>
+            </label>
+            <fieldset className="manual-notification-channels">
+              <legend>Send through</legend>
+              <label><input type="checkbox" checked={channels.includes('in_app')} onChange={() => toggleChannel('in_app')} /> In-site notifications</label>
+              <label><input type="checkbox" checked={channels.includes('telegram')} onChange={() => toggleChannel('telegram')} /> Telegram for users who connected it</label>
+            </fieldset>
+            <section className="manual-notification-preview">
+              <h3>Preview · {targetCount} {targetCount === 1 ? 'recipient' : 'recipients'}</h3>
+              <strong>{title.trim() || 'Notification title'}</strong>
+              <p>{message.trim() || 'Your message will appear here.'}</p>
+              <small>{channels.map((channel) => channel === 'in_app' ? 'In-site' : 'Telegram').join(' + ') || 'Choose a delivery method'}</small>
+            </section>
+            <button type="submit" className="primary-btn" disabled={busy || !targetCount || !channels.length || !title.trim() || !message.trim()}>
+              {busy ? 'Sending…' : 'Send notification'}
+            </button>
+          </form>
+
+          <section className="manual-notification-history">
+            <div className="manual-notification-history-heading">
+              <h2>Recent sends</h2>
+              <button type="button" className="secondary-btn" onClick={() => refreshHistory().catch((loadError) => setError(loadError.message))} disabled={busy}>Refresh</button>
+            </div>
+            {history.length ? history.map((batch) => (
+              <article key={batch.batch_id} className="manual-notification-batch">
+                <div className="manual-notification-batch-summary">
+                  <div>
+                    <strong>{batch.title}</strong>
+                    <small>{new Date(batch.created_at).toLocaleString()} · {scopeLabels[batch.recipient_scope] || batch.recipient_scope} · {batch.recipient_count} recipients</small>
+                  </div>
+                  <button type="button" className="secondary-btn" onClick={() => setExpandedBatch((current) => current === batch.batch_id ? null : batch.batch_id)}>
+                    {expandedBatch === batch.batch_id ? 'Hide details' : 'Details'}
+                  </button>
+                </div>
+                <p>{batch.message}</p>
+                <small>
+                  In-site {batch.in_app_delivered}/{batch.recipient_count}
+                  {batch.channels.includes('telegram') && ` · Telegram: ${batch.telegram_sent} sent, ${batch.telegram_failed} failed, ${batch.telegram_not_connected} not connected, ${batch.telegram_pending} pending`}
+                </small>
+                {batch.telegram_failed > 0 && (
+                  <button type="button" className="secondary-btn" onClick={() => void retry(batch)} disabled={busy}>Retry Telegram failures</button>
+                )}
+                {expandedBatch === batch.batch_id && (
+                  <div className="manual-notification-delivery-list">
+                    {batch.recipients.map((recipient) => (
+                      <div key={recipient.user_id || recipient.display_name}>
+                        <span><strong>{recipient.display_name}</strong><small>{recipient.email} · {recipient.role}</small></span>
+                        <small>In-site: {recipient.in_app_status === 'delivered' ? 'sent' : 'not selected'} · Telegram: {recipient.telegram_status.replaceAll('_', ' ')}</small>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            )) : <p>No manual notifications sent yet.</p>}
+          </section>
+        </>
+      )}
+    </section>
   );
 }
 

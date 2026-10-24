@@ -23,6 +23,28 @@
   height: 100%;
   object-fit: cover;
 }
+.public-slideshow-frame > .public-slideshow-image--fade {
+  animation: landing-slide-fade 420ms ease both;
+}
+.public-slideshow-frame > .public-slideshow-image--slide {
+  animation: landing-slide-in 420ms cubic-bezier(.2, .7, .2, 1) both;
+}
+.public-slideshow-frame > .public-slideshow-image--zoom {
+  animation: landing-slide-zoom 420ms ease both;
+}
+@keyframes landing-slide-fade {
+  from { opacity: .35; }
+  to { opacity: 1; }
+}
+@keyframes landing-slide-in {
+  from { opacity: .65; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes landing-slide-zoom {
+  from { opacity: .6; transform: scale(1.025); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .public-slideshow-caption {
   position: absolute;
   inset: auto 0 0;
@@ -54,7 +76,11 @@
   line-height: 1;
   transform: translateY(-50%);
 }
-.public-slideshow-arrow:hover { transform: translateY(calc(-50% - 1px)); }
+.public-slideshow-arrow {
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.public-slideshow-arrow:hover { background: rgb(17 24 39 / 86%); }
+.public-slideshow-arrow:active { background: rgb(17 24 39 / 94%); }
 .public-slideshow-previous { left: 16px; }
 .public-slideshow-next { right: 16px; }
 .public-slideshow-controls {
@@ -95,6 +121,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .public-slideshow-arrow, .public-slideshow-pause, .public-slideshow-dots button { transition: none !important; }
+  .public-slideshow-frame > .public-slideshow-image--fade,
+  .public-slideshow-frame > .public-slideshow-image--slide,
+  .public-slideshow-frame > .public-slideshow-image--zoom { animation: none !important; }
 }
 
 .landing-slide-manager { display: grid; gap: 14px; }
@@ -120,3 +149,29 @@
   .landing-slide-item { grid-template-columns: 1fr; }
   .landing-slide-item > img { max-width: 320px; }
 }
+
+
+/* Place the managed slideshow inside the existing landing-page hero artwork tile. */
+.public-hero-art > .public-slideshow--hero {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  margin: 0;
+  align-self: stretch;
+}
+.public-hero-art .public-slideshow-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  aspect-ratio: auto;
+  border-radius: inherit;
+}
+@media (max-width: 600px) {
+  .public-hero-art > .public-slideshow--hero,
+  .public-hero-art .public-slideshow-frame {
+    min-height: 230px;
+  }
+}
+
+.landing-slide-transition { display: grid; gap: 6px; max-width: 260px; font-weight: 650; }
+.landing-slide-transition select { width: 100%; }

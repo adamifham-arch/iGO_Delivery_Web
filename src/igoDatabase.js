@@ -435,6 +435,36 @@ export async function markNotificationRead(id) {
   if (error) throw error;
 }
 
+export async function loadManualNotificationRecipients() {
+  const { data, error } = await requireClient().rpc('list_manual_notification_recipients');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function loadManualNotificationHistory() {
+  const { data, error } = await requireClient().rpc('list_manual_notification_history');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function sendManualNotification({ title, message, scope, userIds = [], channels = ['in_app', 'telegram'] }) {
+  const { data, error } = await requireClient().functions.invoke('manual-notification-dispatch', {
+    body: { action: 'send', title, message, scope, userIds, channels },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function retryManualNotification(batchId) {
+  const { data, error } = await requireClient().functions.invoke('manual-notification-dispatch', {
+    body: { action: 'retry', batchId },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 export async function loadTelegramConnection() {
   const { data, error } = await requireClient()
     .from('telegram_connections')

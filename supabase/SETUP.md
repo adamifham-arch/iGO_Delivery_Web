@@ -28,6 +28,7 @@ Run each SQL file separately in Supabase SQL Editor, in this order:
 13. `migrations/202610220007_owner_payment_notifications.sql`
 14. `migrations/202610220008_operations_dispatch_permissions.sql`
 15. `migrations/202610220009_finance_withdrawal_approval_scope.sql`
+16. `migrations/202610240001_telegram_alerts.sql`
 
 The first file adds enum values, which must commit before the next migration refers to them. The third file enables Supabase Cron (`pg_cron`) and schedules a once-per-minute check; invoices are generated once the configured Maldives-local cutoff passes. If Supabase says the extension is unavailable or cannot be enabled through SQL, enable **pg_cron** in the project dashboard under Integrations → Cron, then run migration 3 again. Manual invoice generation works independently of the scheduler.
 
@@ -58,3 +59,17 @@ Reports are generated from these saved records. No demo records are copied into 
 ## Verify the live setup
 
 After applying the migrations and adding the two app settings, sign in with an existing admin account. Confirm the Finance Management page loads from Supabase, then test using a dedicated test partner and test driver account: pending/rejected/suspended accounts should not register packages or claim jobs; an approved partner can create a package; an approved driver can claim it and record pickup; boat delivery must reject missing proof; only an admin can approve a submitted payment or an account; and an admin can generate an invoice for delivered packages. Use test records only, and delete them through the app after confirming the flow.
+
+
+## Enable Telegram notifications
+
+Telegram delivery is optional for each signed-in user. Add these secrets under Supabase Project Settings → Edge Functions → Secrets:
+
+- `TELEGRAM_BOT_TOKEN` — the private token from @BotFather. Never put it in browser or Vite variables.
+- `TELEGRAM_BOT_USERNAME` — the bot username without `@`.
+- `TELEGRAM_WEBHOOK_SECRET` — a random string containing only letters, numbers, underscores, and hyphens.
+- `TELEGRAM_DISPATCH_SECRET` — a different random secret for the database notification webhook.
+
+Deploy the `telegram-link`, `telegram-webhook`, and `telegram-notify` functions. Apply the Telegram migration above first. Configure Telegram's webhook to call `https://zwkbiojexnuxvxczpsyf.supabase.co/functions/v1/telegram-webhook` with the `TELEGRAM_WEBHOOK_SECRET` as Telegram's `secret_token` and allow the `message` update. Create an INSERT Database Webhook on `public.notifications` targeting `telegram-notify`; send `X-iGO-Webhook-Secret: <TELEGRAM_DISPATCH_SECRET>`.
+
+Users then open the notification bell, choose **Connect Telegram**, open the one-time link in the bot, press **Start**, and return to the site to choose **Check connection**. Links expire after 10 minutes. Users can disconnect from the same panel or send `/stop` to the bot.

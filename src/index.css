@@ -8106,3 +8106,17 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   border-color: #cbd5e1;
   color: #202b36;
 }
+
+
+/* Optional Telegram delivery from the notification panel. */
+.notification-panel .telegram-alert-settings {
+  border-top: 1px solid rgba(127, 127, 127, .35);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+.notification-panel .telegram-alert-settings h4 {
+  margin: 0 0 6px;
+}
+.notification-panel .telegram-alert-settings p {
+  margin: 6px 0 10px;
+}

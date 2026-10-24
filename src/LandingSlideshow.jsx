@@ -6,12 +6,13 @@ import {
   updateLandingPageSlide,
   uploadLandingPageSlide,
   reorderLandingPageSlides,
+  saveLandingSlideshowTransition,
 } from './igoDatabase';
 import './LandingSlideshow.css';
 
 const advanceSlide = (current, amount, length) => (current + amount + length) % length;
 
-export function PublicLandingSlideshow({ visible, placement = 'section', fallback = null }) {
+export function PublicLandingSlideshow({ visible, placement = 'section', fallback = null, transition = 'fade' }) {
   const [slides, setSlides] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -52,7 +53,7 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
     >
       {placement !== 'hero' && <h2 id="public-slideshow-title">Updates from iGO</h2>}
       <div className="public-slideshow-frame" aria-roledescription="carousel" aria-label="iGO image slideshow">
-        <img key={slide.id} src={slide.imageUrl} alt={slide.alt_text || ''} />
+        <img key={slide.id} className={`public-slideshow-image public-slideshow-image--${transition}`} src={slide.imageUrl} alt={slide.alt_text || ''} />
         {slide.caption && <p className="public-slideshow-caption">{slide.caption}</p>}
         {slides.length > 1 && <>
           <button className="public-slideshow-arrow public-slideshow-previous" type="button" aria-label="Previous slide" onClick={() => setActiveIndex((index) => advanceSlide(index, -1, slides.length))}>‹</button>
@@ -69,7 +70,7 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
   );
 }
 
-export function SuperadminLandingSlideshowManager({ visible, onVisibilityChange }) {
+export function SuperadminLandingSlideshowManager({ visible, onVisibilityChange, transition = 'fade', onTransitionChange }) {
   const [slides, setSlides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -90,6 +91,22 @@ export function SuperadminLandingSlideshowManager({ visible, onVisibilityChange 
   };
 
   useEffect(() => { void refresh(); }, []);
+
+  const changeTransition = async (event) => {
+    const nextValue = event.target.value;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await saveLandingSlideshowTransition(nextValue);
+      onTransitionChange(nextValue);
+      setMessage('Slide transition saved.');
+    } catch (saveError) {
+      setError(saveError.message || 'Could not update the slide transition.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const changeVisibility = async (event) => {
     const nextValue = event.target.checked;
@@ -210,6 +227,13 @@ export function SuperadminLandingSlideshowManager({ visible, onVisibilityChange 
       <label className="landing-slide-visibility">
         <input type="checkbox" checked={visible} disabled={busy} onChange={changeVisibility} />
         Show slideshow card on the public landing page
+      </label>
+      <label className="landing-slide-transition">Slide transition
+        <select value={transition} disabled={busy} onChange={changeTransition}>
+          <option value="fade">Fade</option>
+          <option value="slide">Slide</option>
+          <option value="zoom">Zoom</option>
+        </select>
       </label>
       <form className="landing-slide-upload" onSubmit={addSlide}>
         <label>Slide image

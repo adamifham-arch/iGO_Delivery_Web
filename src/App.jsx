@@ -438,6 +438,35 @@ export default function App() {
     const recoveryParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     return recoveryParams.get('type') === 'recovery' ? 'reset-password' : 'landing';
   });
+  useEffect(() => {
+    if (authMode !== 'landing' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    const site = document.querySelector('.public-site');
+    if (!site || !('IntersectionObserver' in window)) return undefined;
+
+    const sections = site.querySelectorAll(
+      '.public-how, .public-feature-grid article, .public-delivery-coverage, .public-rider, .public-footer'
+    );
+    sections.forEach((section) => section.setAttribute('data-scroll-motion', ''));
+    site.classList.add('scroll-motion-ready');
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('scroll-motion-visible');
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -16px 0px' });
+
+    sections.forEach((section) => observer.observe(section));
+    return () => {
+      observer.disconnect();
+      site.classList.remove('scroll-motion-ready');
+      sections.forEach((section) => {
+        section.removeAttribute('data-scroll-motion');
+        section.classList.remove('scroll-motion-visible');
+      });
+    };
+  }, [authMode]);
   const [authNotice, setAuthNotice] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');

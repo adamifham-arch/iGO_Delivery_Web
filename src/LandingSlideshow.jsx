@@ -11,7 +11,7 @@ import './LandingSlideshow.css';
 
 const advanceSlide = (current, amount, length) => (current + amount + length) % length;
 
-export function PublicLandingSlideshow({ visible }) {
+export function PublicLandingSlideshow({ visible, placement = 'section', fallback = null }) {
   const [slides, setSlides] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -41,12 +41,16 @@ export function PublicLandingSlideshow({ visible }) {
     return () => window.clearInterval(timer);
   }, [visible, paused, slides.length]);
 
-  if (!visible || !slides.length) return null;
+  if (!visible || !slides.length) return fallback;
   const slide = slides[activeIndex];
 
   return (
-    <section className="public-slideshow" aria-labelledby="public-slideshow-title">
-      <h2 id="public-slideshow-title">Updates from iGO</h2>
+    <section
+      className={`public-slideshow${placement === 'hero' ? ' public-slideshow--hero' : ''}`}
+      aria-label={placement === 'hero' ? 'iGO image slideshow' : undefined}
+      aria-labelledby={placement === 'hero' ? undefined : 'public-slideshow-title'}
+    >
+      {placement !== 'hero' && <h2 id="public-slideshow-title">Updates from iGO</h2>}
       <div className="public-slideshow-frame" aria-roledescription="carousel" aria-label="iGO image slideshow">
         <img key={slide.id} src={slide.imageUrl} alt={slide.alt_text || ''} />
         {slide.caption && <p className="public-slideshow-caption">{slide.caption}</p>}

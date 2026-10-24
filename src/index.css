@@ -2559,6 +2559,13 @@ button {
 .public-auth-card label { display: grid; gap: 6px; color: #334155; font-weight: 600; }
 .public-auth-card input { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid #d6dae0; border-radius: 9px; font: inherit; }
 .public-auth-card input:focus { outline: 3px solid #f5d74466; border-color: #c7a900; }
+.public-auth-card .public-password-control { position: relative; display: flex; align-items: center; }
+.public-auth-card .public-password-control input { padding-right: 64px; }
+.public-auth-card .public-password-toggle { position: absolute; right: 8px; min-width: 48px; padding: 6px; border: 0; border-radius: 6px; background: transparent; color: #725b00; font: inherit; font-size: .9rem; font-weight: 700; cursor: pointer; }
+.public-auth-card .public-password-toggle:focus-visible { outline: 2px solid #c7a900; outline-offset: 2px; }
+.public-auth-card .public-remember-option { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.public-auth-card .public-remember-option input { width: 18px; min-height: 18px; margin: 0; accent-color: #c7a900; }
+
 .public-auth-card .public-form-note { margin: 0; color: #687486; font-size: .9rem; line-height: 1.5; }
 .public-auth-card .public-forgot-link { justify-self: end; margin-top: -6px; }
 .public-auth-switch { text-align: center; font-size: .92rem; }

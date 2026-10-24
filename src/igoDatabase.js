@@ -772,6 +772,33 @@ export async function loadLandingSlideshowTransition() {
   return ['fade', 'slide', 'zoom'].includes(data?.value) ? data.value : 'fade';
 }
 
+export async function loadLandingSlideshowDuration() {
+  const { data, error } = await requireClient()
+    .from('public_site_settings')
+    .select('value')
+    .eq('key', 'slideshow_duration_seconds')
+    .maybeSingle();
+  if (error) throw error;
+  const seconds = Number(data?.value);
+  return Number.isInteger(seconds) && seconds >= 2 && seconds <= 30 ? seconds : 6;
+}
+
+export async function saveLandingSlideshowDuration(durationSeconds) {
+  const client = await requireLandingSlideshowSuperadmin();
+  if (!Number.isInteger(durationSeconds) || durationSeconds < 2 || durationSeconds > 30) {
+    throw new Error('Choose a duration from 2 to 30 seconds.');
+  }
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) throw userError || new Error('Sign in first.');
+  const { error } = await client.from('public_site_settings').upsert({
+    key: 'slideshow_duration_seconds',
+    value: durationSeconds,
+    updated_at: new Date().toISOString(),
+    updated_by: userData.user.id,
+  }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
 export async function saveLandingSlideshowTransition(transition) {
   const client = await requireLandingSlideshowSuperadmin();
   if (!['fade', 'slide', 'zoom'].includes(transition)) throw new Error('Choose a valid slide transition.');
@@ -834,6 +861,7 @@ export async function uploadLandingPageSlide({ file, altText, caption = '' }) {
     image_path: imagePath,
     alt_text: cleanAltText.slice(0, 240),
     caption: String(caption || '').trim().slice(0, 160),
+    is_visible: false,
     updated_by: userData.user.id,
   }).select(landingSlideFields).single();
   if (error) {

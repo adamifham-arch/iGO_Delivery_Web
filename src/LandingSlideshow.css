@@ -69,20 +69,30 @@
 .public-slideshow-arrow {
   position: absolute;
   top: 50%;
-  width: 44px;
-  height: 52px;
-  border-radius: 14px;
-  font-size: 2rem;
+  width: 36px;
+  height: 36px;
+  padding: 0 0 2px;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(15 23 42 / 34%);
+  font-size: 1.65rem;
+  font-weight: 400;
   line-height: 1;
   transform: translateY(-50%);
+  transition: background-color 140ms ease, border-color 140ms ease, opacity 140ms ease;
 }
-.public-slideshow-arrow {
-  transition: background-color 140ms ease, border-color 140ms ease;
+.public-slideshow-arrow:hover,
+.public-site .public-slideshow-arrow:hover {
+  background: rgb(15 23 42 / 58%);
+  border-color: rgb(255 255 255 / 48%);
+  transform: translateY(-50%);
 }
-.public-slideshow-arrow:hover { background: rgb(17 24 39 / 86%); }
-.public-slideshow-arrow:active { background: rgb(17 24 39 / 94%); }
-.public-slideshow-previous { left: 16px; }
-.public-slideshow-next { right: 16px; }
+.public-slideshow-arrow:active,
+.public-site .public-slideshow-arrow:active { background: rgb(15 23 42 / 72%); }
+.public-slideshow-arrow:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.public-slideshow-previous { left: 14px; }
+.public-slideshow-next { right: 14px; }
 .public-slideshow-controls {
   position: absolute;
   right: 18px;
@@ -104,13 +114,21 @@
   cursor: pointer;
 }
 .public-slideshow-dots button[aria-current="true"] { width: 24px; background: #ffd21c; }
-.public-slideshow-pause { padding: 6px 11px; border-radius: 999px; font-size: .78rem; }
+.public-slideshow-pause {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.public-slideshow-pause:hover { background: rgb(17 24 39 / 90%); border-color: rgb(255 255 255 / 68%); }
+.public-slideshow-pause svg { width: 15px; height: 15px; fill: currentColor; }
 .public-site[data-theme="night"] .public-slideshow > h2 { color: #f8fafc; }
 .public-site[data-theme="night"] .public-slideshow-frame { border-color: #374151; background: #1f2937; }
 @media (max-width: 600px) {
   .public-slideshow { width: min(100% - 32px, 600px); margin-bottom: 48px; }
   .public-slideshow-frame { border-radius: 18px; }
-  .public-slideshow-arrow { width: 36px; height: 42px; }
+  .public-slideshow-arrow { width: 32px; height: 32px; }
   .public-slideshow-previous { left: 10px; }
   .public-slideshow-next { right: 10px; }
   .public-slideshow-caption { padding: 30px 16px 50px; }
@@ -175,3 +193,7 @@
 
 .landing-slide-transition { display: grid; gap: 6px; max-width: 260px; font-weight: 650; }
 .landing-slide-transition select { width: 100%; }
+.landing-slide-duration { display: grid; gap: 6px; max-width: 360px; font-weight: 650; }
+.landing-slide-duration > div { display: flex; align-items: center; gap: 8px; }
+.landing-slide-duration input { width: 100px; }
+.landing-slide-duration small { color: #748094; font-weight: 400; }

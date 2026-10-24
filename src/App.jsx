@@ -1,5 +1,6 @@
 import { Component, useEffect, useRef, useState } from 'react';
 import './index.css';
+import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
 import { supabase, supabaseConfigured, setAuthRememberMe } from './supabase';
 import { StaffOperations } from './StaffOperations';
 import { DayEndReport } from './DayEndReport';
@@ -46,6 +47,7 @@ import {
   updatePackage,
   loadRiderCardVisibility,
   saveRiderCardVisibility,
+  loadLandingSlideshowVisibility,
 } from './igoDatabase';
 
 const partnerOperatingLocation = 'Malé'; // Admin-configured partner operating location
@@ -478,6 +480,7 @@ export default function App() {
   const [databaseError, setDatabaseError] = useState('');
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [showRiderCard, setShowRiderCard] = useState(false);
+  const [showSlideshowCard, setShowSlideshowCard] = useState(false);
   const [riderCardSaving, setRiderCardSaving] = useState(Boolean(supabaseConfigured));
   const [riderCardFeedback, setRiderCardFeedback] = useState('');
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
@@ -518,6 +521,14 @@ export default function App() {
       .then((visible) => { if (active) setShowRiderCard(visible); })
       .catch((error) => { if (active) setRiderCardFeedback(`Rider card setting unavailable: ${error.message}`); })
       .finally(() => { if (active) setRiderCardSaving(false); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    if (!supabaseConfigured) return () => { active = false; };
+    loadLandingSlideshowVisibility()
+      .then((visible) => { if (active) setShowSlideshowCard(visible); })
+      .catch((error) => console.error('Slideshow visibility setting unavailable:', error));
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -2073,6 +2084,7 @@ export default function App() {
               <div className="public-hero-art" aria-hidden="true"><div className="public-route-card"><div className="public-route-heading"><img className="public-route-pin-logo" src="/igo-logo.jpg" alt="iGO" /></div><ol className="public-journey"><li className="journey-order"><span>01</span><strong>Package registered</strong></li><li className="journey-pickup"><span>02</span><strong>Picked up</strong></li><li className="journey-delivered"><span>03</span><strong>Delivered</strong></li></ol></div></div>
             </section>
             <section className="public-how" id="how-it-works"><h2>Why choose iGO?</h2><p className="public-section-intro">Great rates, fast delivery, and easy package tracking.</p><div className="public-feature-grid"><article><span>01</span><h3>Best rates</h3><p>Keep delivery costs low as your business grows.</p></article><article><span>02</span><h3>Fast delivery</h3><p>We pick up and deliver your packages promptly.</p></article><article><span>03</span><h3>Easy tracking</h3><p>Check each package’s status whenever you need.</p></article></div><div className="public-delivery-coverage"><h3>Where we deliver</h3><p>Malé · Hulhumalé Phase 1 · Hulhumalé Phase 2 · Boat deliveries</p></div></section>
+            <PublicLandingSlideshow visible={showSlideshowCard} />
             {showRiderCard && (
               <section className="public-rider"><div><p className="approval-kicker">FOR RIDERS</p><h2>Interested in delivering with iGO?</h2><p>Join the rider network. Rider applications are reviewed by the iGO team.</p></div><button className="secondary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-driver'); }}>Become a rider</button></section>
             )}
@@ -2480,6 +2492,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   </label>
                   {riderCardFeedback && <p role="status" style={{ margin: 0 }}>{riderCardFeedback}</p>}
                 </section>
+                <SuperadminLandingSlideshowManager visible={showSlideshowCard} onVisibilityChange={setShowSlideshowCard} />
               )}
               <div className="welcome-card">
                 <div>

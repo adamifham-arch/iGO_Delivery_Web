@@ -382,16 +382,64 @@ class SectionErrorBoundary extends Component {
   }
 }
 
+function formFieldFingerprint(field, useDefault = false) {
+  const type = String(field.type || '').toLowerCase();
+  let value;
+  if (type === 'checkbox' || type === 'radio') {
+    value = useDefault ? field.defaultChecked : field.checked;
+  } else if (type === 'file') {
+    value = useDefault ? '' : Array.from(field.files || [])
+      .map((file) => [file.name, file.size, file.lastModified].join(':'))
+      .join('|');
+  } else if (field.tagName === 'SELECT' && field.multiple) {
+    value = useDefault
+      ? Array.from(field.options).filter((option) => option.defaultSelected).map((option) => option.value).join('|')
+      : Array.from(field.selectedOptions).map((option) => option.value).join('|');
+  } else {
+    value = useDefault ? field.defaultValue : field.value;
+  }
+  const text = String(value ?? '');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return text.length + ':' + (hash >>> 0);
+}
+
+function readSavedIgoNavigation() {
+  try {
+    const historyRoute = window.history.state?.igoNavigation;
+    if (historyRoute) return historyRoute;
+    const savedRoute = window.sessionStorage.getItem('igo-navigation');
+    return savedRoute ? JSON.parse(savedRoute) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveIgoNavigation(route) {
+  try {
+    window.sessionStorage.setItem('igo-navigation', JSON.stringify(route));
+  } catch {
+    // Navigation still works for this session even if storage is unavailable.
+  }
+}
+
 export default function App() {
   const customerNameInputRef = useRef(null);
   const customerMessageInputRef = useRef(null);
-  const [navigation, setNavigation] = useState({
-    page: 'Overview',
-    history: [],
+  const [navigation, setNavigation] = useState(() => {
+    const route = readSavedIgoNavigation();
+    return {
+      page: route?.page || 'Overview',
+      history: Array.isArray(route?.pageHistory) ? route.pageHistory : [],
+    };
   });
+  const browserNavigationIndexRef = useRef(0);
   const page = navigation.page;
   const [notificationScrollRequest, setNotificationScrollRequest] = useState(null);
-  const [workspace, setWorkspace] = useState('Partner');
+  const [workspace, setWorkspace] = useState(() => readSavedIgoNavigation()?.workspace || 'Partner');
   const workspaceRef = useRef('Partner');
   const activeUserIdRef = useRef(null);
   useEffect(() => {
@@ -445,7 +493,8 @@ export default function App() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [authMode, setAuthMode] = useState(() => {
     const recoveryParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    return recoveryParams.get('type') === 'recovery' ? 'reset-password' : 'landing';
+    if (recoveryParams.get('type') === 'recovery') return 'reset-password';
+    return readSavedIgoNavigation()?.authMode || 'landing';
   });
   const [authNotice, setAuthNotice] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -551,12 +600,111 @@ export default function App() {
     return () =>
       window.removeEventListener('igo-finance-updated', syncInvoicedPackages);
   }, [partnerSpendPeriod, databaseProfile]);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [search, setSearch] = useState(() => readSavedIgoNavigation()?.search || '');
+  const [statusFilter, setStatusFilter] = useState(() => readSavedIgoNavigation()?.statusFilter || 'All');
+  useEffect(() => {
+    const savedRoute = readSavedIgoNavigation();
+    const initialRoute = window.history.state?.igoNavigation;
+    if (initialRoute) {
+      browserNavigationIndexRef.current = Number(initialRoute.index) || 0;
+    } else {
+      const route = {
+        index: Number(savedRoute?.index) || 0,
+        page: savedRoute?.page || navigation.page,
+        pageDepth: Number(savedRoute?.pageDepth) || navigation.history.length,
+        pageHistory: Array.isArray(savedRoute?.pageHistory) ? savedRoute.pageHistory : navigation.history,
+        search: savedRoute?.search || search,
+        statusFilter: savedRoute?.statusFilter || statusFilter,
+        workspace: savedRoute?.workspace || workspace,
+        ...(savedRoute?.authMode ? { authMode: savedRoute.authMode } : { authMode }),
+      };
+      browserNavigationIndexRef.current = route.index;
+      window.history.pushState({ igoNavigation: route }, '', window.location.href);
+      saveIgoNavigation(route);
+    }
+
+    const restoreInternalRoute = (event) => {
+      const route = event.state?.igoNavigation;
+      if (!route) return;
+      browserNavigationIndexRef.current = Number(route.index) || 0;
+      saveIgoNavigation(route);
+      if (typeof route.authMode === 'string') setAuthMode(route.authMode);
+      if (typeof route.workspace === 'string') {
+        setWorkspace(route.workspace);
+        workspaceRef.current = route.workspace;
+      }
+      if (typeof route.page === 'string') {
+        const restoredHistory = Array.isArray(route.pageHistory)
+          ? route.pageHistory
+          : [];
+        setNavigation({
+          page: route.page,
+          history: restoredHistory.slice(0, Math.max(0, Number(route.pageDepth) || 0)),
+        });
+        setSearch(route.search || '');
+        setStatusFilter(route.statusFilter || 'All');
+        setShowForm(route.page === 'Register Package');
+        setShowMobileNav(false);
+        setNotice('');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+
+    window.addEventListener('popstate', restoreInternalRoute);
+    return () => window.removeEventListener('popstate', restoreInternalRoute);
+  }, []);
+  useEffect(() => {
+    const initialValues = new WeakMap();
+    const isEditableField = (target) => target instanceof HTMLElement
+      && target.matches('input, textarea, select')
+      && !['button', 'submit', 'reset', 'image'].includes(String(target.type || '').toLowerCase());
+    const captureInitialValues = (event) => {
+      if (!isEditableField(event.target)) return;
+      const target = event.target;
+      if (!initialValues.has(target)) initialValues.set(target, formFieldFingerprint(target));
+    };
+    const captureDefaultIfNeeded = (event) => {
+      if (!isEditableField(event.target)) return;
+      const target = event.target;
+      if (!initialValues.has(target)) initialValues.set(target, formFieldFingerprint(target, true));
+    };
+    const hasUnsavedChanges = () => Array.from(document.querySelectorAll('input, textarea, select'))
+      .some((field) => initialValues.has(field) && initialValues.get(field) !== formFieldFingerprint(field));
+    const confirmBeforeLeaving = (event) => {
+      if (!hasUnsavedChanges()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    const resetFormBaseline = (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      window.setTimeout(() => {
+        form.querySelectorAll('input, textarea, select').forEach((field) => {
+          initialValues.set(field, formFieldFingerprint(field));
+        });
+      }, 0);
+    };
+
+    document.addEventListener('focusin', captureInitialValues, true);
+    document.addEventListener('beforeinput', captureInitialValues, true);
+    document.addEventListener('input', captureDefaultIfNeeded, true);
+    document.addEventListener('change', captureDefaultIfNeeded, true);
+    document.addEventListener('reset', resetFormBaseline, true);
+    window.addEventListener('beforeunload', confirmBeforeLeaving);
+    return () => {
+      document.removeEventListener('focusin', captureInitialValues, true);
+      document.removeEventListener('beforeinput', captureInitialValues, true);
+      document.removeEventListener('input', captureDefaultIfNeeded, true);
+      document.removeEventListener('change', captureDefaultIfNeeded, true);
+      document.removeEventListener('reset', resetFormBaseline, true);
+      window.removeEventListener('beforeunload', confirmBeforeLeaving);
+    };
+  }, []);
+
   const [partnerFilter, setPartnerFilter] = useState('All');
   const [driverFilter, setDriverFilter] = useState('All');
   const [areaFilter, setAreaFilter] = useState('All');
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(() => (readSavedIgoNavigation()?.page || '') === 'Register Package');
   const [notice, setNotice] = useState('');
   const [bulkNotice, setBulkNotice] = useState('');
   const [messageDraft, setMessageDraft] = useState('');
@@ -629,18 +777,24 @@ export default function App() {
         setLinkedPartnerProfile(additionalProfiles.partner);
         setLinkedDriverProfile(additionalProfiles.driver);
         const selectedWorkspace = workspaceRef.current;
+        const savedRoute = readSavedIgoNavigation();
+        const savedWorkspace = savedRoute?.workspace || roleWorkspace;
+        const savedWorkspaceAllowed = savedWorkspace === roleWorkspace
+          || (additionalProfiles.isSuperadmin && savedWorkspace === 'Partner' && additionalProfiles.partner?.approval_status === 'approved')
+          || (additionalProfiles.isSuperadmin && savedWorkspace === 'Driver' && additionalProfiles.driver?.approval_status === 'approved');
+        const restoreSavedRoute = Boolean(savedRoute?.page && savedWorkspaceAllowed);
         const keepSelectedWorkspace = activeUserIdRef.current === user.id && (
           selectedWorkspace === roleWorkspace
           || (additionalProfiles.isSuperadmin && selectedWorkspace === 'Partner' && additionalProfiles.partner?.approval_status === 'approved')
           || (additionalProfiles.isSuperadmin && selectedWorkspace === 'Driver' && additionalProfiles.driver?.approval_status === 'approved')
         );
-        const nextWorkspace = keepSelectedWorkspace ? selectedWorkspace : roleWorkspace;
+        const nextWorkspace = keepSelectedWorkspace ? selectedWorkspace : restoreSavedRoute ? savedWorkspace : roleWorkspace;
         activeUserIdRef.current = user.id;
         workspaceRef.current = nextWorkspace;
         setWorkspace(nextWorkspace);
         setPackages(rows);
         if (finance) applyDatabaseFinanceSnapshot(finance);
-        if (!keepSelectedWorkspace) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : nextWorkspace === 'Staff' ? getStaffLandingPage(profile) : 'Overview', history: [] });
+        if (!keepSelectedWorkspace && !restoreSavedRoute) setNavigation({ page: nextWorkspace === 'Admin' ? 'Admin Operations' : nextWorkspace === 'Driver' ? 'Driver Overview' : nextWorkspace === 'Staff' ? getStaffLandingPage(profile) : 'Overview', history: [] });
         setDatabaseError('');
       } catch (error) {
         if (!active) return;
@@ -1208,23 +1362,54 @@ export default function App() {
     void navigate();
   }
 
+  function pushInternalRoute(route) {
+    const index = (Number(window.history.state?.igoNavigation?.index) || browserNavigationIndexRef.current || 0) + 1;
+    browserNavigationIndexRef.current = index;
+    const nextRoute = {
+      index,
+      page: navigation.page,
+      pageDepth: navigation.history.length,
+      pageHistory: route.page
+        ? [...navigation.history, { page: navigation.page, search, statusFilter }]
+        : navigation.history,
+      search,
+      statusFilter,
+      workspace,
+      authMode,
+      ...route,
+    };
+    window.history.pushState({ igoNavigation: nextRoute }, '', window.location.href);
+    saveIgoNavigation(nextRoute);
+  }
+
+  function navigateAuthMode(nextMode) {
+    if (authMode === nextMode) return;
+    pushInternalRoute({ authMode: nextMode });
+    setAuthMode(nextMode);
+  }
+
   function setPage(nextPage) {
-    setNavigation((current) =>
-      current.page === nextPage
-        ? current
-        : {
-            page: nextPage,
-            history: [
-              ...current.history,
-              { page: current.page, search, statusFilter },
-            ],
-          }
-    );
+    if (navigation.page === nextPage) return;
+    pushInternalRoute({
+      page: nextPage,
+      pageDepth: navigation.history.length + 1,
+    });
+    setNavigation((current) => ({
+      page: nextPage,
+      history: [
+        ...current.history,
+        { page: current.page, search, statusFilter },
+      ],
+    }));
   }
 
   function goBack() {
     const previous = navigation.history[navigation.history.length - 1];
     if (!previous) return;
+    if (window.history.state?.igoNavigation) {
+      window.history.back();
+      return;
+    }
     setNavigation({
       page: previous.page,
       history: navigation.history.slice(0, -1),
@@ -1863,17 +2048,17 @@ export default function App() {
         <div className="public-site" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}>
           <header className="public-header">
             <a className="public-brand" href="#home" aria-label="iGO Delivery home"><img src="/igo-logo.jpg" alt="iGO Delivery" /><span>iGO Delivery</span></a>
-            <nav aria-label="Main navigation"><button className="theme-toggle" type="button" aria-label="Switch to night mode" title="Switch to night mode" aria-pressed="false" onClick={(event) => { const site = event.currentTarget.closest('.public-site'); const night = site.dataset.theme !== 'night'; site.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.setAttribute('aria-pressed', String(night)); event.currentTarget.setAttribute('aria-label', night ? 'Switch to day mode' : 'Switch to night mode'); event.currentTarget.setAttribute('title', night ? 'Switch to day mode' : 'Switch to night mode'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="secondary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('register-partner'); }}>Register as a partner</button><button className="primary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('signin'); }}>Log in</button></nav>
+            <nav aria-label="Main navigation"><button className="theme-toggle" type="button" aria-label="Switch to night mode" title="Switch to night mode" aria-pressed="false" onClick={(event) => { const site = event.currentTarget.closest('.public-site'); const night = site.dataset.theme !== 'night'; site.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.setAttribute('aria-pressed', String(night)); event.currentTarget.setAttribute('aria-label', night ? 'Switch to day mode' : 'Switch to night mode'); event.currentTarget.setAttribute('title', night ? 'Switch to day mode' : 'Switch to night mode'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="secondary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-partner'); }}>Register as a partner</button><button className="primary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('signin'); }}>Log in</button></nav>
           </header>
           <main id="home">
             <section className="public-hero">
-              <div className="public-hero-copy"><p className="approval-kicker">DELIVERY THAT MOVES BUSINESS FORWARD</p><h1>Focus on your business. We’ll handle the deliveries.</h1><p>Best rates. Fast delivery.</p><button className="primary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('register-partner'); }}>Become a partner <span aria-hidden="true">→</span></button><small>Partner applications are reviewed before account access is enabled.</small></div>
+              <div className="public-hero-copy"><p className="approval-kicker">DELIVERY THAT MOVES BUSINESS FORWARD</p><h1>Focus on your business. We’ll handle the deliveries.</h1><p>Best rates. Fast delivery.</p><button className="primary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-partner'); }}>Become a partner <span aria-hidden="true">→</span></button><small>Partner applications are reviewed before account access is enabled.</small></div>
               <div className="public-hero-art" aria-hidden="true"><div className="public-route-card"><div className="public-route-heading"><img className="public-route-pin-logo" src="/igo-logo.jpg" alt="iGO" /></div><ol className="public-journey"><li className="journey-order"><span>01</span><strong>Package registered</strong></li><li className="journey-pickup"><span>02</span><strong>Picked up</strong></li><li className="journey-delivered"><span>03</span><strong>Delivered</strong></li></ol></div></div>
             </section>
             <section className="public-how" id="how-it-works"><p className="approval-kicker">WHY CHOOSE US!</p><h2>Why choose iGO?</h2><p className="public-section-intro">Great rates, fast delivery, and easy package tracking.</p><div className="public-feature-grid"><article><span>01</span><h3>Best rates</h3><p>Keep delivery costs low as your business grows.</p></article><article><span>02</span><h3>Fast delivery</h3><p>We pick up and deliver your packages promptly.</p></article><article><span>03</span><h3>Easy tracking</h3><p>Check each package’s status whenever you need.</p></article></div><div className="public-delivery-coverage"><h3>Where we deliver</h3><p>Malé · Hulhumalé Phase 1 · Hulhumalé Phase 2 · Boat deliveries</p></div></section>
-            <section className="public-rider"><div><p className="approval-kicker">FOR RIDERS</p><h2>Interested in delivering with iGO?</h2><p>Join the rider network. Rider applications are reviewed by the iGO team.</p></div><button className="secondary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('register-driver'); }}>Become a rider</button></section>
+            <section className="public-rider"><div><p className="approval-kicker">FOR RIDERS</p><h2>Interested in delivering with iGO?</h2><p>Join the rider network. Rider applications are reviewed by the iGO team.</p></div><button className="secondary-btn" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-driver'); }}>Become a rider</button></section>
           </main>
-          <footer className="public-footer"><span>© {new Date().getFullYear()} iGO Delivery</span><button type="button" onClick={() => setAuthMode('signin')}>Account sign in</button></footer>
+          <footer className="public-footer"><span>© {new Date().getFullYear()} iGO Delivery</span><button type="button" onClick={() => navigateAuthMode('signin')}>Account sign in</button></footer>
         </div>
       );
     }
@@ -1881,18 +2066,18 @@ export default function App() {
     if (authMode === 'register-partner' || authMode === 'register-driver') {
       const isPartnerRegistration = authMode === 'register-partner';
       return (
-        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label><label>Partner logo (optional)<input name="logo" type="file" accept="image/png,image/jpeg,image/webp" /><small>Upload a PNG, JPEG, or WebP image, up to 256 KB.</small></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><label>Confirm password *<input name="confirm_password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); setAuthMode('signin'); }}>Log in</button></p></form></main>
+        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label><label>Partner logo (optional)<input name="logo" type="file" accept="image/png,image/jpeg,image/webp" /><small>Upload a PNG, JPEG, or WebP image, up to 256 KB.</small></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><label>Confirm password *<input name="confirm_password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('signin'); }}>Log in</button></p></form></main>
       );
     }
 
 if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Set up your password</h1><p>Your account is ready. Choose a password to enter your workspace.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<form onSubmit={completeInvitedPasswordSetup}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>Confirm password<input type="password" autoComplete="new-password" minLength={8} required value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Setting up…' : 'Set password and continue'}</button></form></section></main>; }
 
   if (authMode === 'forgot-password') {
-      return <main className="public-auth-page"><section className="public-auth-card"><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('signin'); }}>← Back to sign in</button><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Reset your password</h1><p>Enter the email address on your iGO account and we’ll send a reset link.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}{authNotice && <p className="notice" role="status">{authNotice}</p>}<form onSubmit={requestPasswordReset}><label>Email<input type="email" autoComplete="email" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending link…' : 'Send reset link'}</button></form></section></main>;
+      return <main className="public-auth-page"><section className="public-auth-card"><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('signin'); }}>← Back to sign in</button><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Reset your password</h1><p>Enter the email address on your iGO account and we’ll send a reset link.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}{authNotice && <p className="notice" role="status">{authNotice}</p>}<form onSubmit={requestPasswordReset}><label>Email<input type="email" autoComplete="email" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending link…' : 'Send reset link'}</button></form></section></main>;
     }
 
     return (
-      <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={signInToDatabase}><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Sign in</h1><p>Use your approved partner, rider, or admin account.</p>{authNotice && <p className="notice" role="status">{authNotice}</p>}{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Email<input type="email" autoComplete="username" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><label className="public-password-field">Password<div className="public-password-control"><input type={showLoginPassword ? 'text' : 'password'} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /><button type="button" className="public-password-toggle" aria-label={showLoginPassword ? 'Hide password' : 'Show password'} aria-pressed={showLoginPassword} onClick={() => setShowLoginPassword((visible) => !visible)}>{showLoginPassword ? 'Hide' : 'Show'}</button></div></label><label className="public-remember-option"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />Remember me</label><button className="public-forgot-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('forgot-password'); }}>Forgot password?</button><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Signing in…' : 'Sign in'}</button><p className="public-auth-switch">Need a partner account? <button type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); setAuthMode('register-partner'); }}>Register as a partner</button></p></form></main>
+      <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={signInToDatabase}><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Sign in</h1><p>Use your approved partner, rider, or admin account.</p>{authNotice && <p className="notice" role="status">{authNotice}</p>}{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Email<input type="email" autoComplete="username" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><label className="public-password-field">Password<div className="public-password-control"><input type={showLoginPassword ? 'text' : 'password'} autoComplete="current-password" required value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} /><button type="button" className="public-password-toggle" aria-label={showLoginPassword ? 'Hide password' : 'Show password'} aria-pressed={showLoginPassword} onClick={() => setShowLoginPassword((visible) => !visible)}>{showLoginPassword ? 'Hide' : 'Show'}</button></div></label><label className="public-remember-option"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />Remember me</label><button className="public-forgot-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('forgot-password'); }}>Forgot password?</button><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Signing in…' : 'Sign in'}</button><p className="public-auth-switch">Need a partner account? <button type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('register-partner'); }}>Register as a partner</button></p></form></main>
     );
   }
 
@@ -5406,7 +5591,38 @@ function ManualNotificationsManagement() {
 }
 
 function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = false, mode = 'management' }) {
-  const [activeFinanceTab, setActiveFinanceTab] = useState('Invoices');
+  const financeTabs = workspace === 'Admin'
+    ? ['Invoices', 'Expenses', 'Day-end', 'Settings']
+    : ['Invoices', 'Expenses', 'Reports', 'Settings'];
+  const [activeFinanceTab, setActiveFinanceTab] = useState(() => {
+    try {
+      const savedTab = window.sessionStorage.getItem('igo-finance-tab');
+      return financeTabs.includes(savedTab) ? savedTab : 'Invoices';
+    } catch {
+      return 'Invoices';
+    }
+  });
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem('igo-finance-tab', activeFinanceTab);
+    } catch {
+      // Keep the selected tab for the current render if storage is unavailable.
+    }
+    if (mode !== 'management') return undefined;
+    const target = {
+      Invoices: 'Invoices & collections',
+      Expenses: 'Record business expense',
+      'Day-end': 'Day-end report',
+      Reports: 'Daily sales report',
+      Settings: 'Payment account settings',
+    }[activeFinanceTab];
+    const timer = window.setTimeout(() => {
+      const heading = Array.from(document.querySelectorAll('h2, h3'))
+        .find((item) => item.textContent.trim().includes(target));
+      heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [activeFinanceTab, workspace, mode]);
   const [overviewMonth, setOverviewMonth] = useState(() => {
     const now = new Date();
     return String(now.getFullYear()) + '-' + String(now.getMonth() + 1).padStart(2, '0');
@@ -6798,11 +7014,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
               key={target}
               type="button"
               style={{ flex: '0 0 auto', padding: '12px 15px', background: 'transparent', color: activeFinanceTab === label ? '#155b43' : '#65736c', border: 0, borderBottom: activeFinanceTab === label ? '3px solid #17634b' : '3px solid transparent', borderRadius: 0, boxShadow: 'none', fontSize: 13, fontWeight: activeFinanceTab === label ? 700 : 600, cursor: 'pointer' }}
-              onClick={() => {
-                setActiveFinanceTab(label);
-                const sectionHeading = Array.from(document.querySelectorAll('h2, h3')).find((heading) => heading.textContent.trim().includes(target));
-                sectionHeading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
+              onClick={() => setActiveFinanceTab(label)}
             >
               {label}
             </button>

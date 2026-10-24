@@ -435,6 +435,32 @@ export async function markNotificationRead(id) {
   if (error) throw error;
 }
 
+export async function loadTelegramConnection() {
+  const { data, error } = await requireClient()
+    .from('telegram_connections')
+    .select('telegram_username, linked_at')
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function createTelegramLink() {
+  const { data, error } = await requireClient().functions.invoke('telegram-link', {
+    body: { action: 'create-link' },
+  });
+  if (error) throw error;
+  if (!data?.url) throw new Error(data?.error || 'Could not create a Telegram link.');
+  return data.url;
+}
+
+export async function disconnectTelegram() {
+  const client = requireClient();
+  const { data: authData, error: authError } = await client.auth.getUser();
+  if (authError || !authData.user) throw authError || new Error('Sign in first.');
+  const { error } = await client.from('telegram_connections').delete().eq('user_id', authData.user.id);
+  if (error) throw error;
+}
+
 export async function loadWithdrawalRequests() {
   const { data, error } = await requireClient().from('driver_withdrawal_requests').select('*,drivers(name)').order('requested_at', { ascending: false });
   if (error) throw error;

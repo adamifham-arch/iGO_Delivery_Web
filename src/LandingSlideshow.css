@@ -114,7 +114,15 @@
   cursor: pointer;
 }
 .public-slideshow-dots button[aria-current="true"] { width: 24px; background: #ffd21c; }
-.public-slideshow-pause { padding: 6px 11px; border-radius: 999px; font-size: .78rem; }
+.public-slideshow-pause {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.public-slideshow-pause:hover { background: rgb(17 24 39 / 90%); border-color: rgb(255 255 255 / 68%); }
+.public-slideshow-pause svg { width: 15px; height: 15px; fill: currentColor; }
 .public-site[data-theme="night"] .public-slideshow > h2 { color: #f8fafc; }
 .public-site[data-theme="night"] .public-slideshow-frame { border-color: #374151; background: #1f2937; }
 @media (max-width: 600px) {

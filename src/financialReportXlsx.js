@@ -1,3 +1,4 @@
+import JSZip from './vendor/jszip.js';
 const REPORT_TEMPLATE = '/templates/iGO_Monthly_and_Annual_Financial_Report.xlsx';
 const CATEGORIES = [
   'Delivery fees', 'Service revenue', 'Partner services', 'Other income',
@@ -321,10 +322,9 @@ export function summarizeFinancialPeriod(model, start, end) {
 
 export async function downloadFinancialReportWorkbook({ reportMonth, ...data }) {
   if (!/^\d{4}-\d{2}$/.test(reportMonth || '')) throw new Error('Choose a report month first.');
-  if (!window.JSZip) throw new Error('The Excel export library did not load. Reload the page and try again.');
   const response = await fetch(REPORT_TEMPLATE);
   if (!response.ok) throw new Error('Could not load the financial report template.');
-  const workbookZip = await window.JSZip.loadAsync(await response.arrayBuffer());
+  const workbookZip = await JSZip.loadAsync(await response.arrayBuffer());
   const model = buildFinancialWorkbookModel(data);
   const [monthlyXml, annualXml, transactionXml] = await Promise.all([
     workbookZip.file('xl/worksheets/sheet1.xml').async('string'),

@@ -1,5 +1,6 @@
-import { Component, useEffect, useRef, useState } from 'react';
+import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import './index.css';
+import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
 import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
 import { supabase, supabaseConfigured, setAuthRememberMe } from './supabase';
 import { StaffOperations } from './StaffOperations';
@@ -5932,19 +5933,26 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     amount: '',
     reference: '',
   }));
-  const [reportStart, setReportStart] = useState(() => {
-    const now = new Date();
-    return localDateKey(new Date(now.getFullYear(), now.getMonth(), 1));
-  });
-  const [reportEnd, setReportEnd] = useState(() => localDateKey(new Date()));
+  const [reportMonth, setReportMonth] = useState(() => localDateKey(new Date()).slice(0, 7));
   const [reportPeriod, setReportPeriod] = useState(() => {
     const now = new Date();
     return {
       start: localDateKey(new Date(now.getFullYear(), now.getMonth(), 1)),
-      end: localDateKey(new Date()),
+      end: localDateKey(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
     };
   });
   const [reportGeneratedAt, setReportGeneratedAt] = useState(null);
+  const reportModel = useMemo(() => buildFinancialWorkbookModel({
+    invoices: billing.invoices,
+    payments: billing.payments,
+    expenses: billing.expenses || [],
+    withdrawals: withdrawalRequests,
+    packages,
+  }), [billing.invoices, billing.payments, billing.expenses, withdrawalRequests, packages]);
+  const reportSummary = useMemo(
+    () => summarizeFinancialPeriod(reportModel, reportPeriod.start, reportPeriod.end),
+    [reportModel, reportPeriod.start, reportPeriod.end]
+  );
   const [dailySalesDate, setDailySalesDate] = useState(() => localDateKey(new Date()));
   const [dailySalesGenerated, setDailySalesGenerated] = useState(null);
   const [adminUser, setAdminUser] = useState(null);
@@ -6779,7 +6787,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     ...billing.payments
       .filter((payment) => payment.status === 'confirmed')
       .map((payment) => ({
-        date: payment.verifiedAt || payment.submittedAt,
+        date: payment.transferDate || payment.verifiedAt || payment.submittedAt,
         type: 'Received payment',
         reference: payment.invoiceId || payment.reference || payment.id,
         party: payment.partner || 'Partner',
@@ -6792,7 +6800,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       .map((request) => ({
         date: request.paid_at || request.reviewedAt || request.requestedAt,
         type: 'Driver withdrawal',
-        reference: shortWithdrawalRequestId(request.id),
+        reference: request.id,
         party: request.driver,
         details: [
           request.bankDetails?.bankName,
@@ -6802,35 +6810,38 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         income: 0,
         outgoing: Number(request.amount || 0),
       })),
-    ...(billing.expenses || []).map((expense) => {
-      const fullReference = expense.reference || shortExpenseRecordId(expense.id);
-      return {
-        date: expense.date,
-        type: 'Expense · ' + expense.category,
-        reference: compactExpenseReference(fullReference),
-        fullReference,
-        party: expense.paidTo || '—',
-        details: expense.description,
-        income: 0,
-        outgoing: Number(expense.amount || 0),
-      };
-    }),
+    ...(billing.expenses || []).map((expense) => ({
+      date: expense.date,
+      type: 'Expense · ' + expense.category,
+      reference: expense.reference || expense.id,
+      party: expense.paidTo || '—',
+      details: expense.description,
+      income: 0,
+      outgoing: Number(expense.amount || 0),
+    })),
   ]
     .filter((row) => {
       const day = localDateKey(row.date);
       return day && day >= reportPeriod.start && day <= reportPeriod.end;
     })
     .sort((a, b) => new Date(a.date) - new Date(b.date));
-  const reportReceived = reportRows.reduce((sum, row) => sum + row.income, 0);
-  const reportOutgoings = reportRows.reduce((sum, row) => sum + row.outgoing, 0);
-  const reportNet = reportReceived - reportOutgoings;
+  const reportReceived = reportSummary.cashReceipts;
+  const reportOutgoings = reportSummary.cashPayments;
+  const reportNet = reportSummary.netProfit;
+  const reportDirectCosts = reportSummary.directDeliveryCosts;
+  const reportGrossProfit = reportSummary.grossProfit;
+  const reportOperatingExpenses = reportSummary.operatingExpenses;
   const generateFinancialReport = (event) => {
     event.preventDefault();
-    if (!reportStart || !reportEnd || reportStart > reportEnd) {
-      setNotice('Choose a valid report date range.');
+    if (!/^\d{4}-\d{2}$/.test(reportMonth)) {
+      setNotice('Choose a month for the financial report.');
       return;
     }
-    setReportPeriod({ start: reportStart, end: reportEnd });
+    const [year, month] = reportMonth.split('-').map(Number);
+    setReportPeriod({
+      start: `${reportMonth}-01`,
+      end: localDateKey(new Date(year, month, 0)),
+    });
     setReportGeneratedAt(new Date().toISOString());
     setNotice('Financial report generated.');
   };
@@ -6930,18 +6941,30 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       setCutoffSaving(false);
     }
   };
-  const exportFinancialReport = () => {
-    const fields = ['Date', 'Type', 'Reference', 'Payee / From', 'Details', 'Received (MVR)', 'Outgoing (MVR)'];
-    const rows = reportRows.map((row) => [localDateKey(row.date), row.type, row.fullReference || row.reference, row.party, row.details, row.income.toFixed(2), row.outgoing.toFixed(2)]);
-    const csvValue = (value) => '"' + String(value ?? '').replace(/"/g, '""') + '"';
-    const content = [fields, ...rows].map((row) => row.map(csvValue).join(',')).join('\r\n');
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'igo-financial-report-' + reportPeriod.start + '-to-' + reportPeriod.end + '.csv';
-    link.click();
-    URL.revokeObjectURL(url);
+  const exportFinancialReport = async () => {
+    try {
+      await downloadFinancialReportWorkbook({
+        reportMonth: reportPeriod.start.slice(0, 7),
+        invoices: billing.invoices,
+        payments: billing.payments,
+        expenses: billing.expenses || [],
+        withdrawals: withdrawalRequests,
+        packages,
+      });
+      setNotice('Monthly and annual Excel financial report downloaded.');
+    } catch (error) {
+      setNotice(error.message || 'Could not export the Excel financial report.');
+    }
+  };
+  const printFinancialReport = () => {
+    const clearPrintMode = () => {
+      delete document.body.dataset.printReport;
+      window.removeEventListener('afterprint', clearPrintMode);
+    };
+    document.body.dataset.printReport = 'financial';
+    window.addEventListener('afterprint', clearPrintMode);
+    window.print();
+    window.setTimeout(clearPrintMode, 1000);
   };
   const signInAdmin = async (event) => {
     event.preventDefault();
@@ -7436,42 +7459,53 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           <div>
             <p className="approval-kicker">IGO DELIVERY · FINANCE</p>
             <h3>Financial report</h3>
-            <p>Received payments, driver withdrawals, and business expenses.</p>
+            <p>Revenue, gross profit, expenses, cash flow, and transaction detail.</p>
           </div>
         </div>
         <form onSubmit={generateFinancialReport} className="finance-report-controls no-print">
-          <label>From<input type="date" required value={reportStart} onChange={(event) => setReportStart(event.target.value)} /></label>
-          <label>To<input type="date" required value={reportEnd} onChange={(event) => setReportEnd(event.target.value)} /></label>
-          <button style={buttonStyle} type="submit">Generate report</button>
+          <label>Report month<input type="month" required value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} /></label>
+          <button style={{ ...buttonStyle, background: '#f6cf32', color: '#202124' }} type="submit">Generate report</button>
         </form>
         {reportGeneratedAt ? (
           <>
             <p className="finance-report-meta">Period: {reportPeriod.start} to {reportPeriod.end} · Generated {new Date(reportGeneratedAt).toLocaleString()}</p>
-            <div className="stats-grid finance-report-totals">
-              <article className="stat-card"><span>Payments received</span><strong>{money(reportReceived)}</strong></article>
-              <article className="stat-card"><span>Total outgoings</span><strong>{money(reportOutgoings)}</strong></article>
-              <article className="stat-card"><span>Net cash flow</span><strong>{money(reportNet)}</strong></article>
+            <p className="finance-report-meta">Revenue uses invoice dates. Cash flow uses confirmed payment and paid-cost dates. Direct costs include driver withdrawals, fuel, and vehicle maintenance.</p>
+            <div className="finance-report-table-wrap">
+              <table className="finance-report-table finance-report-summary-table">
+                <thead><tr><th>Financial measure</th><th>Amount (MVR)</th></tr></thead>
+                <tbody>
+                  <tr><td>Revenue</td><td>{money(reportSummary.revenue)}</td></tr>
+                  <tr><td>Direct delivery costs</td><td>{money(reportDirectCosts)}</td></tr>
+                  <tr className="finance-report-highlight"><th>Gross profit</th><th>{money(reportGrossProfit)}</th></tr>
+                  <tr><td>Operating expenses</td><td>{money(reportOperatingExpenses)}</td></tr>
+                  <tr><td>Total expenses</td><td>{money(reportSummary.totalExpenses)}</td></tr>
+                  <tr className="finance-report-highlight"><th>Net profit / (loss)</th><th>{money(reportNet)}</th></tr>
+                  <tr><td>Cash receipts</td><td>{money(reportSummary.cashReceipts)}</td></tr>
+                  <tr><td>Cash payments</td><td>{money(reportSummary.cashPayments)}</td></tr>
+                  <tr><th>Net cash flow</th><th>{money(reportSummary.netCashFlow)}</th></tr>
+                </tbody>
+              </table>
             </div>
             <div className="finance-report-actions no-print">
-              <button style={buttonStyle} type="button" onClick={() => window.print()}>Print report</button>
-              <button style={{ ...buttonStyle, background: '#48564f' }} type="button" onClick={exportFinancialReport}>Export CSV</button>
+              <button style={buttonStyle} type="button" onClick={printFinancialReport}>Print report</button>
+              <button style={{ ...buttonStyle, background: '#48564f' }} type="button" onClick={exportFinancialReport}>Export Excel workbook</button>
             </div>
             <div className="finance-report-table-wrap">
               <table className="finance-report-table">
-                <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Payee / From</th><th>Details</th><th>Received</th><th>Outgoing</th></tr></thead>
+                <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Payee / From</th><th>Details</th><th>Cash received</th><th>Cash paid</th></tr></thead>
                 <tbody>
                   {reportRows.length ? reportRows.map((row, index) => (
                     <tr key={row.reference + '-' + index}>
-                      <td>{localDateKey(row.date)}</td><td>{row.type}</td><td title={row.fullReference || row.reference}>{row.reference}</td><td>{row.party}</td><td>{row.details || '—'}</td><td>{row.income ? money(row.income) : '—'}</td><td>{row.outgoing ? money(row.outgoing) : '—'}</td>
+                      <td>{localDateKey(row.date)}</td><td>{row.type}</td><td>{row.reference}</td><td>{row.party}</td><td>{row.details || '—'}</td><td>{row.income ? money(row.income) : '—'}</td><td>{row.outgoing ? money(row.outgoing) : '—'}</td>
                     </tr>
-                  )) : <tr><td colSpan="7">No transactions in this date range.</td></tr>}
+                  )) : <tr><td colSpan="7">No transactions in this report month.</td></tr>}
                 </tbody>
-                <tfoot><tr><th colSpan="5">Totals</th><th>{money(reportReceived)}</th><th>{money(reportOutgoings)}</th></tr></tfoot>
+                <tfoot><tr><th colSpan="5">Cash totals</th><th>{money(reportReceived)}</th><th>{money(reportOutgoings)}</th></tr></tfoot>
               </table>
             </div>
           </>
         ) : (
-          <p>Choose a date range and generate a report.</p>
+          <p>Choose a report month and generate the monthly and annual Excel report.</p>
         )}
       </section>
       <section style={panel}>

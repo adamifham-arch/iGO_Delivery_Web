@@ -8296,3 +8296,7 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   .manual-notification-delivery-list > div { flex-direction: column; gap: 4px; }
   .manual-notification-delivery-list > div > small { text-align: left; }
 }
+
+.finance-report-summary-table { min-width: 360px; max-width: 620px; }
+.finance-report-summary-table th:last-child, .finance-report-summary-table td:last-child { text-align: right; }
+.finance-report-summary-table .finance-report-highlight { background: #fff7d6; color: #263746; }

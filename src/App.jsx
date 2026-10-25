@@ -6962,9 +6962,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
       window.removeEventListener('afterprint', clearPrintMode);
     };
     document.body.dataset.printReport = 'financial';
-    window.addEventListener('afterprint', clearPrintMode);
+    window.addEventListener('afterprint', clearPrintMode, { once: true });
     window.print();
-    window.setTimeout(clearPrintMode, 1000);
   };
   const signInAdmin = async (event) => {
     event.preventDefault();

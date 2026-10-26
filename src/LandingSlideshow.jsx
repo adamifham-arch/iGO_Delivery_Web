@@ -60,23 +60,12 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
         <img key={slide.id} className={`public-slideshow-image public-slideshow-image--${transition}`} src={slide.imageUrl} alt={slide.alt_text || ''} />
         {slide.caption && <p className="public-slideshow-caption">{slide.caption}</p>}
         {slides.length > 1 && <>
+          <button className="public-slideshow-arrow public-slideshow-previous" type="button" aria-label="Previous slide" onClick={() => setActiveIndex((index) => advanceSlide(index, -1, slides.length))}>‹</button>
+          <button className="public-slideshow-arrow public-slideshow-next" type="button" aria-label="Next slide" onClick={() => setActiveIndex((index) => advanceSlide(index, 1, slides.length))}>›</button>
           <div className="public-slideshow-controls">
             <div className="public-slideshow-dots" aria-label="Choose slide">
               {slides.map((item, index) => <button key={item.id} type="button" aria-label={`Show slide ${index + 1}`} aria-current={index === activeIndex ? 'true' : undefined} onClick={() => setActiveIndex(index)} />)}
             </div>
-            <button
-              className="public-slideshow-pause"
-              type="button"
-              aria-label={paused ? 'Play slideshow' : 'Pause slideshow'}
-              title={paused ? 'Play slideshow' : 'Pause slideshow'}
-              onClick={() => setPaused((value) => !value)}
-            >
-              {paused ? (
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.8v12.4c0 .7.8 1.1 1.4.7l9-6.2a.9.9 0 0 0 0-1.4l-9-6.2c-.6-.4-1.4 0-1.4.7Z" /></svg>
-              ) : (
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5.5A1.5 1.5 0 0 1 8.5 4h1A1.5 1.5 0 0 1 11 5.5v13A1.5 1.5 0 0 1 9.5 20h-1A1.5 1.5 0 0 1 7 18.5v-13Zm6 0A1.5 1.5 0 0 1 14.5 4h1A1.5 1.5 0 0 1 17 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-1a1.5 1.5 0 0 1-1.5-1.5v-13Z" /></svg>
-              )}
-            </button>
           </div>
         </>}
       </div>

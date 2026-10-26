@@ -60,8 +60,6 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
         <img key={slide.id} className={`public-slideshow-image public-slideshow-image--${transition}`} src={slide.imageUrl} alt={slide.alt_text || ''} />
         {slide.caption && <p className="public-slideshow-caption">{slide.caption}</p>}
         {slides.length > 1 && <>
-          <button className="public-slideshow-arrow public-slideshow-previous" type="button" aria-label="Previous slide" onClick={() => setActiveIndex((index) => advanceSlide(index, -1, slides.length))}>‹</button>
-          <button className="public-slideshow-arrow public-slideshow-next" type="button" aria-label="Next slide" onClick={() => setActiveIndex((index) => advanceSlide(index, 1, slides.length))}>›</button>
           <div className="public-slideshow-controls">
             <div className="public-slideshow-dots" aria-label="Choose slide">
               {slides.map((item, index) => <button key={item.id} type="button" aria-label={`Show slide ${index + 1}`} aria-current={index === activeIndex ? 'true' : undefined} onClick={() => setActiveIndex(index)} />)}

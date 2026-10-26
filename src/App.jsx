@@ -5388,6 +5388,22 @@ function NotificationCenter({ onNavigate }) {
   const [telegramSetupOpen, setTelegramSetupOpen] = useState(false);
   const [telegramBusy, setTelegramBusy] = useState(false);
   const [telegramMessage, setTelegramMessage] = useState('');
+  const notificationCenterRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutsidePointer = (event) => {
+      if (!notificationCenterRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
   useEffect(() => {
     let active = true;
     let refreshing = false;
@@ -5481,7 +5497,7 @@ function NotificationCenter({ onNavigate }) {
   };
   const unread = notifications.filter((item) => !item.read).length;
   return (
-    <div className="notification-center" style={{ position: 'relative' }}>
+    <div ref={notificationCenterRef} className="notification-center" style={{ position: 'relative' }}>
       <button type="button" className="notification-icon-button" aria-label={"Notifications" + (unread > 0 ? ", " + unread + " unread" : "")} title="Notifications" onClick={() => setOpen((value) => !value)}>
         <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />

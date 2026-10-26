@@ -2616,31 +2616,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 
           {page === 'Website controls' && workspace === 'Admin' && isSuperadmin && (
             <div style={{ display: 'grid', gap: 18, marginTop: 20 }}>
-              <section className="card" style={{ padding: 20, display: 'grid', gap: 12 }}>
-                <div>
-                  <p className="eyebrow">PUBLIC WEBSITE</p>
-                  <h2 style={{ margin: '4px 0 6px' }}>Rider application card</h2>
-                  <p style={{ margin: 0, color: '#748094' }}>Choose whether visitors can see the rider application card on the landing page.</p>
-                </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
-                  <input type="checkbox" checked={showRiderCard} disabled={riderCardSaving} onChange={async (event) => {
-                    const visible = event.target.checked;
-                    setRiderCardSaving(true);
-                    setRiderCardFeedback('');
-                    try {
-                      await saveRiderCardVisibility(visible);
-                      setShowRiderCard(visible);
-                      setRiderCardFeedback(visible ? 'Rider card is visible on the public landing page.' : 'Rider card is hidden from the public landing page.');
-                    } catch (error) {
-                      setRiderCardFeedback(error.message || 'Could not update rider card visibility.');
-                    } finally {
-                      setRiderCardSaving(false);
-                    }
-                  }} />
-                  Show rider card
-                </label>
-                {riderCardFeedback && <p role="status" style={{ margin: 0 }}>{riderCardFeedback}</p>}
-              </section>
+
               <section className="card" style={{ padding: 20, display: 'grid', gap: 12 }}>
                 <div>
                   <p className="eyebrow">PUBLIC WEBSITE</p>
@@ -2667,6 +2643,31 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 {heroCopyFeedback && <p role="status" style={{ margin: 0 }}>{heroCopyFeedback}</p>}
               </section>
               <SuperadminLandingSlideshowManager visible={showSlideshowCard} onVisibilityChange={setShowSlideshowCard} transition={slideshowTransition} onTransitionChange={setSlideshowTransition} />
+              <section className="card" style={{ padding: 20, display: 'grid', gap: 12 }}>
+                <div>
+                  <p className="eyebrow">PUBLIC WEBSITE</p>
+                  <h2 style={{ margin: '4px 0 6px' }}>Rider application card</h2>
+                  <p style={{ margin: 0, color: '#748094' }}>Choose whether visitors can see the rider application card on the landing page.</p>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
+                  <input type="checkbox" checked={showRiderCard} disabled={riderCardSaving} onChange={async (event) => {
+                    const visible = event.target.checked;
+                    setRiderCardSaving(true);
+                    setRiderCardFeedback('');
+                    try {
+                      await saveRiderCardVisibility(visible);
+                      setShowRiderCard(visible);
+                      setRiderCardFeedback(visible ? 'Rider card is visible on the public landing page.' : 'Rider card is hidden from the public landing page.');
+                    } catch (error) {
+                      setRiderCardFeedback(error.message || 'Could not update rider card visibility.');
+                    } finally {
+                      setRiderCardSaving(false);
+                    }
+                  }} />
+                  Show rider card
+                </label>
+                {riderCardFeedback && <p role="status" style={{ margin: 0 }}>{riderCardFeedback}</p>}
+              </section>
             </div>
           )}
 

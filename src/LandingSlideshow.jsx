@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   deleteLandingPageSlide,
   loadLandingPageSlides,
@@ -19,6 +19,21 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [durationMs, setDurationMs] = useState(6000);
+  const swipeStart = useRef(null);
+  const handleSwipeStart = (event) => {
+    if (event.pointerType === 'mouse' || (event.target instanceof Element && event.target.closest('button'))) return;
+    swipeStart.current = { x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handleSwipeEnd = (event) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || slides.length < 2) return;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
+    setActiveIndex((index) => advanceSlide(index, deltaX < 0 ? 1 : -1, slides.length));
+  };
 
   useEffect(() => {
     let active = true;
@@ -56,7 +71,7 @@ export function PublicLandingSlideshow({ visible, placement = 'section', fallbac
       aria-labelledby={placement === 'hero' ? undefined : 'public-slideshow-title'}
     >
       {placement !== 'hero' && <h2 id="public-slideshow-title">Updates from iGO</h2>}
-      <div className="public-slideshow-frame" aria-roledescription="carousel" aria-label="iGO image slideshow">
+      <div className="public-slideshow-frame" aria-roledescription="carousel" aria-label="iGO image slideshow" onPointerDown={handleSwipeStart} onPointerUp={handleSwipeEnd} onPointerCancel={() => { swipeStart.current = null; }}>
         <img key={slide.id} className={`public-slideshow-image public-slideshow-image--${transition}`} src={slide.imageUrl} alt={slide.alt_text || ''} />
         {slide.caption && <p className="public-slideshow-caption">{slide.caption}</p>}
         {slides.length > 1 && <>

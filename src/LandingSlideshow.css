@@ -9,6 +9,7 @@
   letter-spacing: -.045em;
 }
 .public-slideshow-frame {
+  touch-action: pan-y;
   position: relative;
   overflow: hidden;
   aspect-ratio: 16 / 9;

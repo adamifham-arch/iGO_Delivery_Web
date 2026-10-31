@@ -2513,13 +2513,31 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
-              <AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} />
-              <ManagedIgoAccounts />
-              {isSuperadmin && <PartnerDeliveryPricingManagement />}
-              <PendingIgoUserApprovals />
-              <SuperadminUserManagementAccess />
-              <ProfileChangeRequests profile={databaseProfile} user={databaseUser} workspace={workspace} setNotice={setNotice} />
-              <StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} view="people" />
+              <nav className="admin-settings-shortcuts" aria-label="User management settings shortcuts">
+                <span>Settings shortcuts</span>
+                {[
+                  ['Team shares', 'admin-team-settings'],
+                  ['User accounts', 'admin-user-accounts'],
+                  ...(isSuperadmin ? [['Agreed rates', 'admin-agreed-rates']] : []),
+                  ['Approvals', 'admin-pending-approvals'],
+                  ['Admin access', 'admin-access-settings'],
+                  ['Profile requests', 'admin-profile-requests'],
+                  ['Staff roles', 'admin-staff-access'],
+                ].map(([label, target]) => (
+                  <button
+                    key={target}
+                    type="button"
+                    onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  >{label}</button>
+                ))}
+              </nav>
+              <div id="admin-team-settings" className="admin-settings-target"><AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} /></div>
+              <div id="admin-user-accounts" className="admin-settings-target"><ManagedIgoAccounts /></div>
+              {isSuperadmin && <div id="admin-agreed-rates" className="admin-settings-target"><PartnerDeliveryPricingManagement /></div>}
+              <div id="admin-pending-approvals" className="admin-settings-target"><PendingIgoUserApprovals /></div>
+              <div id="admin-access-settings" className="admin-settings-target"><SuperadminUserManagementAccess /></div>
+              <div id="admin-profile-requests" className="admin-settings-target"><ProfileChangeRequests profile={databaseProfile} user={databaseUser} workspace={workspace} setNotice={setNotice} /></div>
+              <div id="admin-staff-access" className="admin-settings-target"><StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} view="people" /></div>
             </section>
           )}
 

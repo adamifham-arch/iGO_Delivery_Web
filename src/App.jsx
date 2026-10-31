@@ -3394,7 +3394,12 @@ function PartnerDeliveryPricingManagement() {
         agreedDeliveryFee: partner.agreedDeliveryFee == null ? '' : String(partner.agreedDeliveryFee),
       }])));
     } catch (loadError) {
-      setError(loadError.message || 'Could not load customer delivery rates.');
+      const detail = String(loadError.message || '').toLowerCase();
+      setError(
+        detail.includes('delivery_pricing_mode') || detail.includes('agreed_delivery_fee')
+          ? 'Partner pricing needs the Supabase migration before rates can load.'
+          : loadError.message || 'Could not load customer delivery rates.'
+      );
     } finally {
       setLoading(false);
     }
@@ -3443,7 +3448,7 @@ function PartnerDeliveryPricingManagement() {
       </div>
       {message && <p role="status" className="notice">{message}</p>}
       {error && <p role="alert" className="notice">{error}</p>}
-      {loading ? <p>Loading customer rates…</p> : partners.length ? partners.map((partner) => {
+      {loading ? <p>Loading customer rates…</p> : error ? null : partners.length ? partners.map((partner) => {
         const draft = drafts[partner.id] || { pricingMode: 'route', agreedDeliveryFee: '' };
         return (
           <article key={partner.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end', padding: 14, border: '1px solid var(--border, #d8dee8)', borderRadius: 12 }}>

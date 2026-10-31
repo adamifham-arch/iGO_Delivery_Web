@@ -52,6 +52,9 @@ import {
   loadLandingHeroCopy,
   saveLandingHeroCopy,
   loadLandingSlideshowTransition,
+  loadPartnerDeliveryPricing,
+  loadPartnerDeliveryPricingSettings,
+  savePartnerDeliveryPricing,
 } from './igoDatabase';
 
 const partnerOperatingLocation = 'Malé'; // Admin-configured partner operating location
@@ -77,6 +80,12 @@ const deliveryRates = {
 };
 const getDeliveryFee = (destination) =>
   deliveryRates[partnerOperatingLocation]?.[destination] ?? 35;
+const getPartnerDeliveryFee = (destination, pricing) => {
+  const agreedFee = Number(pricing?.agreedDeliveryFee);
+  return pricing?.pricingMode === 'agreed_flat' && Number.isFinite(agreedFee) && agreedFee > 0
+    ? agreedFee
+    : getDeliveryFee(destination);
+};
 
 const initialPackages = [
   {
@@ -493,6 +502,8 @@ export default function App() {
   const [riderCardSaving, setRiderCardSaving] = useState(Boolean(supabaseConfigured));
   const [riderCardFeedback, setRiderCardFeedback] = useState('');
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
+  const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null });
+  const getCurrentDeliveryFee = (destination) => getPartnerDeliveryFee(destination, partnerDeliveryPricing);
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
   const [partnerSetupOpen, setPartnerSetupOpen] = useState(false);
   const [partnerBusinessName, setPartnerBusinessName] = useState('');
@@ -764,7 +775,7 @@ export default function App() {
     landmark: '',
     area: 'Malé',
     item: '',
-    fee: String(getDeliveryFee('Malé')),
+    fee: String(getCurrentDeliveryFee('Malé')),
     notes: '',
   });
 
@@ -781,6 +792,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseLoading(false);
@@ -794,6 +806,12 @@ export default function App() {
         const profile = baseProfile.role === 'staff' ? { ...baseProfile, staffAssignments: staffResult.data || [] } : baseProfile;
         const isStaff = profile.role === 'staff';
         const additionalProfiles = isStaff ? { isSuperadmin: false, partner: null, driver: null } : await loadSuperadminLinkedProfiles(user, profile);
+        const currentPartnerId = profile.role === 'partner'
+          ? await getCurrentPartnerIdOptional()
+          : profile.role === 'admin' ? additionalProfiles.partner?.id : null;
+        const currentPartnerPricing = currentPartnerId
+          ? await loadPartnerDeliveryPricing(currentPartnerId)
+          : { pricingMode: 'route', agreedDeliveryFee: null };
         const canOperatePackages = (profile.staffAssignments || []).some((item) => ['operations_manager', 'operations_staff'].includes(item.role));
         const rows = isStaff ? (canOperatePackages ? await loadPackages() : []) : await loadPackages();
         let finance = null;
@@ -819,6 +837,8 @@ export default function App() {
         setIsSuperadmin(additionalProfiles.isSuperadmin);
         setLinkedPartnerProfile(additionalProfiles.partner);
         setLinkedDriverProfile(additionalProfiles.driver);
+        setPartnerDeliveryPricing(currentPartnerPricing);
+        setForm((current) => ({ ...current, fee: String(getPartnerDeliveryFee(current.area, currentPartnerPricing)) }));
         const selectedWorkspace = workspaceRef.current;
         const savedRoute = readSavedIgoNavigation();
         const savedWorkspace = savedRoute?.workspace || roleWorkspace;
@@ -846,6 +866,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseError(error.message || 'Could not load this iGO account.');
@@ -1494,7 +1515,7 @@ export default function App() {
     setForm((current) => ({
       ...current,
       [name]: name === 'phone' ? normalizeCustomerPhone(value) : value,
-      ...(name === 'area' ? { fee: String(getDeliveryFee(value)) } : {}),
+      ...(name === 'area' ? { fee: String(getCurrentDeliveryFee(value)) } : {}),
     }));
   };
 
@@ -1564,7 +1585,7 @@ export default function App() {
         landmark: '',
         area: 'Malé',
         item: '',
-        fee: String(getDeliveryFee('Malé')),
+        fee: String(getCurrentDeliveryFee('Malé')),
         notes: '',
       });
 
@@ -1705,7 +1726,7 @@ export default function App() {
       const added = validRows.map((entry, index) => ({
           ...entry,
           id: 'IGO-' + (1001 + packages.length + index),
-          fee: getDeliveryFee(entry.area),
+          fee: getCurrentDeliveryFee(entry.area),
           status: 'Pending',
         }));
       if (supabaseConfigured) {
@@ -1872,7 +1893,7 @@ export default function App() {
         readMessageField(text, 'departure\\s*time|departure')
       ),
       landmark: readMessageField(text, 'nearby\\s*landmark|landmark'),
-      fee: String(getDeliveryFee(draftArea)),
+      fee: String(getCurrentDeliveryFee(draftArea)),
     };
     Object.assign(draft, deliveryDetails(draft));
     const duplicateKey = packageDuplicateKey(draft);
@@ -1923,7 +1944,7 @@ export default function App() {
               [field]:
                 field === 'phone' ? normalizeCustomerPhone(value) : value,
               ...(field === 'area'
-                ? { fee: String(getDeliveryFee(value)) }
+                ? { fee: String(getCurrentDeliveryFee(value)) }
                 : {}),
             }
           : entry
@@ -1973,7 +1994,7 @@ export default function App() {
         ...deliveryDetails(entry),
         phone: normalizeCustomerPhone(entry.phone),
         id: 'IGO-' + (1001 + packages.length + index),
-        fee: getDeliveryFee(entry.area),
+        fee: getCurrentDeliveryFee(entry.area),
         status: 'Pending',
       }));
     if (supabaseConfigured) {
@@ -2492,12 +2513,35 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
-              <AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} />
-              <ManagedIgoAccounts />
-              <PendingIgoUserApprovals />
-              <SuperadminUserManagementAccess />
-              <ProfileChangeRequests profile={databaseProfile} user={databaseUser} workspace={workspace} setNotice={setNotice} />
-              <StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} view="people" />
+              <nav className="admin-settings-shortcuts" aria-label="User management sections">
+                {[
+                  ['Driver Rates', 'admin-team-settings'],
+                  ['User accounts', 'admin-user-accounts'],
+                  ...(isSuperadmin ? [['Partner Rates', 'admin-agreed-rates']] : []),
+                  ['Pending Approvals', 'admin-pending-approvals'],
+                  ['Admin access', 'admin-access-settings'],
+                  ['Profile requests', 'admin-profile-requests'],
+                  ['Staff roles', 'admin-staff-access'],
+                ].map(([label, target], index) => (
+                  <button
+                    key={target}
+                    type="button"
+                    aria-current={index === 0 ? 'location' : undefined}
+                    onClick={(event) => {
+                      event.currentTarget.parentElement?.querySelectorAll('button').forEach((button) => button.removeAttribute('aria-current'));
+                      event.currentTarget.setAttribute('aria-current', 'location');
+                      document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  >{label}</button>
+                ))}
+              </nav>
+              <div id="admin-team-settings" className="admin-settings-target"><AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} /></div>
+              <div id="admin-user-accounts" className="admin-settings-target"><ManagedIgoAccounts /></div>
+              {isSuperadmin && <div id="admin-agreed-rates" className="admin-settings-target"><PartnerDeliveryPricingManagement /></div>}
+              <div id="admin-pending-approvals" className="admin-settings-target"><PendingIgoUserApprovals /></div>
+              <div id="admin-access-settings" className="admin-settings-target"><SuperadminUserManagementAccess /></div>
+              <div id="admin-profile-requests" className="admin-settings-target"><ProfileChangeRequests profile={databaseProfile} user={databaseUser} workspace={workspace} setNotice={setNotice} /></div>
+              <div id="admin-staff-access" className="admin-settings-target"><StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} view="people" /></div>
             </section>
           )}
 
@@ -3061,6 +3105,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                         readOnly
                         aria-label="Calculated delivery fee in MVR"
                       />
+                      <small>{partnerDeliveryPricing.pricingMode === 'agreed_flat' ? 'This customer’s agreed rate applies to every delivery area.' : 'Calculated from the delivery route.'}</small>
                     </label>
                   </div>
                   <div className="form-actions">
@@ -3349,6 +3394,102 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
         </button>
       )}
     </div>
+  );
+}
+
+function PartnerDeliveryPricingManagement() {
+  const [partners, setPartners] = useState([]);
+  const [drafts, setDrafts] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  const refresh = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const rows = await loadPartnerDeliveryPricingSettings();
+      setPartners(rows);
+      setDrafts(Object.fromEntries(rows.map((partner) => [partner.id, {
+        pricingMode: partner.pricingMode || 'route',
+        agreedDeliveryFee: partner.agreedDeliveryFee == null ? '' : String(partner.agreedDeliveryFee),
+      }])));
+    } catch (loadError) {
+      const detail = String(loadError.message || '').toLowerCase();
+      setError(
+        detail.includes('delivery_pricing_mode') || detail.includes('agreed_delivery_fee')
+          ? 'Partner pricing needs the Supabase migration before rates can load.'
+          : loadError.message || 'Could not load customer delivery rates.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void refresh(); }, []);
+
+  const updateDraft = (id, changes) => {
+    setDrafts((current) => ({ ...current, [id]: { ...current[id], ...changes } }));
+    setMessage('');
+  };
+
+  const save = async (partner) => {
+    const draft = drafts[partner.id] || {};
+    const agreedDeliveryFee = Number(draft.agreedDeliveryFee);
+    if (draft.pricingMode === 'agreed_flat' && (!Number.isFinite(agreedDeliveryFee) || agreedDeliveryFee <= 0)) {
+      setError('Enter an agreed delivery amount greater than MVR 0.');
+      return;
+    }
+    setSavingId(partner.id);
+    setError('');
+    setMessage('');
+    try {
+      await savePartnerDeliveryPricing({
+        partnerId: partner.id,
+        pricingMode: draft.pricingMode,
+        agreedDeliveryFee: draft.pricingMode === 'agreed_flat' ? agreedDeliveryFee : null,
+      });
+      setMessage('Saved delivery pricing for ' + partner.name + '. It applies to new packages; existing packages keep their saved fee.');
+      await refresh();
+    } catch (saveError) {
+      setError(saveError.message || 'Could not save this customer rate.');
+    } finally {
+      setSavingId('');
+    }
+  };
+
+  return (
+    <section id="partner-delivery-pricing" className="card" style={{ padding: 20, display: 'grid', gap: 16 }}>
+      <div>
+        <p className="eyebrow">CUSTOMER BILLING</p>
+        <h2 style={{ margin: '4px 0 6px' }}>Agreed delivery rates</h2>
+        <p style={{ margin: 0, color: '#748094' }}>
+          Choose standard route rates or an agreed flat amount per delivery for each partner. Flat rates ignore destination; invoices remain separate by partner and show each delivery as a line.
+        </p>
+      </div>
+      {message && <p role="status" className="notice">{message}</p>}
+      {error && <p role="alert" className="notice">{error}</p>}
+      {loading ? <p>Loading customer rates…</p> : error ? null : partners.length ? partners.map((partner) => {
+        const draft = drafts[partner.id] || { pricingMode: 'route', agreedDeliveryFee: '' };
+        return (
+          <article key={partner.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end', padding: 14, border: '1px solid var(--border, #d8dee8)', borderRadius: 12 }}>
+            <strong>{partner.name}</strong>
+            <label>Rate type
+              <select value={draft.pricingMode} onChange={(event) => updateDraft(partner.id, { pricingMode: event.target.value })}>
+                <option value="route">Standard route rates</option>
+                <option value="agreed_flat">Agreed per-delivery rate</option>
+              </select>
+            </label>
+            <label>Agreed amount (MVR)
+              <input type="number" min="0.01" step="0.01" inputMode="decimal" value={draft.agreedDeliveryFee} disabled={draft.pricingMode !== 'agreed_flat'} onChange={(event) => updateDraft(partner.id, { agreedDeliveryFee: event.target.value })} placeholder="e.g. 25.00" />
+            </label>
+            <button className="primary-btn" type="button" onClick={() => void save(partner)} disabled={savingId === partner.id || (draft.pricingMode === 'agreed_flat' && !(Number(draft.agreedDeliveryFee) > 0))}>{savingId === partner.id ? 'Saving…' : 'Save rate'}</button>
+          </article>
+        );
+      }) : <p>No partner accounts yet.</p>}
+      <p style={{ margin: 0, color: '#748094' }}>A rate change affects packages registered after it is saved. It does not rewrite fees on packages already registered.</p>
+    </section>
   );
 }
 

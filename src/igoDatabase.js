@@ -557,6 +557,52 @@ export async function savePaymentAccount({ id, bankName = '', accountName, accou
   return data;
 }
 
+export async function loadPartnerDeliveryPricing(partnerId) {
+  if (!partnerId) return { pricingMode: 'route', agreedDeliveryFee: null };
+  const { data, error } = await requireClient()
+    .from('partners')
+    .select('delivery_pricing_mode,agreed_delivery_fee')
+    .eq('id', partnerId)
+    .maybeSingle();
+  if (error) {
+    const message = String(error.message || '').toLowerCase();
+    if (['42703', 'pgrst204', 'pgrst205'].includes(String(error.code || '').toLowerCase())
+        || message.includes('delivery_pricing_mode')
+        || message.includes('agreed_delivery_fee')) {
+      return { pricingMode: 'route', agreedDeliveryFee: null };
+    }
+    throw error;
+  }
+  return {
+    pricingMode: data?.delivery_pricing_mode || 'route',
+    agreedDeliveryFee: data?.agreed_delivery_fee == null ? null : Number(data.agreed_delivery_fee),
+  };
+}
+
+export async function loadPartnerDeliveryPricingSettings() {
+  const { data, error } = await requireClient()
+    .from('partners')
+    .select('id,name,delivery_pricing_mode,agreed_delivery_fee')
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    id: row.id,
+    name: row.name || 'Partner',
+    pricingMode: row.delivery_pricing_mode || 'route',
+    agreedDeliveryFee: row.agreed_delivery_fee == null ? null : Number(row.agreed_delivery_fee),
+  }));
+}
+
+export async function savePartnerDeliveryPricing({ partnerId, pricingMode, agreedDeliveryFee }) {
+  const { data, error } = await requireClient().rpc('save_partner_delivery_pricing', {
+    p_partner_id: partnerId,
+    p_pricing_mode: pricingMode,
+    p_agreed_delivery_fee: pricingMode === 'agreed_flat' ? agreedDeliveryFee : null,
+  });
+  if (error) throw error;
+  if (data !== true) throw new Error('The customer delivery rate was not saved.');
+}
+
 export async function saveInvoiceCutoff(time) {
   const client = requireClient();
   const { data, error } = await client.rpc('save_invoice_cutoff', {

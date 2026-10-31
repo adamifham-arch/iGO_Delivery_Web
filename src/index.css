@@ -157,6 +157,77 @@ button {
   padding: 38px;
   margin: auto;
 }
+.admin-settings-shortcuts {
+  position: sticky;
+  top: 8px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 10px;
+  margin-top: 14px;
+  border: 1px solid var(--line, #d7dce5);
+  border-radius: 16px;
+  background: var(--surface, #fff);
+  color: var(--text, #202124);
+  box-shadow: 0 8px 22px rgb(15 23 42 / 9%);
+  scrollbar-width: thin;
+}
+
+.admin-settings-shortcuts > span {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  color: #8a6d00;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.admin-settings-shortcuts button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border: 1px solid var(--line, #d7dce5);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.admin-settings-shortcuts button:hover {
+  border-color: #e8c82c;
+  background: #fff8d9;
+  color: #493b00;
+}
+
+.admin-settings-shortcuts button:focus-visible {
+  outline: 3px solid #e8c82c;
+  outline-offset: 2px;
+}
+
+.admin-settings-target {
+  scroll-margin-top: 100px;
+}
+
+.app[data-theme="night"] .admin-settings-shortcuts {
+  border-color: #334155;
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.app[data-theme="night"] .admin-settings-shortcuts button:hover {
+  border-color: #d4b52b;
+  background: #3b3418;
+  color: #fff4ba;
+}
+
 .eyebrow {
   color: #a2860c;
   font-weight: 800;

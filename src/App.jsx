@@ -2513,8 +2513,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
-              <nav className="admin-settings-shortcuts" aria-label="User management settings shortcuts">
-                <span>Settings shortcuts</span>
+              <nav className="admin-settings-shortcuts" aria-label="User management sections">
                 {[
                   ['Driver Rates', 'admin-team-settings'],
                   ['User accounts', 'admin-user-accounts'],
@@ -2523,11 +2522,16 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   ['Admin access', 'admin-access-settings'],
                   ['Profile requests', 'admin-profile-requests'],
                   ['Staff roles', 'admin-staff-access'],
-                ].map(([label, target]) => (
+                ].map(([label, target], index) => (
                   <button
                     key={target}
                     type="button"
-                    onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    aria-current={index === 0 ? 'location' : undefined}
+                    onClick={(event) => {
+                      event.currentTarget.parentElement?.querySelectorAll('button').forEach((button) => button.removeAttribute('aria-current'));
+                      event.currentTarget.setAttribute('aria-current', 'location');
+                      document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
                   >{label}</button>
                 ))}
               </nav>

@@ -162,55 +162,47 @@ button {
   top: 8px;
   z-index: 30;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
   max-width: 100%;
-  overflow-x: visible;
-  padding: 10px;
+  padding: 0 2px;
   margin-top: 14px;
-  border: 1px solid var(--line, #d7dce5);
-  border-radius: 16px;
+  border-bottom: 1px solid var(--line, #d7dce5);
   background: var(--surface, #fff);
   color: var(--text, #202124);
-  box-shadow: 0 8px 22px rgb(15 23 42 / 9%);
-  scrollbar-width: thin;
-}
-
-.admin-settings-shortcuts > span {
-  flex: 0 0 auto;
-  padding: 0 4px;
-  color: #8a6d00;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  text-transform: uppercase;
 }
 
 .admin-settings-shortcuts button {
-  flex: 0 1 auto;
-  padding: 8px 12px;
-  border: 1px solid var(--line, #d7dce5);
-  border-radius: 999px;
+  flex: 0 0 auto;
+  padding: 12px 15px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
   background: transparent;
-  color: inherit;
+  color: #65736c;
+  box-shadow: none;
   font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: normal;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+  transition: color 140ms ease, border-color 140ms ease;
 }
 
 .admin-settings-shortcuts button:hover {
-  border-color: #e8c82c;
-  background: #fff8d9;
-  color: #493b00;
+  color: #155b43;
+}
+
+.admin-settings-shortcuts button[aria-current="location"] {
+  border-bottom-color: #17634b;
+  color: #155b43;
+  font-weight: 700;
 }
 
 .admin-settings-shortcuts button:focus-visible {
   outline: 3px solid #e8c82c;
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .admin-settings-target {
@@ -218,14 +210,14 @@ button {
 }
 
 .app[data-theme="night"] .admin-settings-shortcuts {
-  border-color: #334155;
-  background: #1e293b;
+  border-bottom-color: #334155;
+  background: var(--surface, #1e293b);
   color: #e2e8f0;
 }
 
-.app[data-theme="night"] .admin-settings-shortcuts button:hover {
-  border-color: #d4b52b;
-  background: #3b3418;
+.app[data-theme="night"] .admin-settings-shortcuts button:hover,
+.app[data-theme="night"] .admin-settings-shortcuts button[aria-current="location"] {
+  border-bottom-color: #d4b52b;
   color: #fff4ba;
 }
 

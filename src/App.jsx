@@ -2516,10 +2516,10 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               <nav className="admin-settings-shortcuts" aria-label="User management settings shortcuts">
                 <span>Settings shortcuts</span>
                 {[
-                  ['Team shares', 'admin-team-settings'],
+                  ['Driver Rates', 'admin-team-settings'],
                   ['User accounts', 'admin-user-accounts'],
-                  ...(isSuperadmin ? [['Agreed rates', 'admin-agreed-rates']] : []),
-                  ['Approvals', 'admin-pending-approvals'],
+                  ...(isSuperadmin ? [['Partner Rates', 'admin-agreed-rates']] : []),
+                  ['Pending Approvals', 'admin-pending-approvals'],
                   ['Admin access', 'admin-access-settings'],
                   ['Profile requests', 'admin-profile-requests'],
                   ['Staff roles', 'admin-staff-access'],

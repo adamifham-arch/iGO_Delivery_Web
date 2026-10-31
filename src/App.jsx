@@ -2513,6 +2513,24 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 
                 <p>Invite users, review pending accounts, and manage profile change requests.</p>
               </header>
+              <nav className="admin-settings-shortcuts" aria-label="User management settings shortcuts">
+                <span>Settings shortcuts</span>
+                {[
+                  ['Driver Rates', 'admin-team-settings'],
+                  ['User accounts', 'admin-user-accounts'],
+                  ...(isSuperadmin ? [['Partner Rates', 'admin-agreed-rates']] : []),
+                  ['Pending Approvals', 'admin-pending-approvals'],
+                  ['Admin access', 'admin-access-settings'],
+                  ['Profile requests', 'admin-profile-requests'],
+                  ['Staff roles', 'admin-staff-access'],
+                ].map(([label, target]) => (
+                  <button
+                    key={target}
+                    type="button"
+                    onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  >{label}</button>
+                ))}
+              </nav>
               <div id="admin-team-settings" className="admin-settings-target"><AdminDriverRoster packages={newestPackages} liveMode={Boolean(databaseProfile)} /></div>
               <div id="admin-user-accounts" className="admin-settings-target"><ManagedIgoAccounts /></div>
               {isSuperadmin && <div id="admin-agreed-rates" className="admin-settings-target"><PartnerDeliveryPricingManagement /></div>}

@@ -1,4 +1,5 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import './index.css';
 import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
 import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
@@ -7783,6 +7784,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           {notice}
         </p>
       )}
+      <Analytics />
     </section>
   );
 }

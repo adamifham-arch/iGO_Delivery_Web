@@ -1,4 +1,5 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import './index.css';
 import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
 import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
@@ -5683,6 +5684,7 @@ function NotificationCenter({ onNavigate }) {
           {!item.read && <button type="button" className="secondary-btn" onClick={() => markRead(item.id)}>Mark read</button>}
         </article>) : <p>No notifications.</p>}
       </section>}
+      <Analytics />
     </div>
   );
 }

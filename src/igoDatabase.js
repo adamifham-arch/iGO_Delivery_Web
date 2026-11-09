@@ -615,11 +615,11 @@ export async function saveInvoiceCutoff(time) {
   return Number(data);
 }
 
-export async function loadCurrentRole() {
+export async function loadCurrentRole(user) {
+  if (!user?.id) throw new Error('Sign in first.');
   const client = requireClient();
-  const { data: userResult, error: userError } = await client.auth.getUser();
-  if (userError || !userResult.user) throw userError || new Error('Sign in first.');
-  const { data, error } = await client.from('profiles').select('id,full_name,phone,role').eq('id', userResult.user.id).maybeSingle();
+  // The authenticated database request verifies the token and enforces profile RLS.
+  const { data, error } = await client.from('profiles').select('id,full_name,phone,role').eq('id', user.id).maybeSingle();
   if (error) throw error;
   if (!data) throw new Error('This signed-in account has no iGO profile yet.');
   let profile = data;
@@ -634,7 +634,7 @@ export async function loadCurrentRole() {
       }),
     };
   }
-  return { user: userResult.user, profile };
+  return { user, profile };
 }
 
 async function loadAccountContactEmails(client = requireClient()) {

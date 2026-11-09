@@ -800,7 +800,7 @@ export default function App() {
       }
       try {
         if (session.user.invited_at && session.user.user_metadata?.password_setup_complete !== true) { if (!active) return; setDatabaseUser(null); setDatabaseProfile(null); setIsSuperadmin(false); setLinkedPartnerProfile(null); setLinkedDriverProfile(null); setPartnerLogo(''); setPackages([]); setInvitePasswordSetupRequired(true); setAuthMode('invite-password-setup'); setDatabaseLoading(false); return; }
-        const { user, profile: baseProfile } = await loadCurrentRole();
+        const { user, profile: baseProfile } = await loadCurrentRole(session.user);
         const staffResult = await supabase.from('staff_role_assignments').select('id,department_id,role,active,departments(name)').eq('user_id', user.id).eq('active', true);
         if (staffResult.error) throw staffResult.error;
         const profile = baseProfile.role === 'staff' ? { ...baseProfile, staffAssignments: staffResult.data || [] } : baseProfile;
@@ -980,7 +980,7 @@ export default function App() {
     if (data.user?.invited_at && data.user.user_metadata?.password_setup_complete !== true) { setInvitePasswordSetupRequired(true); setAuthMode('invite-password-setup'); setLoginBusy(false); return; }
     if (data.session) {
       try {
-        const { profile: baseProfile } = await loadCurrentRole();
+        const { profile: baseProfile } = await loadCurrentRole(data.session.user);
         const staffResult = await supabase.from('staff_role_assignments').select('id,department_id,role,active,departments(name)').eq('user_id', data.user.id).eq('active', true);
         if (staffResult.error) throw staffResult.error;
         const profile = baseProfile.role === 'staff' ? { ...baseProfile, staffAssignments: staffResult.data || [] } : baseProfile;

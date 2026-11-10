@@ -970,7 +970,22 @@ export default function App() {
     setLoginBusy(true);
     setDatabaseError('');
     setAuthRememberMe(rememberMe);
-    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail.trim(), password: loginPassword });
+    let signInResult;
+    try {
+      signInResult = await supabase.auth.signInWithPassword({
+        email: loginEmail.trim(),
+        password: loginPassword,
+      });
+    } catch (authError) {
+      setDatabaseError(
+        authError?.message === 'Failed to fetch'
+          ? 'Could not connect to iGO sign-in. Check your internet connection and try again.'
+          : authError?.message || 'Could not sign in. Please try again.'
+      );
+      setLoginBusy(false);
+      return;
+    }
+    const { data, error } = signInResult;
     if (error) {
       setDatabaseError(error.message);
       setLoginBusy(false);
@@ -1128,26 +1143,6 @@ export default function App() {
       setDatabaseError('Passwords do not match.');
       return;
     }
-    const logoFile = role === 'partner' ? values.get('logo') : null;
-    let logoDataUrl = '';
-    if (logoFile?.size) {
-      const allowedLogoTypes = ['image/png', 'image/jpeg', 'image/webp'];
-      if (!allowedLogoTypes.includes(logoFile.type) || logoFile.size > 256 * 1024) {
-        setDatabaseError('Choose a PNG, JPEG, or WebP logo no larger than 256 KB.');
-        return;
-      }
-      try {
-        logoDataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result || ''));
-          reader.onerror = () => reject(new Error('The logo could not be read.'));
-          reader.readAsDataURL(logoFile);
-        });
-      } catch (logoError) {
-        setDatabaseError(logoError.message || 'The logo could not be read.');
-        return;
-      }
-    }
     setLoginBusy(true);
     setDatabaseError('');
     setAuthNotice('');
@@ -1164,7 +1159,6 @@ export default function App() {
             phone,
             business_name: String(values.get('business_name') || '').trim(),
             address: String(values.get('address') || '').trim(),
-            logo_data_url: logoDataUrl || null,
           },
         },
       });
@@ -2174,7 +2168,7 @@ export default function App() {
     if (authMode === 'register-partner' || authMode === 'register-driver') {
       const isPartnerRegistration = authMode === 'register-partner';
       return (
-        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label><label>Partner logo (optional)<input name="logo" type="file" accept="image/png,image/jpeg,image/webp" /><small>Upload a PNG, JPEG, or WebP image, up to 256 KB.</small></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><label>Confirm password *<input name="confirm_password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('signin'); }}>Log in</button></p></form></main>
+        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><label>Confirm password *<input name="confirm_password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval. Partners can add a business logo from Profile after signing in.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('signin'); }}>Log in</button></p></form></main>
       );
     }
 

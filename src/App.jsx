@@ -2116,6 +2116,7 @@ export default function App() {
   const activeLinkedProfile = databaseProfile?.role === 'admin' ? (workspace === 'Partner' ? linkedPartnerProfile : workspace === 'Driver' ? linkedDriverProfile : null) : null;
   const viewedProfileName = activeLinkedProfile?.name || databaseProfile?.full_name || (workspace === 'Admin' ? 'Operations' : workspace === 'Driver' ? 'Ahmed Rasheed' : 'Style Hub');
   const viewedProfileType = activeLinkedProfile ? workspace.toLowerCase() : databaseProfile?.role || workspace + ' preview';
+  const showPartnerLogo = workspace === 'Partner' && databaseProfile?.role === 'partner' && Boolean(partnerLogo);
 
   if (supabaseConfigured && authMode === 'reset-password') {
     return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Choose a new password</h1><p>Use at least 8 characters for your new password.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}{authNotice && <p className="notice" role="status">{authNotice}</p>}<form onSubmit={saveRecoveredPassword}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Saving…' : 'Save new password'}</button></form></section></main>;
@@ -2197,7 +2198,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 
         <div className="partner-profile">
           <div className="partner-avatar">
-            {viewedProfileName.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'OP'}
+            {showPartnerLogo ? <img src={partnerLogo} alt={viewedProfileName + ' logo'} className="partner-avatar-logo" /> : viewedProfileName.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'OP'}
           </div>
           <div>
             <strong>{viewedProfileName}</strong>
@@ -2343,7 +2344,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               onClick={() => setShowProfileMenu((open) => !open)}
             >
               <span className="profile-avatar">
-                {databaseProfile?.full_name?.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || (workspace === 'Admin' ? 'OP' : workspace === 'Driver' ? 'DR' : 'SH')}
+                {showPartnerLogo ? <img src={partnerLogo} alt={viewedProfileName + ' logo'} className="profile-avatar-logo" /> : databaseProfile?.full_name?.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || (workspace === 'Admin' ? 'OP' : workspace === 'Driver' ? 'DR' : 'SH')}
               </span>
               <span className="profile-trigger-name">
                 {''}

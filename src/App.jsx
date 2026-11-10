@@ -443,6 +443,88 @@ function saveIgoNavigation(route) {
   }
 }
 
+const MAX_PARTNER_LOGO_BYTES = 256 * 1024;
+
+const readImageBlobAsDataUrl = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result || ''));
+  reader.onerror = () => reject(new Error('Could not read the compressed logo.'));
+  reader.readAsDataURL(blob);
+});
+
+const canvasToImageBlob = (canvas, type, quality) => new Promise((resolve) => {
+  canvas.toBlob(resolve, type, quality);
+});
+
+async function preparePartnerLogo(file) {
+  if (file.size <= MAX_PARTNER_LOGO_BYTES) {
+    return { dataUrl: await readImageBlobAsDataUrl(file), compressed: false, originalSize: file.size, savedSize: file.size };
+  }
+
+  let image;
+  if (typeof window.createImageBitmap === 'function') {
+    try {
+      image = await window.createImageBitmap(file);
+    } catch {
+      image = null;
+    }
+  }
+  if (!image) {
+    image = await new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file);
+      const loadedImage = new Image();
+      loadedImage.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(loadedImage);
+      };
+      loadedImage.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('This image could not be opened. Please choose another image.'));
+      };
+      loadedImage.src = objectUrl;
+    });
+  }
+
+  try {
+    const originalWidth = image.width || image.naturalWidth;
+    const originalHeight = image.height || image.naturalHeight;
+    if (!originalWidth || !originalHeight) {
+      throw new Error('This image could not be opened. Please choose another image.');
+    }
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Image compression is unavailable in this browser.');
+
+    const outputType = file.type === 'image/png' ? 'image/webp' : file.type;
+    const maxDimensions = [1600, 1200, 900, 700, 512, 384];
+    const qualities = [0.88, 0.76, 0.64, 0.52];
+
+    for (const maxDimension of maxDimensions) {
+      const scale = Math.min(1, maxDimension / Math.max(originalWidth, originalHeight));
+      canvas.width = Math.max(1, Math.round(originalWidth * scale));
+      canvas.height = Math.max(1, Math.round(originalHeight * scale));
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      for (const quality of qualities) {
+        const blob = await canvasToImageBlob(canvas, outputType, quality);
+        if (blob && blob.size <= MAX_PARTNER_LOGO_BYTES) {
+          return {
+            dataUrl: await readImageBlobAsDataUrl(blob),
+            compressed: true,
+            originalSize: file.size,
+            savedSize: blob.size,
+          };
+        }
+      }
+    }
+    throw new Error('This image is still over 256 KB after compression. Please choose a smaller image.');
+  } finally {
+    if (typeof image.close === 'function') image.close();
+  }
+}
+
 export default function App() {
   const customerNameInputRef = useRef(null);
   const customerMessageInputRef = useRef(null);
@@ -932,36 +1014,32 @@ export default function App() {
       setLogoFeedback('Choose a logo image before saving.');
       return;
     }
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 256 * 1024) {
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       setLogoFeedbackKind('error');
-      setLogoFeedback('Choose a PNG, JPEG, or WebP image up to 256 KB.');
+      setLogoFeedback('Choose a PNG, JPEG, or WebP image.');
       return;
     }
+
     setLogoSaving(true);
-    setLogoFeedback('');
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const logoDataUrl = String(reader.result || '');
-        await savePartnerLogo(logoDataUrl);
-        setPartnerLogo(logoDataUrl);
-        setLogoFeedbackKind('success');
-        setLogoFeedback('Logo saved. Drivers will see it on your job tiles.');
-        formElement.reset();
-        setLogoFileSelected(false);
-      } catch (error) {
-        setLogoFeedbackKind('error');
-        setLogoFeedback(error.message || 'Could not save the logo. Please try again.');
-      } finally {
-        setLogoSaving(false);
-      }
-    };
-    reader.onerror = () => {
+    setLogoFeedback(file.size > MAX_PARTNER_LOGO_BYTES ? 'Compressing your logo…' : '');
+    try {
+      const preparedLogo = await preparePartnerLogo(file);
+      await savePartnerLogo(preparedLogo.dataUrl);
+      setPartnerLogo(preparedLogo.dataUrl);
+      setLogoFeedbackKind('success');
+      setLogoFeedback(
+        preparedLogo.compressed
+          ? 'Logo compressed from ' + (preparedLogo.originalSize / 1024).toFixed(0) + ' KB to ' + (preparedLogo.savedSize / 1024).toFixed(0) + ' KB and saved.'
+          : 'Logo saved. Drivers will see it on your job tiles.'
+      );
+      formElement.reset();
+      setLogoFileSelected(false);
+    } catch (error) {
       setLogoFeedbackKind('error');
-      setLogoFeedback('Could not read that image. Please choose it again.');
+      setLogoFeedback(error.message || 'Could not save the logo. Please try again.');
+    } finally {
       setLogoSaving(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const signInToDatabase = async (event) => {
@@ -2457,7 +2535,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 {workspace === 'Partner' && databaseProfile?.role === 'partner' && (
                   <form className="profile-logo-editor" onSubmit={savePartnerLogoFromProfile}>
                     <h3>Business logo</h3>
-                    <p>Add a logo to help drivers recognize your packages. PNG, JPEG, or WebP · up to 256 KB.</p>
+                    <p>Add a logo to help drivers recognize your packages. PNG, JPEG, or WebP. Images over 256 KB are compressed automatically before saving.</p>
                     {partnerLogo && <img src={partnerLogo} alt="Current partner logo" className="profile-logo-preview" />}
                     <label>Choose logo<input name="partner_logo" type="file" accept="image/png,image/jpeg,image/webp" required onChange={(event) => { setLogoFileSelected(Boolean(event.currentTarget.files?.[0])); setLogoFeedback(''); setNotice(''); }} /></label>
                     <p className="profile-logo-hint">{logoFileSelected ? 'Logo selected. Save to apply it.' : 'Choose an image above to enable the save button.'}</p>

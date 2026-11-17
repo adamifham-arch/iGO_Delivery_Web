@@ -8364,3 +8364,38 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .finance-report-summary-table { min-width: 360px; max-width: 620px; }
 .finance-report-summary-table th:last-child, .finance-report-summary-table td:last-child { text-align: right; }
 .finance-report-summary-table .finance-report-highlight { background: #fff7d6; color: #263746; }
+
+
+/* Package size pricing controls */
+.package-size-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0 8px;
+}
+.package-size-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #d8dee8);
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  color: var(--text, #172033);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.package-size-chips button span {
+  color: var(--muted, #748094);
+  font-size: 11px;
+  font-weight: 500;
+}
+.package-size-chips button.selected,
+.package-size-chips button[aria-pressed="true"] {
+  border-color: #087653;
+  background: #e5f6ef;
+  color: #075d42;
+}

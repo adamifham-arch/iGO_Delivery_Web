@@ -55,6 +55,7 @@ import {
   loadPartnerDeliveryPricing,
   loadPartnerDeliveryPricingSettings,
   savePartnerDeliveryPricing,
+  savePartnerPackageSizeRates,
 } from './igoDatabase';
 
 const partnerOperatingLocation = 'Malé'; // Admin-configured partner operating location
@@ -80,7 +81,12 @@ const deliveryRates = {
 };
 const getDeliveryFee = (destination) =>
   deliveryRates[partnerOperatingLocation]?.[destination] ?? 35;
-const getPartnerDeliveryFee = (destination, pricing) => {
+const packageSizeLabels = { S: 'Small', M: 'Medium', L: 'Large', XL: 'Extra large' };
+const getPartnerDeliveryFee = (destination, pricing, packageSize = '') => {
+  if (pricing?.pricingMode === 'package_size') {
+    const sizeFee = Number(pricing?.packageSizeRates?.[packageSize]);
+    return Number.isFinite(sizeFee) && sizeFee > 0 ? sizeFee : null;
+  }
   const agreedFee = Number(pricing?.agreedDeliveryFee);
   return pricing?.pricingMode === 'agreed_flat' && Number.isFinite(agreedFee) && agreedFee > 0
     ? agreedFee
@@ -502,8 +508,8 @@ export default function App() {
   const [riderCardSaving, setRiderCardSaving] = useState(Boolean(supabaseConfigured));
   const [riderCardFeedback, setRiderCardFeedback] = useState('');
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
-  const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null });
-  const getCurrentDeliveryFee = (destination) => getPartnerDeliveryFee(destination, partnerDeliveryPricing);
+  const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
+  const getCurrentDeliveryFee = (destination, packageSize = '') => getPartnerDeliveryFee(destination, partnerDeliveryPricing, packageSize);
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
   const [partnerSetupOpen, setPartnerSetupOpen] = useState(false);
   const [partnerBusinessName, setPartnerBusinessName] = useState('');
@@ -774,8 +780,9 @@ export default function App() {
     departureTime: '',
     landmark: '',
     area: 'Malé',
+    packageSize: '',
     item: '',
-    fee: String(getCurrentDeliveryFee('Malé')),
+    fee: String(getCurrentDeliveryFee('Malé') ?? ''),
     notes: '',
   });
 
@@ -792,7 +799,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
-        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null });
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseLoading(false);
@@ -838,7 +845,7 @@ export default function App() {
         setLinkedPartnerProfile(additionalProfiles.partner);
         setLinkedDriverProfile(additionalProfiles.driver);
         setPartnerDeliveryPricing(currentPartnerPricing);
-        setForm((current) => ({ ...current, fee: String(getPartnerDeliveryFee(current.area, currentPartnerPricing)) }));
+        setForm((current) => { const area = currentPartnerPricing.pricingMode === 'package_size' && current.area.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : current.area; return { ...current, area, fee: String(getPartnerDeliveryFee(area, currentPartnerPricing, current.packageSize) ?? '') }; });
         const selectedWorkspace = workspaceRef.current;
         const savedRoute = readSavedIgoNavigation();
         const savedWorkspace = savedRoute?.workspace || roleWorkspace;
@@ -866,7 +873,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
-        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null });
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseError(error.message || 'Could not load this iGO account.');
@@ -1514,8 +1521,8 @@ export default function App() {
     const { name, value } = e.target;
     setForm((current) => ({
       ...current,
-      [name]: name === 'phone' ? normalizeCustomerPhone(value) : value,
-      ...(name === 'area' ? { fee: String(getCurrentDeliveryFee(value)) } : {}),
+      [name]: name === 'phone' ? normalizeCustomerPhone(value) : name === 'area' && partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : value,
+      ...(name === 'area' || name === 'packageSize' ? { fee: String(getCurrentDeliveryFee(name === 'area' ? value : current.area, name === 'packageSize' ? value : current.packageSize) ?? '') } : {}),
     }));
   };
 
@@ -1524,6 +1531,10 @@ export default function App() {
 
     if (!isValidCustomerPhone(form.phone)) {
       setNotice('Customer phone must contain 7 digits and start with 7 or 9.');
+      return;
+    }
+    if (partnerDeliveryPricing.pricingMode === 'package_size' && (!form.packageSize || !getCurrentDeliveryFee(form.area, form.packageSize))) {
+      setNotice('Choose a package size with a rate set by the admin.');
       return;
     }
     const deliveryAddress = (
@@ -1547,6 +1558,7 @@ export default function App() {
       phone: normalizeCustomerPhone(form.phone),
       id: `IGO-${1001 + packages.length}`,
       fee: Number(form.fee),
+      packageSize: form.packageSize || '',
       status: 'Pending',
     };
 
@@ -1584,8 +1596,9 @@ export default function App() {
         departureTime: '',
         landmark: '',
         area: 'Malé',
+        packageSize: '',
         item: '',
-        fee: String(getCurrentDeliveryFee('Malé')),
+        fee: String(getCurrentDeliveryFee('Malé') ?? ''),
         notes: '',
       });
 
@@ -1881,7 +1894,8 @@ export default function App() {
       customer: updates.customer || '',
       phone: updates.phone || '',
       address: updates.address || '',
-      area: draftArea,
+      area: partnerDeliveryPricing.pricingMode === 'package_size' && draftArea.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : draftArea,
+      packageSize: '',
       item: updates.item || '',
       notes: updates.notes || '',
       boatName: draftArea === 'Boat' ? boatName || address || '' : '',
@@ -1893,7 +1907,7 @@ export default function App() {
         readMessageField(text, 'departure\\s*time|departure')
       ),
       landmark: readMessageField(text, 'nearby\\s*landmark|landmark'),
-      fee: String(getCurrentDeliveryFee(draftArea)),
+      fee: String(getCurrentDeliveryFee(partnerDeliveryPricing.pricingMode === 'package_size' && draftArea.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : draftArea) ?? ''),
     };
     Object.assign(draft, deliveryDetails(draft));
     const duplicateKey = packageDuplicateKey(draft);
@@ -1941,10 +1955,9 @@ export default function App() {
         entry.queueId === queueId
           ? {
               ...entry,
-              [field]:
-                field === 'phone' ? normalizeCustomerPhone(value) : value,
-              ...(field === 'area'
-                ? { fee: String(getCurrentDeliveryFee(value)) }
+              [field]: field === 'phone' ? normalizeCustomerPhone(value) : field === 'area' && partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : value,
+              ...(field === 'area' || field === 'packageSize'
+                ? { fee: String(getCurrentDeliveryFee(field === 'area' ? value : entry.area, field === 'packageSize' ? value : entry.packageSize) ?? '') }
                 : {}),
             }
           : entry
@@ -1957,6 +1970,7 @@ export default function App() {
       (entry) =>
         !entry.customer.trim() ||
         !isValidCustomerPhone(entry.phone) ||
+        (partnerDeliveryPricing.pricingMode === 'package_size' && (!entry.packageSize || !getCurrentDeliveryFee(entry.area, entry.packageSize))) ||
         !(entry.area === 'Boat' ? entry.boatName : entry.address)?.trim() ||
         !validDepartureTime(
           entry.area === 'Boat'
@@ -1994,7 +2008,8 @@ export default function App() {
         ...deliveryDetails(entry),
         phone: normalizeCustomerPhone(entry.phone),
         id: 'IGO-' + (1001 + packages.length + index),
-        fee: getCurrentDeliveryFee(entry.area),
+        fee: getCurrentDeliveryFee(entry.area, entry.packageSize),
+        packageSize: entry.packageSize || '',
         status: 'Pending',
       }));
     if (supabaseConfigured) {
@@ -2828,11 +2843,20 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                               }
                             >
                               <option>Malé</option>
-                              <option>Hulhumalé Phase 1</option>
-                              <option>Hulhumalé Phase 2</option>
+                              {partnerDeliveryPricing.pricingMode === 'package_size' ? <option>Hulhumalé</option> : <><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
                               <option>Boat</option>
                             </select>
                           </label>
+                          {partnerDeliveryPricing.pricingMode === 'package_size' && (
+                            <div className="package-size-chips" role="group" aria-label="Package size">
+                              {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
+                                <button key={size} type="button" className={entry.packageSize === size ? 'selected' : ''} aria-pressed={entry.packageSize === size} onClick={() => updateQueuedPackage(entry.queueId, 'packageSize', size)}>
+                                  {size}<span>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
+                                </button>
+                              ))}
+                              {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}
+                            </div>
+                          )}
                           {(entry.area === 'Boat'
                             ? [
                                 ['boatName', 'Boat name *'],
@@ -2867,7 +2891,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                             </label>
                           ))}
                           <p className="message-queue-fee">
-                            Delivery fee: MVR {entry.fee}
+                            {partnerDeliveryPricing.pricingMode === 'package_size' && entry.packageSize ? `${packageSizeLabels[entry.packageSize]} package · ` : ''}{entry.fee ? `Delivery fee: MVR ${entry.fee}` : partnerDeliveryPricing.pricingMode === 'package_size' ? 'Choose a priced package size' : 'Delivery fee not available'}
                           </p>
                           {entry.item && <p>Package: {entry.item}</p>}
                           {entry.notes && <p>Instructions: {entry.notes}</p>}
@@ -3019,11 +3043,20 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                         required
                       >
                         <option>Malé</option>
-                        <option>Hulhumalé Phase 1</option>
-                        <option>Hulhumalé Phase 2</option>
+                        {partnerDeliveryPricing.pricingMode === 'package_size' ? <option>Hulhumalé</option> : <><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
                         <option>Boat</option>
                       </select>
                     </label>
+                    {partnerDeliveryPricing.pricingMode === 'package_size' && (
+                      <div className="package-size-chips" role="group" aria-label="Package size">
+                        {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
+                          <button key={size} type="button" className={form.packageSize === size ? 'selected' : ''} aria-pressed={form.packageSize === size} onClick={() => updateForm({ target: { name: 'packageSize', value: size } })}>
+                            {size}<span>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
+                          </button>
+                        ))}
+                        {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}
+                      </div>
+                    )}
                     {form.area === 'Boat' ? (
                       <>
                         <label className="full-width">
@@ -3404,6 +3437,7 @@ function PartnerDeliveryPricingManagement() {
   const [savingId, setSavingId] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
 
   const refresh = async () => {
     setLoading(true);
@@ -3414,11 +3448,15 @@ function PartnerDeliveryPricingManagement() {
       setDrafts(Object.fromEntries(rows.map((partner) => [partner.id, {
         pricingMode: partner.pricingMode || 'route',
         agreedDeliveryFee: partner.agreedDeliveryFee == null ? '' : String(partner.agreedDeliveryFee),
+        packageSizeRates: Object.fromEntries(['S', 'M', 'L', 'XL'].map((size) => [
+          size,
+          partner.packageSizeRates?.[size] == null ? '' : String(partner.packageSizeRates[size]),
+        ])),
       }])));
     } catch (loadError) {
       const detail = String(loadError.message || '').toLowerCase();
       setError(
-        detail.includes('delivery_pricing_mode') || detail.includes('agreed_delivery_fee')
+        detail.includes('delivery_pricing_mode') || detail.includes('agreed_delivery_fee') || detail.includes('package_size_rates')
           ? 'Partner pricing needs the Supabase migration before rates can load.'
           : loadError.message || 'Could not load customer delivery rates.'
       );
@@ -3437,19 +3475,30 @@ function PartnerDeliveryPricingManagement() {
   const save = async (partner) => {
     const draft = drafts[partner.id] || {};
     const agreedDeliveryFee = Number(draft.agreedDeliveryFee);
+    const rates = Object.fromEntries(Object.entries(draft.packageSizeRates || {})
+      .filter(([, value]) => value !== '' && value != null)
+      .map(([size, value]) => [size, Number(value)]));
     if (draft.pricingMode === 'agreed_flat' && (!Number.isFinite(agreedDeliveryFee) || agreedDeliveryFee <= 0)) {
       setError('Enter an agreed delivery amount greater than MVR 0.');
+      return;
+    }
+    if (draft.pricingMode === 'package_size' && (!Object.keys(rates).length || Object.values(rates).some((rate) => !Number.isFinite(rate) || rate <= 0))) {
+      setError('Enter a positive price for each size you want this partner to use. Leave unused sizes blank.');
       return;
     }
     setSavingId(partner.id);
     setError('');
     setMessage('');
     try {
-      await savePartnerDeliveryPricing({
-        partnerId: partner.id,
-        pricingMode: draft.pricingMode,
-        agreedDeliveryFee: draft.pricingMode === 'agreed_flat' ? agreedDeliveryFee : null,
-      });
+      if (draft.pricingMode === 'package_size') {
+        await savePartnerPackageSizeRates({ partnerId: partner.id, packageSizeRates: rates });
+      } else {
+        await savePartnerDeliveryPricing({
+          partnerId: partner.id,
+          pricingMode: draft.pricingMode,
+          agreedDeliveryFee: draft.pricingMode === 'agreed_flat' ? agreedDeliveryFee : null,
+        });
+      }
       setMessage('Saved delivery pricing for ' + partner.name + '. It applies to new packages; existing packages keep their saved fee.');
       await refresh();
     } catch (saveError) {
@@ -3459,36 +3508,51 @@ function PartnerDeliveryPricingManagement() {
     }
   };
 
+  const visiblePartners = partners.filter((partner) => partner.name.toLowerCase().includes(search.trim().toLowerCase()));
+
   return (
     <section id="partner-delivery-pricing" className="card" style={{ padding: 20, display: 'grid', gap: 16 }}>
       <div>
         <p className="eyebrow">CUSTOMER BILLING</p>
-        <h2 style={{ margin: '4px 0 6px' }}>Agreed delivery rates</h2>
+        <h2 style={{ margin: '4px 0 6px' }}>Partner delivery rates</h2>
         <p style={{ margin: 0, color: '#748094' }}>
-          Choose standard route rates or an agreed flat amount per delivery for each partner. Flat rates ignore destination; invoices remain separate by partner and show each delivery as a line.
+          Choose route pricing, one agreed rate, or separate prices by package size.
         </p>
       </div>
+      {partners.length > 1 && <label>Find partner
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search partner name…" />
+      </label>}
       {message && <p role="status" className="notice">{message}</p>}
       {error && <p role="alert" className="notice">{error}</p>}
-      {loading ? <p>Loading customer rates…</p> : error ? null : partners.length ? partners.map((partner) => {
-        const draft = drafts[partner.id] || { pricingMode: 'route', agreedDeliveryFee: '' };
+      {loading ? <p>Loading partner rates…</p> : error ? null : visiblePartners.length ? visiblePartners.map((partner) => {
+        const draft = drafts[partner.id] || { pricingMode: 'route', agreedDeliveryFee: '', packageSizeRates: {} };
         return (
           <article key={partner.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end', padding: 14, border: '1px solid var(--border, #d8dee8)', borderRadius: 12 }}>
             <strong>{partner.name}</strong>
             <label>Rate type
               <select value={draft.pricingMode} onChange={(event) => updateDraft(partner.id, { pricingMode: event.target.value })}>
-                <option value="route">Standard route rates</option>
-                <option value="agreed_flat">Agreed per-delivery rate</option>
+                <option value="route">By delivery location</option>
+                <option value="agreed_flat">Agreed amount per delivery</option>
+                <option value="package_size">By package size</option>
               </select>
             </label>
-            <label>Agreed amount (MVR)
-              <input type="number" min="0.01" step="0.01" inputMode="decimal" value={draft.agreedDeliveryFee} disabled={draft.pricingMode !== 'agreed_flat'} onChange={(event) => updateDraft(partner.id, { agreedDeliveryFee: event.target.value })} placeholder="e.g. 25.00" />
-            </label>
+            {draft.pricingMode === 'agreed_flat' && <label>Agreed amount (MVR)
+              <input type="number" min="0.01" step="0.01" inputMode="decimal" value={draft.agreedDeliveryFee} onChange={(event) => updateDraft(partner.id, { agreedDeliveryFee: event.target.value })} placeholder="e.g. 25" />
+            </label>}
+            {draft.pricingMode === 'package_size' && (
+              <div className="partner-size-rate-grid" style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: 10 }}>
+                {Object.entries(packageSizeLabels).map(([size, label]) => (
+                  <label key={size}>{label} (MVR)
+                    <input type="number" min="0.01" step="0.01" inputMode="decimal" value={draft.packageSizeRates?.[size] || ''} onChange={(event) => updateDraft(partner.id, { packageSizeRates: { ...(draft.packageSizeRates || {}), [size]: event.target.value } })} placeholder="Leave blank to hide" />
+                  </label>
+                ))}
+              </div>
+            )}
             <button className="primary-btn" type="button" onClick={() => void save(partner)} disabled={savingId === partner.id || (draft.pricingMode === 'agreed_flat' && !(Number(draft.agreedDeliveryFee) > 0))}>{savingId === partner.id ? 'Saving…' : 'Save rate'}</button>
           </article>
         );
-      }) : <p>No partner accounts yet.</p>}
-      <p style={{ margin: 0, color: '#748094' }}>A rate change affects packages registered after it is saved. It does not rewrite fees on packages already registered.</p>
+      }) : <p>{partners.length ? 'No matching partner.' : 'No partner accounts yet.'}</p>}
+      <p style={{ margin: 0, color: '#748094' }}>Only sizes with a saved price appear when registering packages. Rate changes apply to new packages; registered package fees stay unchanged.</p>
     </section>
   );
 }

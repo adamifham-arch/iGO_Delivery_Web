@@ -4646,6 +4646,7 @@ function DriverWorkflowDashboard({
         </div>
         <button
           type="button"
+          id="driver-availability-switch"
           className={`driver-availability-switch ${online ? 'is-online' : 'is-offline'}`}
           onClick={changeOnline}
           role="switch"
@@ -4697,7 +4698,15 @@ function DriverWorkflowDashboard({
           <span className="driver-count">{waiting.length} waiting</span>
         </div>
         {!online && (
-          <p className="notice">Go online to accept delivery jobs.</p>
+          <button
+            type="button"
+            className="notice driver-online-notice"
+            onClick={() => document.getElementById('driver-availability-switch')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            aria-label="Go to the online control"
+            style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+          >
+            Go online to accept delivery jobs.
+          </button>
         )}
         {waiting.length ? (
           <>

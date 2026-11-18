@@ -149,7 +149,7 @@ function extractMaldivianPersonName(line) {
   while (end + 1 < words.length && (known.has(words[end + 1].normalized) || joiners.has(words[end + 1].normalized)) && end - start < 3) end += 1;
   return String(line).slice(words[start].index, words[end].index + words[end].text.length).trim();
 }
-const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name)?|item|order|order\s*info|receive\s*info|recipient\s*info|instructions|delivery\s*instructions|notes|time|captain(?:\s*number)?|boat\s*details|package\s*details)\s*[:=-]/i;
+const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|your\s*name|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name|\s*details)?|item(?:\s*code)?|product|sku|order(?:\s*(?:info|id|number|no|tracking))?|receive\s*info|recipient\s*info|instructions|delivery\s*instructions|notes|more|time|price|pcs|pieces|qty|quantity|tracking(?:\s*(?:number|no))?|partner\s*tracking(?:\s*(?:number|no))?|captain(?:\s*number)?|boat\s*details)\s*[:=-]/i;
 const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer|handle with care|fragile|carefully handle)\b/i;
 const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hiyya?|hyyaa?|hyia|heeya|hiaya|sifco|sifko|sifkoo|sifcu|police|udhares?|udharas?|udhara|dhoadhi|dhoadhee|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|amaan\s*(?:udhares?|dhoadhi|dhodhi)|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
 const isVesselLine = (line) => {
@@ -1897,7 +1897,7 @@ export default function App() {
     const item = readMessageField(customerText, 'package|item|order') || inlineItem;
     const labeledNotes = readMessageField(
       customerText,
-      'delivery\\s*instructions|instructions|notes'
+      'delivery\\s*instructions|instructions|notes|more'
     );
     const explicitArea = readMessageField(
       customerText,
@@ -1918,7 +1918,7 @@ export default function App() {
       .replace(/\b(?:before|by|at|around|after)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?(?:\s+today)?\b.*$/i, '')
       .replace(/\s+(?:boat|vessel)$/i, '')
       .trim();
-    const candidateLines = customerLines.filter((line) =>
+    const candidateLines = customerLines.map((line) => line.replace(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/g, '').trim()).filter(Boolean).filter((line) =>
       !messageLabelLine.test(line)
       && !/^(?:item|package|product)\s+(?:is|:|-)\s*/i.test(line)
       && line !== inlineItem

@@ -4314,7 +4314,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
   );
 }
 
-function AdminOperations({ packages, onUpdate, liveMode = false, staffMode = false }) {
+function AdminOperations({ packages, onUpdate, onCreated, liveMode = false, staffMode = false }) {
   const [driverNames, setDriverNames] = useState([]); const [activeDriverField, setActiveDriverField] = useState(''); useEffect(() => { if (!liveMode) return undefined; let active = true; const refreshDrivers = async () => { try { const rows = staffMode ? (await supabase.from('drivers').select('name').eq('active', true).eq('approval_status', 'approved').order('name')).data || [] : await loadDriverRoster(); if (active) setDriverNames([...new Set(rows.map((driver) => driver.name).filter(Boolean))]); } catch {} }; void refreshDrivers(); const timer = window.setInterval(() => void refreshDrivers(), 15000); return () => { active = false; window.clearInterval(timer); }; }, [liveMode]); const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [area, setArea] = useState('All');

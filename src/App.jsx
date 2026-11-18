@@ -43,6 +43,7 @@ import {
   setAccountApproval,
   requestWithdrawal as requestDatabaseWithdrawal,
   submitInvoicePayment,
+  addInvoiceCharge,
   sendPaymentReceipt,
   uploadIgoFile,
   updatePackage,
@@ -2765,7 +2766,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             page === 'Accounts') &&
             (workspace === 'Admin' || workspace === 'Staff') && (
               <SectionErrorBoundary>
-                {workspace === 'Admin' && <FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} />}
+                {workspace === 'Admin' && <FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} isSuperadmin={isSuperadmin} />}
                 <StaffOperations user={databaseUser} profile={databaseProfile} isOwner={isSuperadmin} view="finance" />
               </SectionErrorBoundary>
             )}
@@ -6287,7 +6288,7 @@ function ManualNotificationsManagement() {
   );
 }
 
-function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = false, mode = 'management' }) {
+function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = false, mode = 'management', isSuperadmin = false }) {
   const financeTabs = workspace === 'Admin'
     ? ['Invoices', 'Expenses', 'Day-end', 'Settings']
     : ['Invoices', 'Expenses', 'Reports', 'Settings'];
@@ -6345,6 +6346,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
     }
   };
   const [billing, setBilling] = useState(() => (liveMode ? initialState : readState()));
+  const [invoiceChargeDraft, setInvoiceChargeDraft] = useState({ invoiceId: '', description: '', amount: '' });
+  const [invoiceChargeSaving, setInvoiceChargeSaving] = useState(false);
   const [savedInvoiceCutoff, setSavedInvoiceCutoff] = useState(() => (liveMode ? '' : readState().cutoff || ''));
   const [cutoffSaving, setCutoffSaving] = useState(false);
   const [cutoffFeedback, setCutoffFeedback] = useState('');
@@ -6634,6 +6637,55 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         p.allocations?.find((allocation) => allocation.invoiceId === invoiceId)?.amount ||
         (p.invoiceId === invoiceId ? p.amount : 0)
       ), 0));
+  const invoiceHasPaymentActivity = (invoice) => billing.payments.some((payment) =>
+    payment.status !== 'rejected' && (
+      payment.invoiceId === invoice.id ||
+      (payment.allocations || []).some((allocation) => allocation.invoiceId === invoice.id)
+    )
+  );
+  const canEditInvoice = (invoice) => isSuperadmin || (
+    Number(invoice.paidAmount || getPaid(invoice.id) || 0) <= 0 && !invoiceHasPaymentActivity(invoice)
+  );
+  const saveInvoiceCharge = async (event) => {
+    event.preventDefault();
+    const invoice = billing.invoices.find((item) => item.id === invoiceChargeDraft.invoiceId);
+    const amount = Number(invoiceChargeDraft.amount);
+    if (!invoice) return setNotice('Choose an invoice first.');
+    if (!canEditInvoice(invoice)) return setNotice('This invoice has payment activity. Only the Superadmin can change it.');
+    if (!invoiceChargeDraft.description.trim()) return setNotice('Enter a description for the extra charge.');
+    if (!Number.isFinite(amount) || amount <= 0) return setNotice('Enter an extra charge greater than zero.');
+    setInvoiceChargeSaving(true);
+    setNotice('');
+    try {
+      if (liveMode) {
+        if (!invoice.dbId) throw new Error('This invoice cannot be updated because its database ID is missing.');
+        await addInvoiceCharge(invoice.dbId, invoiceChargeDraft.description, amount);
+        await refreshDatabaseFinance(true);
+      } else {
+        const line = {
+          id: `demo-charge-${Date.now()}`,
+          packageId: null,
+          customer: '',
+          area: '',
+          description: invoiceChargeDraft.description.trim(),
+          amount: Number(amount.toFixed(2)),
+          kind: 'charge',
+        };
+        setBilling((current) => ({
+          ...current,
+          invoices: current.invoices.map((item) => item.id === invoice.id
+            ? { ...item, amount: Number((item.amount + line.amount).toFixed(2)), lines: [...item.lines, line] }
+            : item),
+        }));
+      }
+      setInvoiceChargeDraft({ invoiceId: '', description: '', amount: '' });
+      setNotice(`Added ${money(amount)} extra charge to ${invoice.id}.`);
+    } catch (error) {
+      setNotice(error.message || 'Could not add the extra invoice charge.');
+    } finally {
+      setInvoiceChargeSaving(false);
+    }
+  };
   const getInvoiceStatus = (invoice) => {
     const paid = getPaid(invoice.id);
     return paid >= invoice.amount
@@ -6956,7 +7008,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
                 <td style={{ ...cellStyle, overflowWrap: 'anywhere' }}>
                   <strong style={{ fontSize: 12 }}>{invoice.id}</strong>
                   <small style={{ display: 'block', marginTop: 4, color: '#65736c' }}>
-                    {invoice.partner} · {invoice.period} · {invoice.lines.length} packages
+                    {invoice.partner} · {invoice.period} · {invoice.lines.filter((line) => line.kind !== 'charge').length} packages
                   </small>
                 </td>
                 <td style={{ ...cellStyle, whiteSpace: 'nowrap', fontWeight: 700 }}>{money(invoice.amount)}</td>
@@ -6999,9 +7051,9 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                 <thead><tr><th>Package</th><th>Customer</th><th>Destination</th><th>Description</th><th>Amount</th></tr></thead>
                 <tbody>
-                  {viewingInvoice.lines.map((line) => (
-                    <tr key={line.packageId}>
-                      <td>{line.packageId}</td><td>{line.customer}</td><td>{line.area}</td><td>{line.description}</td><td>{money(line.amount)}</td>
+                  {viewingInvoice.lines.map((line, index) => (
+                    <tr key={line.id || line.packageId || `charge-${index}`}>
+                      <td>{line.kind === 'charge' ? 'Extra charge' : line.packageId}</td><td>{line.customer || '—'}</td><td>{line.area || '—'}</td><td>{line.description}</td><td>{money(line.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -7804,6 +7856,26 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           )}
         {!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Working…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}</>}
         {invoiceList(false)}
+        {workspace === 'Admin' && (
+          <section id="invoice-extra-charges" style={{ ...panel, marginTop: 14 }}>
+            <h3>Add extra invoice charge</h3>
+            <p>Bill a partner for costs iGO paid, such as a boat loading fee.</p>
+            <form onSubmit={saveInvoiceCharge} style={{ display: 'grid', gap: 10, maxWidth: 560 }}>
+              <label>
+                Invoice
+                <select required value={invoiceChargeDraft.invoiceId} onChange={(event) => setInvoiceChargeDraft((draft) => ({ ...draft, invoiceId: event.target.value }))}>
+                  <option value="">Choose an invoice</option>
+                  {billing.invoices.filter(canEditInvoice).map((invoice) => (
+                    <option key={invoice.id} value={invoice.id}>{invoice.partner} · {invoice.id} · {money(Math.max(0, invoice.amount - getPaid(invoice.id)))} due</option>
+                  ))}
+                </select>
+              </label>
+              <label>Charge description<input required maxLength={160} placeholder="e.g. Boat loading fee" value={invoiceChargeDraft.description} onChange={(event) => setInvoiceChargeDraft((draft) => ({ ...draft, description: event.target.value }))} /></label>
+              <label>Amount (MVR)<input required type="number" min="0.01" step="0.01" value={invoiceChargeDraft.amount} onChange={(event) => setInvoiceChargeDraft((draft) => ({ ...draft, amount: event.target.value }))} /></label>
+              <div><button style={buttonStyle} type="submit" disabled={invoiceChargeSaving}>{invoiceChargeSaving ? 'Adding charge…' : 'Add charge to invoice'}</button></div>
+            </form>
+          </section>
+        )}
       </section>
       {mode === 'management' && (
       <>

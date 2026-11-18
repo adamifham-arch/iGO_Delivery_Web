@@ -2293,6 +2293,7 @@ export default function App() {
           ['Register Package', '+'],
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
+          ['Tracking Settings', '↗'],
         ];
 
   if (supabaseConfigured && databaseProfile && accountApprovalStatus && accountApprovalStatus !== 'approved') {
@@ -2912,27 +2913,29 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             </div>
           )}
 
+          {page === 'Tracking Settings' && workspace === 'Partner' && (
+            <section className="simple-list partner-tracking-settings">
+              <h2>Partner tracking reference</h2>
+              <p>Set the format and next number for your customer tracking references.</p>
+              <form className="message-queue-fields" onSubmit={savePartnerTrackingSettings}>
+                <label>
+                  Tracking format
+                  <input value={partnerTrackingFormat} onChange={(event) => setPartnerTrackingFormat(event.target.value)} placeholder="BBD/0000 or TCMV000" />
+                </label>
+                <label>
+                  Next number
+                  <input type="number" min="1" step="1" value={partnerTrackingNext} onChange={(event) => setPartnerTrackingNext(event.target.value)} />
+                </label>
+                <button className="primary-btn" type="submit" disabled={partnerTrackingSaving}>{partnerTrackingSaving ? 'Saving…' : 'Save format'}</button>
+                {partnerTrackingNotice && <p role="status">{partnerTrackingNotice}</p>}
+                <small>For example, BBD/0000 starts at BBD/0001. The number advances as packages are added.</small>
+              </form>
+            </section>
+          )}
+
           {page === 'Register Package' && (
             <>
-              {workspace === 'Partner' && (
-                <details className="bulk-upload-panel partner-tracking-settings">
-                  <summary>Partner tracking number format</summary>
-                  <form className="message-queue-fields" onSubmit={savePartnerTrackingSettings}>
-                    <label>
-                      Format
-                      <input value={partnerTrackingFormat} onChange={(event) => setPartnerTrackingFormat(event.target.value)} placeholder="BBD/0000 or TCMV000" />
-                    </label>
-                    <label>
-                      Next number
-                      <input type="number" min="1" step="1" value={partnerTrackingNext} onChange={(event) => setPartnerTrackingNext(event.target.value)} />
-                    </label>
-                    <button className="primary-btn" type="submit" disabled={partnerTrackingSaving}>{partnerTrackingSaving ? 'Saving…' : 'Save format'}</button>
-                    {partnerTrackingNotice && <p role="status">{partnerTrackingNotice}</p>}
-                    <small>Zeros set the number width. Example: BBD/0000 starts at BBD/0001.</small>
-                  </form>
-                </details>
-              )}
-              <div className="package-import-actions">
+                            <div className="package-import-actions">
                 {showForm && (
                   <details className="bulk-upload-panel message-import-panel">
                     <summary>Fill from customer message</summary>

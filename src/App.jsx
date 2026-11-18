@@ -102,18 +102,49 @@ const normalizeMessageText = (value) =>
     .replace(/[^a-z0-9+#]+/g, ' ')
     .trim();
 
+// FollowMe public-vessel names checked against its public list (the list changes).
 const knownVesselAliases = [
-  'mathangee', 'orchid', 'fazaspeed', 'escape wing',
+  'mathangee', 'orchid', 'fazaspeed', 'escape wing', 'aakko express',
+  'aares cruiser', 'aares explorer', 'aqua blue 3', 'aqua gold', 'aqua lily',
+  'astro ocean', 'atoll advisor', 'atoll cute', 'baby shark', 'bankaru speed',
+  'blue speed', 'blue star', 'chill speed', 'coral cruiser', 'coral express',
+  'coral speed', 'altec dash', 'altec keen', 'altec pace', 'altec race',
+  'altec rush', 'altec scoot', 'altec woosh', 'altec zoom', 'ameera tours',
+  'atoll cute king', 'atoll cute queen', 'atoll cute princess',
+  'atoll cute crown', 'aqua dream', 'alira one', 'alioth', 'amilla odi',
+  'angel malak', 'cocogiri eagle', 'cocogiri express', 'blue marine',
+  'blue marlin', 'blue wave', 'black manta', 'beach cruiser',
 ];
 const maldivianNameTokens = [
-  'ali', 'ahmed', 'mohamed', 'mohammed', 'ibrahim', 'hassan', 'moosa',
-  'aishath', 'aminath', 'fathimath', 'khadheeja', 'mariyam', 'shifa',
-  'zaina', 'zifleen', 'naila', 'mishka', 'faazil', 'aseel', 'annuu',
-  'anu', 'zuleikha', 'sarah', 'abdulla', 'abdullah', 'ismail', 'yusuf',
-  'rasheed', 'shareef', 'anees', 'arif', 'shakir', 'sulaiman', 'ilyas',
-  'ameen', 'faheem', 'aslam', 'nashid', 'saeed', 'shaan', 'shaifa', 'aseel',
-  'yousuf', 'raheem', 'raashid', 'rasheed', 'imran', 'azeel', 'shiyam',
+  'aadhil', 'aahil', 'aishath', 'aisha', 'aysha', 'ayesha', 'ali',
+  'abdulla', 'abdullah', 'abdhulla', 'abdul', 'abdurrahman', 'adam',
+  'adham', 'ahmed', 'ahsan', 'ameen', 'amin', 'aminath', 'amina', 'anwar',
+  'arif', 'ashraf', 'aslam', 'asif', 'azeel', 'aseel', 'anees', 'aneesa',
+  'anu', 'annuu', 'fathimath', 'fathima', 'fathuma', 'fathumath', 'fathmath',
+  'faazil', 'faiz', 'faiza', 'faheem', 'fairooz', 'farish', 'farhan',
+  'hameed', 'hameeda', 'hamza', 'hassan', 'hasan', 'hussain', 'hussein',
+  'luqman', 'maisha', 'mariyam', 'maryam', 'mariya', 'mishka', 'moosa',
+  'musa', 'mohamed', 'mohammed', 'muhammad', 'mohamad', 'munavvar',
+  'naail', 'naaila', 'naila', 'nashid', 'naseer', 'naseema', 'nazia',
+  'nazim', 'noora', 'nuzha', 'raheem', 'raashid', 'rashid', 'rasheed',
+  'rishma', 'ruqayya', 'sarah', 'safa', 'safiyya', 'saeed', 'shakir',
+  'shareef', 'shareefa', 'shaifa', 'shifa', 'shiyam', 'shiyama', 'shuaib',
+  'sulaiman', 'umar', 'omar', 'yameen', 'yousuf', 'yusuf', 'zainab', 'zaina',
+  'zuleikha', 'zifleen', 'azeema', 'afrah', 'aafath', 'faathin', 'ibna',
+  'xaaitte', 'may',
 ];
+function extractMaldivianPersonName(line) {
+  const words = normalizeMessageText(line).match(/[a-z]+/g) || [];
+  const known = new Set(maldivianNameTokens);
+  const index = words.findIndex((word) => known.has(word));
+  if (index < 0) return '';
+  let start = index;
+  let end = index;
+  const joiners = new Set(['bin', 'ibn', 'bint', 'abd']);
+  while (start > 0 && (known.has(words[start - 1]) || joiners.has(words[start - 1])) && end - start < 3) start -= 1;
+  while (end + 1 < words.length && (known.has(words[end + 1]) || joiners.has(words[end + 1])) && end - start < 3) end += 1;
+  return words.slice(start, end + 1).join(' ');
+}
 const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name)?|item|order|order\s*info|receive\s*info|recipient\s*info|instructions|delivery\s*instructions|notes|time|captain(?:\s*number)?|boat\s*details|package\s*details)\s*[:=-]/i;
 const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer)\b/i;
 const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hyyaa?|sifco|sifko|sifkoo|police|udhares?|udhara|dhoadhi|dhodhi|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
@@ -1829,7 +1860,7 @@ export default function App() {
     const customerText = customerLines.join('\n');
     const customer = readMessageField(
       customerText,
-      'customer\\s*name|recipient\\s*name|package\\s*name|name|customer|recipient'
+      'customer\\s*name|recipient\\s*name|your\\s*name|package\\s*name|name|customer|recipient'
     );
     const receiveInfo = readMessageField(customerText, 'receive\\s*info|recipient\\s*info');
     const orderInfo = readMessageField(customerText, 'order\\s*info');
@@ -1891,11 +1922,10 @@ export default function App() {
       !isVesselLine(line) && !isAddressCandidate(line)
     );
     const knownNameFromMessage = safeKnownNameLines
-      .flatMap((line) => maldivianNameTokens.filter((name) =>
-        new RegExp('(?:^|\\b)' + name + '(?:$|\\b)', 'i').test(normalizeMessageText(line))
-      ))
+      .map(extractMaldivianPersonName)
       .find(Boolean) || '';
-    const nameFromLine = inferredName || knownNameLine;
+    // Prefer a recognized person name to an unlabelled first line, which can be a vessel or address.
+    const nameFromLine = knownNameLine || knownNameFromMessage || inferredName;
     const customerName = customer || structuredName || nameFromLine || knownNameFromMessage;
     const instructionLines = customerLines.filter((line) => messageInstructionLine.test(line));
     const notes = labeledNotes || instructionLines.join('; ');

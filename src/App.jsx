@@ -93,6 +93,42 @@ const getPartnerDeliveryFee = (destination, pricing, packageSize = '') => {
     : getDeliveryFee(destination);
 };
 
+const normalizeMessageText = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/[^a-z0-9+#]+/g, ' ')
+    .trim();
+
+const knownVesselAliases = [
+  'mathangee', 'orchid', 'fazaspeed', 'escape wing',
+];
+const maldivianNameTokens = [
+  'ali', 'ahmed', 'mohamed', 'mohammed', 'ibrahim', 'hassan', 'moosa',
+  'aishath', 'aminath', 'fathimath', 'khadheeja', 'mariyam', 'shifa',
+  'zaina', 'zifleen', 'naila', 'mishka', 'faazil', 'aseel', 'annuu',
+  'anu', 'zuleikha', 'sarah', 'abdulla', 'abdullah', 'ismail', 'yusuf',
+  'yousuf', 'raheem', 'raashid', 'rasheed', 'imran', 'azeel', 'shiyam',
+];
+const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name)?|item|order|instructions|delivery\s*instructions|notes|time|captain(?:\s*number)?|boat\s*details|package\s*details)\s*[:=-]/i;
+const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer)\b/i;
+const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hyyaa?|sifco|sifko|sifkoo|police|udhares?|udhara|dhoadhi|dhodhi|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
+const isVesselLine = (line) => {
+  const normalized = normalizeMessageText(line);
+  if (!normalized || /^(?:boat|vessel) details$/.test(normalized)) return false;
+  return /\b(?:boat|dhoni|dhoani|ferry|launch|speed boat|speed launch)\b/.test(normalized)
+    || knownVesselAliases.some((name) => normalized.includes(name));
+};
+const cleanImportedMessageLine = (line) =>
+  String(line || '')
+    .replace(/^\s*\[\d{1,2}[/-]\d{1,2}[^\]]*\]\s*/i, '')
+    .replace(/^\s*(?:\+?960[\s-]*)?[79]\d{6}\s*:\s*/i, '')
+    .replace(/^\s*[>•\-\s]+/, '')
+    .replace(/[🟥🟩🛳️✅☑️]+/gu, '')
+    .trim();
+
 const initialPackages = [
   {
     id: 'IGO-1001',
@@ -1777,175 +1813,158 @@ export default function App() {
   function fillFromMessage() {
     const text = messageDraft.trim();
     if (!text) {
-      setMessageNotice(
-        'Please paste a customer message before filling the package details.'
-      );
+      setMessageNotice('Please paste a customer message before filling the package details.');
       return;
     }
-    const updates = {};
-    const cleanLines = text
-      .split(/\r?\n/)
-      .map((line) => line.trim().replace(/^[>•\-\s]+/, ''))
-      .filter(Boolean);
-    const phoneLineIndex = cleanLines.findIndex((line) =>
-      /(?:\+?960[\s-]?)?[79]\d{6}/.test(line)
+
+    const cleanLines = text.split(/\r?\n/).map(cleanImportedMessageLine).filter(Boolean);
+    const packageSectionStart = text.search(/(?:package\s*details|recipient\s*details|customer\s*details)\s*[:=-]?/i);
+    const customerText = packageSectionStart >= 0
+      ? text.slice(packageSectionStart).replace(/^(?:package\s*details|recipient\s*details|customer\s*details)\s*[:=-]?/i, '')
+      : text;
+    const customerLines = customerText.split(/\r?\n/).map(cleanImportedMessageLine).filter(Boolean);
+    const customer = readMessageField(
+      customerText,
+      'customer\s*name|recipient\s*name|package\s*name|name|customer|recipient'
     );
-    const unlabelledLines = cleanLines.filter(
-      (line) =>
-        !/^(?:name|customer|customer\s*name|phone|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package|item|order|instructions|delivery\s*instructions|notes)\s*[:=-]/i.test(
-          line
-        ) && !/(?:\+?960[\s-]?)?[79]\d{6}/.test(line)
-    );
-    const customer = readMessageField(text, 'customer\\s*name|name|customer');
     const labeledPhone = readMessageField(
-      text,
-      'phone|phone\\s*number|mobile|contact'
+      customerText,
+      'phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?'
     );
-    const phoneMatch = text.match(/(?<![\d+])(?:\+960[ -]*)?[79]\d{6}(?!\d)/);
+    const phoneMatch = customerText.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/)
+      || text.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/);
     const phone = labeledPhone || phoneMatch?.[0] || '';
     const address = readMessageField(
-      text,
-      'delivery\\s*address|address|deliver\\s*to'
+      customerText,
+      'delivery\s*address|address|deliver\s*to'
     );
-    const item = readMessageField(text, 'package|item|order');
-    const notes = readMessageField(
-      text,
-      'delivery\\s*instructions|instructions|notes'
+    const item = readMessageField(customerText, 'package|item|order');
+    const labeledNotes = readMessageField(
+      customerText,
+      'delivery\s*instructions|instructions|notes'
     );
-    if (customer) updates.customer = customer;
-    if (!customer && unlabelledLines.length) {
-      const inferredName = unlabelledLines[0]
-        .replace(/^(?:hi|hello|assalamu alaikum)[,!. ]+/i, '')
-        .trim();
-      if (inferredName) updates.customer = inferredName;
-    }
-    if (!address) {
-      const afterPhone =
-        phoneLineIndex >= 0
-          ? cleanLines
-              .slice(phoneLineIndex + 1)
-              .find(
-                (line) =>
-                  /[a-z]/i.test(line) &&
-                  !/^(?:boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package|item|order|instructions|notes)\s*[:=-]/i.test(
-                    line
-                  )
-              )
-          : '';
-      const inferredAddress =
-        afterPhone ||
-        (unlabelledLines.length > 1
-          ? unlabelledLines[unlabelledLines.length - 1]
-          : '');
-      if (inferredAddress && inferredAddress !== updates.customer)
-        updates.address = inferredAddress;
-    }
+    const explicitArea = readMessageField(
+      customerText,
+      'destination|island(?:\s*name)?|area|location'
+    );
+
+    const boatSectionMatch = text.match(/(?:boat|ferry)\s*details\b([\s\S]*?)(?=package\s*details|recipient\s*details|customer\s*details|$)/i);
+    const boatSection = boatSectionMatch?.[1] || '';
+    const boatField = readMessageField(text, 'boat\\s*name|vessel\\s*name')
+      || readMessageField(boatSection, 'vessel\\s*name|boat\\s*name|name');
+    const boatLine = cleanLines.find((line) => isVesselLine(line)) || '';
+    const detectedBoat = boatField || (boatLine ? boatLine.split(/[,;|]/)[0].replace(/\s+(?:boat|vessel)$/i, '').trim() : '');
+    const candidateLines = customerLines.filter((line) =>
+      !messageLabelLine.test(line)
+      && !/(?:\+?960[\s-]*)?[79]\d{6}/.test(line)
+      && !/^\s*(?:[A-Z]{2,}\s*[/#-]\s*\d{2,}|[A-Z]{2,}-\d{3,})\s*$/i.test(line)
+    );
+    const isAddressCandidate = (line) =>
+      messageAddressLine.test(line)
+      || /^[MGH]\.\s*[A-Z][\w'-]+(?:\s+[A-Z][\w'-]+)*$/i.test(line)
+      || /\b(?:male|hulhumale|hml|mle)\b/i.test(line);
+    const isNameCandidate = (line) =>
+      line.length <= 72
+      && !isVesselLine(line)
+      && !isAddressCandidate(line)
+      && !messageInstructionLine.test(line)
+      && !/^\s*(?:boat|captain|departure|jetty|time|island|location|package|order)\b/i.test(line)
+      && /^[\p{L}][\p{L}.'’ -]*$/u.test(line)
+      && line.split(/\s+/).length <= 5;
+    const inferredName = candidateLines.find(isNameCandidate) || '';
+    const knownNameLine = candidateLines.find((line) =>
+      isNameCandidate(line)
+      && maldivianNameTokens.some((name) => new RegExp('(?:^|\\b)' + name + '(?:$|\\b)', 'i').test(normalizeMessageText(line)))
+    ) || '';
+    const safeKnownNameLines = candidateLines.filter((line) =>
+      !isVesselLine(line) && !isAddressCandidate(line)
+    );
+    const knownNameFromMessage = safeKnownNameLines
+      .flatMap((line) => maldivianNameTokens.filter((name) =>
+        new RegExp('(?:^|\\b)' + name + '(?:$|\\b)', 'i').test(normalizeMessageText(line))
+      ))
+      .find(Boolean) || '';
+    const nameFromLine = inferredName || knownNameLine;
+    const customerName = customer || nameFromLine || knownNameFromMessage;
+    const instructionLines = customerLines.filter((line) => messageInstructionLine.test(line));
+    const notes = labeledNotes || instructionLines.join('; ');
+    const addressCandidate = candidateLines.find((line) =>
+      line !== nameFromLine && line !== inferredName && !isVesselLine(line)
+      && !messageInstructionLine.test(line) && isAddressCandidate(line)
+    ) || candidateLines.find((line) =>
+      line !== nameFromLine && line !== inferredName && !isVesselLine(line)
+      && !messageInstructionLine.test(line)
+    ) || '';
+    const inferredAddress = address || addressCandidate;
+
+    const updates = {};
+    if (customerName) updates.customer = customerName.replace(/^(?:hi|hello|assalamu alaikum)[,!. ]+/i, '').trim();
     if (phone) updates.phone = normalizeCustomerPhone(phone);
-    if (address) updates.address = address;
+    if (inferredAddress) updates.address = inferredAddress;
     if (item) updates.item = item;
     if (notes) updates.notes = notes;
-    const locationText = [
-      readMessageField(text, 'destination|island|area'),
-      address,
-      text,
-    ]
-      .join(' ')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
-    const hasHulhumale = /\bhulhu?\s*male\b/.test(locationText);
-    const isPhase2 =
-      /\bphase[\s-]*(?:2|ii|two)\b|\bp2\b/.test(locationText) ||
-      (hasHulhumale && /\b(?:lot|plot)\s*20\d{3}\b/.test(locationText));
-    const isPhase1 =
-      /\bphase[\s-]*(?:1|i|one)\b|\bp1\b/.test(locationText) ||
-      (hasHulhumale && /\b(?:lot|plot)\s*1\d{4}\b/.test(locationText));
-    if (isPhase2) updates.area = 'Hulhumalé Phase 2';
-    else if (isPhase1) updates.area = 'Hulhumalé Phase 1';
-    else if (/\bboat\b|\b(?:dhoani|launch)\b/.test(locationText))
-      updates.area = 'Boat';
-    else if (
-      /\bmale\b|\bmaafannu\b|\bhenveiru\b|\bgalolhu\b|\bmachchangolhi\b|\bvillimale\b|\bvillingili\b/.test(
-        locationText
-      )
-    )
-      updates.area = 'Malé';
+
+    const normalizedAreaText = normalizeMessageText([explicitArea, inferredAddress, detectedBoat].join(' '));
+    const hasHulhumale = /\bhulhu?male(?:e)?\b|\bhml\b|\bh\s*mle\b|\bh\s*male\b/.test(normalizedAreaText);
+    const phase2 = /\bphase\s*(?:2|ii|two)\b|\bp2\b/.test(normalizedAreaText)
+      || /\b(?:lot|plot)\s*20\d{3}\b/.test(normalizedAreaText);
+    const phase1 = /\bphase\s*(?:1|i|one)\b|\bp1\b/.test(normalizedAreaText)
+      || /\b(?:lot|plot)\s*1\d{4}\b/.test(normalizedAreaText);
+    const knownHulhumaleFlat = /\b(?:hiyaa?|hyyaa?|sifco|sifko|sifkoo|police\s*flats?|amaan\s*(?:udhares?|dhoadhi|dhodhi)|udhares?|udhara|dhoadhi|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc)\b|\b(?:ud|dh)\s*\+?\s*\d{1,5}\b|\b(?:lot|plot|lott)\s*[#/-]?\s*\d{1,5}\b/.test(normalizedAreaText);
+    const explicitHml = /\bhulhu?male(?:e)?\b|\bhml\b|\bh\s*mle\b|\bh\s*male\b/.test(normalizeMessageText(explicitArea));
+    const explicitMale = /\b(?:male|mle|maale)\b/.test(normalizeMessageText(explicitArea))
+      && !/\bh\s*(?:mle|male)\b/.test(normalizeMessageText(explicitArea));
+    const isBoatDelivery = Boolean(detectedBoat) || /\b(?:boat|dhoni|dhoani|ferry|launch|speed boat|speed launch)\b/.test(normalizedAreaText);
+
+    if (explicitHml || hasHulhumale || knownHulhumaleFlat) {
+      if (partnerDeliveryPricing.pricingMode === 'package_size') updates.area = 'Hulhumalé';
+      else if (phase2) updates.area = 'Hulhumalé Phase 2';
+      else updates.area = 'Hulhumalé Phase 1';
+    } else if (isBoatDelivery) updates.area = 'Boat';
+    else if (explicitMale || /\b(?:maafannu|henveiru|galolhu|machchangolhi|villimale|villingili)\b/.test(normalizedAreaText)) updates.area = 'Malé';
+
     if (!Object.keys(updates).length) {
-      setMessageNotice(
-        'No customer details recognized. Use labels such as Name:, Phone:, Address:, and Destination:.'
-      );
+      setMessageNotice('No customer details recognized. Use labels such as Name:, Phone:, Address:, and Destination:.');
       return;
     }
-    const boatName = readMessageField(text, 'boat\\s*name|vessel\\s*name');
-    const explicitArea = readMessageField(text, 'destination|island|area');
-    const destinations = [
-      'Malé',
-      'Hulhumalé Phase 1',
-      'Hulhumalé Phase 2',
-      'Boat',
-    ];
-    const matchedArea = destinations.find(
-      (area) =>
-        normalizePackageText(area) === normalizePackageText(explicitArea)
-    );
-    const draftArea =
-      matchedArea || (boatName ? 'Boat' : updates.area) || form.area || 'Malé';
+
+    const draftArea = updates.area || form.area || 'Malé';
+    const boatName = draftArea === 'Boat'
+      ? (detectedBoat || (inferredAddress && isVesselLine(inferredAddress) ? inferredAddress : ''))
+      : '';
+    if (draftArea === 'Boat' && boatName) {
+      updates.address = boatName;
+      if (!updates.customer && nameFromLine) updates.customer = nameFromLine;
+    }
     const draft = {
       customer: updates.customer || '',
       phone: updates.phone || '',
-      address: updates.address || '',
-      area: partnerDeliveryPricing.pricingMode === 'package_size' && draftArea.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : draftArea,
+      address: draftArea === 'Boat' ? boatName : updates.address || '',
+      area: draftArea,
       packageSize: '',
       item: updates.item || '',
       notes: updates.notes || '',
-      boatName: draftArea === 'Boat' ? boatName || address || '' : '',
-      boatLocation: readMessageField(
-        text,
-        'boat\\s*location|harbour|jetty|location'
-      ),
-      departureTime: normalizeDepartureTime(
-        readMessageField(text, 'departure\\s*time|departure')
-      ),
-      landmark: readMessageField(text, 'nearby\\s*landmark|landmark'),
-      fee: String(getCurrentDeliveryFee(partnerDeliveryPricing.pricingMode === 'package_size' && draftArea.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : draftArea) ?? ''),
+      boatName,
+      boatLocation: readMessageField(text, 'boat\\s*location|harbour|jetty'),
+      departureTime: normalizeDepartureTime(readMessageField(text, 'departure\\s*time|departure')),
+      landmark: readMessageField(customerText, 'nearby\\s*landmark|landmark'),
+      fee: String(getCurrentDeliveryFee(draftArea, '') ?? ''),
     };
     Object.assign(draft, deliveryDetails(draft));
     const duplicateKey = packageDuplicateKey(draft);
-    if (
-      messageQueue.some((entry) => packageDuplicateKey(entry) === duplicateKey)
-    ) {
-      setMessageNotice(
-        'This package is already in the review list. It was not added again.'
-      );
+    if (messageQueue.some((entry) => packageDuplicateKey(entry) === duplicateKey)) {
+      setMessageNotice('This package is already in the review list. It was not added again.');
       return;
     }
     if (packages.some((entry) => packageDuplicateKey(entry) === duplicateKey)) {
-      setMessageNotice(
-        'This package is already registered. It was not added again.'
-      );
+      setMessageNotice('This package is already registered. It was not added again.');
       return;
     }
-    setMessageQueue((current) => [
-      ...current,
-      { ...draft, queueId: Date.now() + Math.random() },
-    ]);
+    setMessageQueue((current) => [...current, { ...draft, queueId: Date.now() + Math.random() }]);
     setConfirmBulkAdd(false);
     setMessageDraft('');
-    const labels = {
-      customer: 'name',
-      phone: 'phone',
-      address: 'address',
-      area: 'destination',
-      item: 'description',
-      notes: 'instructions',
-    };
-    setMessageNotice(
-      'Added to review list: ' +
-        Object.keys(updates)
-          .map((key) => labels[key])
-          .join(', ') +
-        '. Check the list before adding packages.'
-    );
+    const labels = { customer: 'name', phone: 'phone', address: 'address', area: 'destination', item: 'description', notes: 'instructions' };
+    setMessageNotice('Added to review list: ' + Object.keys(updates).map((key) => labels[key]).filter(Boolean).join(', ') + '. Check the list before adding packages.');
     window.requestAnimationFrame(() => customerMessageInputRef.current?.focus());
   }
 

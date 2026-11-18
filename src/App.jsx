@@ -1905,7 +1905,7 @@ export default function App() {
     const detectedBoat = boatField || (boatLine ? boatLine.split(/[,;|]/)[0].replace(/\s+(?:boat|vessel)$/i, '').trim() : '');
     const candidateLines = customerLines.filter((line) =>
       !messageLabelLine.test(line)
-      && !/^(?:item|package|product)\\s+(?:is|:|-)\\s*/i.test(line)
+      && !/^(?:item|package|product)\s+(?:is|:|-)\s*/i.test(line)
       && !/(?:\+?960[\s-]*)?[79]\d{6}/.test(line)
       && !/^\s*(?:[A-Z]{2,}\s*[/#-]\s*\d{2,}|[A-Z]{2,}-\d{3,})\s*$/i.test(line)
     );
@@ -1914,16 +1914,16 @@ export default function App() {
       || /^[MGH]\.\s*[A-Z][\w'-]+(?:\s+[A-Z][\w'-]+)*$/i.test(line)
       || /\b(?:male|hulhumale|hml|mle)\b/i.test(line);
     const isNameCandidate = (line) => {
-      const slashSeparatedCustomerName = /^\\s*[^/]+\\s*\\/\\s*[^/]+\\s*$/.test(line)
+      const slashSeparatedCustomerName = /^\s*[^/]+\s*\/\s*[^/]+\s*$/.test(line)
         && Boolean(extractMaldivianPersonName(line.split('/')[0]));
       return slashSeparatedCustomerName || (
         line.length <= 72
         && !isVesselLine(line)
         && !isAddressCandidate(line)
         && !messageInstructionLine.test(line)
-        && !/^\\s*(?:boat|captain|departure|jetty|time|island|location|package|order)\\b/i.test(line)
-        && /^[\\p{L}][\\p{L}.'’ -]*$/u.test(line)
-        && line.split(/\\s+/).length <= 5
+        && !/^\s*(?:boat|captain|departure|jetty|time|island|location|package|order)\b/i.test(line)
+        && /^[\p{L}][\p{L}.'’ -]*$/u.test(line)
+        && line.split(/\s+/).length <= 5
       );
     };
     const inferredName = candidateLines.find(isNameCandidate) || '';

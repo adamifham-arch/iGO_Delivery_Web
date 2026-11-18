@@ -404,6 +404,22 @@ const normalizeCustomerPhone = (value = '') =>
     .replace(/[\s-]/g, '');
 const isValidCustomerPhone = (value) =>
   /^[79]\d{6}$/.test(normalizeCustomerPhone(value));
+const packageContactError = (entry = {}) => {
+  const customer = String(entry.customer || '').trim();
+  const phone = normalizeCustomerPhone(entry.phone || '');
+  if (entry.area === 'Boat') {
+    if (!customer) return 'Boat deliveries need a customer name.';
+    if (!phone) return 'Boat deliveries need a customer phone number.';
+    if (!isValidCustomerPhone(phone))
+      return 'Customer phone must contain 7 digits and start with 7 or 9.';
+    return '';
+  }
+  if (!customer && !phone)
+    return 'Enter a customer name or phone number.';
+  if (phone && !isValidCustomerPhone(phone))
+    return 'Customer phone must contain 7 digits and start with 7 or 9.';
+  return '';
+};
 
 const normalizeDepartureTime = (value = '') => {
   const text = String(value).trim();
@@ -1672,8 +1688,9 @@ export default function App() {
   async function registerPackage(e) {
     e.preventDefault();
 
-    if (!isValidCustomerPhone(form.phone)) {
-      setNotice('Customer phone must contain 7 digits and start with 7 or 9.');
+    const contactError = packageContactError(form);
+    if (contactError) {
+      setNotice(contactError);
       return;
     }
     if (partnerDeliveryPricing.pricingMode === 'package_size' && (!form.packageSize || !getCurrentDeliveryFee(form.area, form.packageSize))) {
@@ -1826,14 +1843,10 @@ export default function App() {
           .toLowerCase()
       );
       const column = (name) => headers.indexOf(name.toLowerCase());
-      if (
-        ['Customer name', 'Phone number', 'Destination'].some(
-          (name) => column(name) < 0
-        )
-      )
-        throw new Error(
-          'Required columns: Customer name, Phone number, and Destination.'
-        );
+      if (column('Destination') < 0)
+        throw new Error('Include a Destination column.');
+      if (column('Customer name') < 0 && column('Phone number') < 0)
+        throw new Error('Include a Customer name or Phone number column.');
       if (
         column('Delivery address / boat name') < 0 &&
         column('Delivery address') < 0 &&
@@ -1864,9 +1877,8 @@ export default function App() {
         };
         Object.assign(entry, deliveryDetails(entry));
         if (
-          !entry.customer ||
-          !isValidCustomerPhone(entry.phone) ||
-          !entry.address ||
+          packageContactError(entry) ||
+          !(area === 'Boat' ? entry.boatName : entry.address) ||
           !['Malé', 'Hulhumalé Phase 1', 'Hulhumalé Phase 2', 'Boat'].includes(
             area
           ) ||
@@ -1879,7 +1891,7 @@ export default function App() {
       }
       if (!validRows.length)
         throw new Error(
-          'No valid rows. Boat needs a boat name; other destinations need an address. Check phone numbers and departure times.'
+          'No valid rows. Land deliveries need a name or phone; boat deliveries need both and a boat name. Check the address and departure time.'
         );
       const added = validRows.map((entry, index) => ({
           ...entry,
@@ -1899,7 +1911,7 @@ export default function App() {
           (skipped
             ? ' ' +
               skipped +
-              ' row(s) skipped: check required name, phone, destination, address or boat name, and departure time.'
+              ' row(s) skipped: land deliveries need a name or phone; boat deliveries need both and a boat name. Check destination, address, and departure time.'
             : '')
       );
     } catch (error) {
@@ -2150,8 +2162,7 @@ export default function App() {
   async function confirmAddQueuedPackages() {
     const incomplete = messageQueue.filter(
       (entry) =>
-        !entry.customer.trim() ||
-        !isValidCustomerPhone(entry.phone) ||
+        packageContactError(entry) ||
         (partnerDeliveryPricing.pricingMode === 'package_size' && (!entry.packageSize || !getCurrentDeliveryFee(entry.area, entry.packageSize))) ||
         !(entry.area === 'Boat' ? entry.boatName : entry.address)?.trim() ||
         !validDepartureTime(
@@ -2162,7 +2173,7 @@ export default function App() {
     );
     if (incomplete.length) {
       setMessageNotice(
-        'Each package needs a customer name, valid 7-digit phone starting with 7 or 9, and a boat name for Boat or an address for other destinations. Check any departure time.'
+        'Land deliveries need a customer name or phone. Boat deliveries need both, plus a boat name. Check the delivery address, package size, and departure time.'
       );
       setConfirmBulkAdd(false);
       return;
@@ -3200,18 +3211,18 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   <h3>Customer and delivery details</h3>
                   <div className="form-grid">
                     <label>
-                      Customer name *
+                      Customer name {form.area === 'Boat' ? '*' : '(optional)'}
                       <input
                         ref={customerNameInputRef}
                         name="customer"
                         value={form.customer}
                         onChange={updateForm}
-                        required
+                        required={form.area === 'Boat'}
                         placeholder="Full name"
                       />
                     </label>
                     <label>
-                      Customer phone *
+                      Customer phone {form.area === 'Boat' ? '*' : '(optional)'}
                       <input
                         type="tel"
                         inputMode="tel"
@@ -3220,7 +3231,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                         name="phone"
                         value={form.phone}
                         onChange={updateForm}
-                        required
+                        required={form.area === 'Boat'}
                         placeholder="Phone number"
                       />
                     </label>

@@ -924,9 +924,10 @@ export default function App() {
         const selectedWorkspace = workspaceRef.current;
         const savedRoute = readSavedIgoNavigation();
         const savedWorkspace = savedRoute?.workspace || roleWorkspace;
-        const savedWorkspaceAllowed = savedWorkspace === roleWorkspace
-          || (additionalProfiles.isSuperadmin && savedWorkspace === 'Partner' && additionalProfiles.partner?.approval_status === 'approved')
-          || (additionalProfiles.isSuperadmin && savedWorkspace === 'Driver' && additionalProfiles.driver?.approval_status === 'approved');
+        // On a fresh sign-in or reload, start in the account's own workspace.
+        // Superadmin-linked Partner/Driver workspaces are explicit in-session switches,
+        // not a saved login destination.
+        const savedWorkspaceAllowed = savedWorkspace === roleWorkspace;
         const restoreSavedRoute = Boolean(savedRoute?.page && savedWorkspaceAllowed);
         const keepSelectedWorkspace = activeUserIdRef.current === user.id && (
           selectedWorkspace === roleWorkspace

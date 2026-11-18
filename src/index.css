@@ -8558,3 +8558,69 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .app[data-theme="night"] .main .package-size-chips button[aria-pressed="true"] span {
   color: #334155 !important;
 }
+
+
+/* Package size choices use a clear letter bubble with its rate beside it. */
+.main .package-size-chips button {
+  gap: 7px;
+  min-height: 40px;
+  padding: 4px 11px 4px 5px;
+  border-radius: 999px;
+}
+.main .package-size-chips button .package-size-initial {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9eef5;
+  color: #253448;
+  font-size: 13px;
+  font-weight: 800;
+}
+.main .package-size-chips button .package-size-label {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+.main .package-size-chips button.selected,
+.main .package-size-chips button[aria-pressed="true"] {
+  border-color: #087653;
+  background: #e5f6ef;
+  color: #075d42;
+  box-shadow: 0 0 0 2px rgb(8 118 83 / 14%);
+}
+.main .package-size-chips button.selected .package-size-initial,
+.main .package-size-chips button[aria-pressed="true"] .package-size-initial {
+  background: #087653;
+  color: #fff;
+}
+.app[data-theme="night"] .main .package-size-chips button {
+  background: #1e2c41 !important;
+  border-color: #62748d !important;
+  color: #f1f5f9 !important;
+}
+.app[data-theme="night"] .main .package-size-chips button .package-size-initial {
+  background: #42536b !important;
+  color: #fff !important;
+}
+.app[data-theme="night"] .main .package-size-chips button .package-size-label {
+  color: #e2e8f0 !important;
+}
+.app[data-theme="night"] .main .package-size-chips button.selected,
+.app[data-theme="night"] .main .package-size-chips button[aria-pressed="true"] {
+  background: #facc15 !important;
+  border: 2px solid #fff2a8 !important;
+  color: #172033 !important;
+  box-shadow: 0 0 0 3px rgb(250 204 21 / 26%) !important;
+}
+.app[data-theme="night"] .main .package-size-chips button.selected .package-size-initial,
+.app[data-theme="night"] .main .package-size-chips button[aria-pressed="true"] .package-size-initial {
+  background: #172033 !important;
+  color: #facc15 !important;
+}
+.app[data-theme="night"] .main .package-size-chips button.selected .package-size-label,
+.app[data-theme="night"] .main .package-size-chips button[aria-pressed="true"] .package-size-label {
+  color: #172033 !important;
+}

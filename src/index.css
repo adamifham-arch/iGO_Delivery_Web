@@ -8719,3 +8719,29 @@ article.driver-delivery-card .driver-failed-attempt > summary { padding: 4px 0; 
   article.driver-delivery-card .driver-delivery-details { grid-template-columns: 1fr; gap: 6px; }
   article.driver-delivery-card .driver-stop-group { padding: 7px 8px; }
 }
+
+
+/* Compact driver earnings into a clear summary with optional detail */
+#driver-earnings { gap: 8px; }
+#driver-earnings .driver-section-heading { margin-bottom: 2px; }
+#driver-earnings .driver-earnings-total { display: flex; align-items: baseline; gap: 8px; margin: 0; padding: 0 0 7px; border-bottom: 1px solid #e7ece8; color: #647067; font-size: 12px; }
+#driver-earnings .driver-earnings-total strong { color: #1f2b24; font-size: 14px; font-variant-numeric: tabular-nums; }
+#driver-earnings .driver-withdrawal-request { align-items: center; gap: 6px 10px; margin: 0; padding: 9px 10px; border-radius: 10px; }
+#driver-earnings .driver-withdrawal-request > div { flex: 1 1 180px; min-width: 0; }
+#driver-earnings .driver-withdrawal-request strong { font-size: 12px; }
+#driver-earnings .driver-withdrawal-request p { margin: 2px 0 0; font-size: 10px; line-height: 1.3; }
+#driver-earnings .driver-withdrawal-request .driver-action { min-height: 34px; padding: 7px 10px; border-radius: 8px; font-size: 11px; }
+.driver-earnings-history { margin: 0; }
+.driver-earnings-history > summary { padding: 5px 0; color: #176a50; font-size: 11px; font-weight: 650; cursor: pointer; }
+.driver-earnings-history .driver-delivery-list { gap: 5px; margin-top: 5px; }
+.driver-earnings-history .driver-delivery-card { gap: 6px; padding: 8px 10px; border-radius: 9px; font-size: 11px; }
+.app[data-theme="night"] #driver-earnings .driver-earnings-total { border-color: #334155; color: #cbd5e1; }
+.app[data-theme="night"] #driver-earnings .driver-earnings-total strong { color: #f8fafc; }
+.app[data-theme="night"] .driver-earnings-history > summary { color: #86efac; }
+@media (max-width: 560px) {
+  #driver-earnings { gap: 7px; padding: 10px; }
+  #driver-earnings .driver-section-heading h3 { font-size: 15px; }
+  #driver-earnings .driver-withdrawal-request { gap: 6px; padding: 8px; }
+  #driver-earnings .driver-withdrawal-request > div { flex-basis: 140px; }
+  #driver-earnings .driver-withdrawal-request .driver-action { min-height: 32px; padding: 6px 8px; font-size: 10px; }
+}

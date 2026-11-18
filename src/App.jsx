@@ -3090,8 +3090,8 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                           {partnerDeliveryPricing.pricingMode === 'package_size' && (
                             <div className="package-size-chips message-queue-size-chips" role="group" aria-label="Package size">
                               {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
-                                <button key={size} type="button" className={entry.packageSize === size ? 'selected' : ''} aria-pressed={entry.packageSize === size} onClick={() => updateQueuedPackage(entry.queueId, 'packageSize', size)}>
-                                  {size}<span>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
+                                <button key={size} type="button" className={entry.packageSize === size ? 'selected' : ''} aria-label={label + ' package size, MVR ' + partnerDeliveryPricing.packageSizeRates[size]} aria-pressed={entry.packageSize === size} onClick={() => updateQueuedPackage(entry.queueId, 'packageSize', size)}>
+                                  <span className="package-size-initial">{size}</span><span className="package-size-label">{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
                                 </button>
                               ))}
                               {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}
@@ -3321,8 +3321,8 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                     {partnerDeliveryPricing.pricingMode === 'package_size' && (
                       <div className="package-size-chips" role="group" aria-label="Package size">
                         {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
-                          <button key={size} type="button" className={form.packageSize === size ? 'selected' : ''} aria-pressed={form.packageSize === size} onClick={() => updateForm({ target: { name: 'packageSize', value: size } })}>
-                            {size}<span>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
+                          <button key={size} type="button" className={form.packageSize === size ? 'selected' : ''} aria-label={label + ' package size, MVR ' + partnerDeliveryPricing.packageSizeRates[size]} aria-pressed={form.packageSize === size} onClick={() => updateForm({ target: { name: 'packageSize', value: size } })}>
+                            <span className="package-size-initial">{size}</span><span className="package-size-label">{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
                           </button>
                         ))}
                         {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}

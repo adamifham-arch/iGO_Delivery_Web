@@ -2974,6 +2974,17 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                               />
                             </label>
                           ))}
+                          <label className="message-queue-instructions">
+                            Delivery instructions (optional)
+                            <textarea
+                              rows={2}
+                              value={entry.notes || ''}
+                              placeholder="Call before delivery, fragile item, etc."
+                              onChange={(event) =>
+                                updateQueuedPackage(entry.queueId, 'notes', event.target.value)
+                              }
+                            />
+                          </label>
                           <p className="message-queue-fee">
                             {partnerDeliveryPricing.pricingMode === 'package_size' && entry.packageSize ? `${packageSizeLabels[entry.packageSize]} package · ` : ''}{entry.fee ? `Delivery fee: MVR ${entry.fee}` : partnerDeliveryPricing.pricingMode === 'package_size' ? 'Choose a priced package size' : 'Delivery fee not available'}
                           </p>

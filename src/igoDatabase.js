@@ -46,6 +46,7 @@ export function packageFromDb(row) {
     driverPhone: row.drivers?.phone || '',
     customer: row.customer_name,
     phone: row.customer_phone,
+    trackingReference: row.partner_tracking_reference || '',
     address: row.address,
     area: row.area,
     boatName: row.boat_name || '',
@@ -76,6 +77,7 @@ export function packageToDb(entry) {
   const fields = {
     customer: 'customer_name',
     phone: 'customer_phone',
+    trackingReference: 'partner_tracking_reference',
     address: 'address',
     area: 'area',
     boatName: 'boat_name',

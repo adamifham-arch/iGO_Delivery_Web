@@ -1880,10 +1880,7 @@ export default function App() {
     const phoneMatch = customerText.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/)
       || text.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/);
     const phone = labeledPhone || phoneMatch?.[0] || '';
-    const partnerTracking = readMessageField(
-      customerText,
-      'partner\\s*tracking(?:\\s*number)?|tracking(?:\\s*(?:number|id))?|order\\s*(?:tracking|number)|reference'
-    ) || customerLines.find((line) => /^\\s*[A-Z]{2,}\\s*[/#-]\\s*\\d{2,}\\s*$/i.test(line)) || '';
+
     const address = readMessageField(
       customerText,
       'delivery\s*address|address|deliver\s*to'
@@ -1949,7 +1946,6 @@ export default function App() {
     const updates = {};
     if (customerName) updates.customer = customerName.replace(/^(?:hi|hello|assalamu alaikum)[,!. ]+/i, '').trim();
     if (phone) updates.phone = normalizeCustomerPhone(phone);
-    if (partnerTracking) updates.partnerTracking = partnerTracking.trim();
     if (inferredAddress) updates.address = inferredAddress;
     if (item) updates.item = item;
     if (notes) updates.notes = notes;
@@ -1992,7 +1988,6 @@ export default function App() {
       address: draftArea === 'Boat' ? boatName : updates.address || '',
       area: draftArea,
       packageSize: '',
-      partnerTracking: updates.partnerTracking || '',
       item: updates.item || '',
       notes: updates.notes || '',
       boatName,
@@ -2014,7 +2009,7 @@ export default function App() {
     setMessageQueue((current) => [...current, { ...draft, queueId: Date.now() + Math.random() }]);
     setConfirmBulkAdd(false);
     setMessageDraft('');
-    const labels = { customer: 'name', phone: 'phone', partnerTracking: 'tracking number', address: 'address', area: 'destination', item: 'description', notes: 'instructions' };
+    const labels = { customer: 'name', phone: 'phone', address: 'address', area: 'destination', item: 'description', notes: 'instructions' };
     setMessageNotice('Added to review list: ' + Object.keys(updates).map((key) => labels[key]).filter(Boolean).join(', ') + '. Check the list before adding packages.');
     window.requestAnimationFrame(() => customerMessageInputRef.current?.focus());
   }
@@ -2080,7 +2075,6 @@ export default function App() {
         id: 'IGO-' + (1001 + packages.length + index),
         fee: getCurrentDeliveryFee(entry.area, entry.packageSize),
         packageSize: entry.packageSize || '',
-        partnerTracking: entry.partnerTracking || '',
         status: 'Pending',
       }));
     if (supabaseConfigured) {

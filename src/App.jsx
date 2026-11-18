@@ -1885,6 +1885,8 @@ export default function App() {
       customerText,
       'delivery\\s*address|address(?:/building\\s*name)?|building\\s*name|deliver\\s*to'
     );
+    const road = readMessageField(customerText, 'road|street');
+    const landmark = readMessageField(customerText, 'nearby\\s*landmark|near\\s*by\\s*(?:location|landmark)|landmark');
     const itemCodeIndex = customerLines.findIndex((line) => /^[A-Z]{2,}\s*-\s*\d{3,}$/i.test(line));
     const inlineItemLine = customerLines.find((line) => /^(?:item|package|product)\s+(?:is|:|-)\s*.+/i.test(line)) || '';
     const itemFromCodeLine = customerLines.map((line) => line.match(/^([A-Z]{2,}\s*-\s*\d{3,})\s+(.+)$/i)?.[2]?.trim()).find(Boolean) || '';
@@ -1907,13 +1909,16 @@ export default function App() {
     const boatSectionMatch = cleanMessageText.match(/(?:boat|ferry)\s*details\b([\s\S]*?)(?=package\s*details|recipient\s*details|customer\s*details|$)/i);
     const boatSection = boatSectionMatch?.[1] || '';
     const boatField = readMessageField(cleanMessageText, 'boat\\s*name|vessel\\s*name')
+      || cleanLines.map((line) => line.match(/^\\s*(?:boat|vessel)\\s*name\\s*[:=-]?\\s*(.+)$/i)?.[1]?.trim()).find(Boolean)
       || readMessageField(boatSection, 'vessel\\s*name|boat\\s*name|name');
-    const boatLine = cleanLines.find((line) => isVesselLine(line)) || '';
     const boatTimingMatch = boatLine.match(/\b(?:before|by|at|around|after)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)(?:\s+today)?\b/i);
     const boatTimingNote = boatLine.match(/\b(?:before|by|at|around|after)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?(?:\s+today)?\b/i)?.[0] || '';
-    const labeledDeparture = readMessageField(text, 'departure\\s*time|departure');
+    const labeledDeparture = readMessageField(text, 'departure\\s*time|departure') || readMessageField(boatSection, 'time');
+    const labeledDeliveryTime = readMessageField(customerText, 'time');
     const labeledDepartureClock = labeledDeparture.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i)?.[1] || '';
-    const rawBoatName = boatField || (boatLine ? boatLine.split(/[,;|]/)[0] : '');
+    const rawBoatName = boatField || (isVesselLine(explicitArea) ? explicitArea : '') || (boatLine ? boatLine.split(/[,;|]/)[0] : '');
+      .replace(/^(?:location|destination|boat|boat\s*name|vessel|deliver\s*to)\s*[:=-]?\s*/i, '')
+      .replace(/^.*?(?:would it be possible to )?(?:deliver|drop)(?: it)? (?:to|at) (?:the )+/i, '')
     const detectedBoat = rawBoatName
       .replace(/\b(?:before|by|at|around|after)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?(?:\s+today)?\b.*$/i, '')
       .replace(/\s+(?:boat|vessel)$/i, '')
@@ -1961,8 +1966,8 @@ export default function App() {
     // Prefer a recognized person name to an unlabelled first line, which can be a vessel or address.
     const nameFromLine = customerNameCodeLine || knownNameLine || knownNameFromMessage || inferredName;
     const customerName = customer || structuredName || customerNameCodeLine || nameFromLine || knownNameFromMessage;
-    const instructionLines = customerLines.filter((line) => line !== boatLine && messageInstructionLine.test(line));
-    const notes = [...new Set([labeledNotes, ...instructionLines, boatTimingNote, /^(?:before|by|after|around)\b/i.test(labeledDeparture) ? labeledDeparture : ''].filter(Boolean))].join('; ');
+    const instructionLines = customerLines.filter((line) => line !== boatLine && (messageInstructionLine.test(line) || /\b(?:before|after|by|around|at)\s+\d{1,2}(?::|\.)?\d{0,2}\s*(?:am|pm)?\b/i.test(line)));
+    const notes = [...new Set([labeledNotes, ...instructionLines, boatTimingNote, /^(?:before|by|after|around)\b/i.test(labeledDeparture) ? labeledDeparture : '', labeledDeliveryTime ? 'Delivery time: ' + labeledDeliveryTime : ''].filter(Boolean))].join('; ');
     const addressCandidate = candidateLines.find((line) =>
       line !== nameFromLine && line !== inferredName && !isVesselLine(line)
       && !messageInstructionLine.test(line) && isAddressCandidate(line)
@@ -1970,7 +1975,7 @@ export default function App() {
       line !== nameFromLine && line !== inferredName && !isVesselLine(line)
       && !messageInstructionLine.test(line)
     ) || '';
-    const inferredAddress = address || addressCandidate;
+    const inferredAddress = [...new Set([address, road].filter(Boolean))].join(', ') || addressCandidate;
 
     const updates = {};
     if (customerName) updates.customer = customerName.replace(/^(?:hi|hello|assalamu alaikum)[,!. ]+/i, '').trim();
@@ -2021,8 +2026,8 @@ export default function App() {
       notes: updates.notes || '',
       boatName,
       boatLocation: readMessageField(text, 'boat\\s*location|harbour|jetty'),
-      departureTime: normalizeDepartureTime(labeledDepartureClock || boatTimingMatch?.[1] || ''),
-      landmark: readMessageField(customerText, 'nearby\\s*landmark|landmark'),
+      departureTime: normalizeDepartureTime((labeledDepartureClock || boatTimingMatch?.[1] || '').replace(/^(\d{1,2})\.(\d{2})$/, '$1:$2')),
+      landmark: landmark || readMessageField(customerText, 'nearby\\s*landmark|landmark'),
       fee: String(getCurrentDeliveryFee(draftArea, '') ?? ''),
     };
     Object.assign(draft, deliveryDetails(draft));

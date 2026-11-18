@@ -1927,7 +1927,7 @@ export default function App() {
       /^\s*[\p{L}][\p{L}.'’ -]*\s*(?:\/\s*|\s+)[A-Z]{1,4}\s*-?\s*\d[\w-]*\s*$/iu.test(line)
     ) || '';
     const isNameCandidate = (line) => {
-      const slashSeparatedCustomerName = line === slashCustomerNameLine || (
+      const slashSeparatedCustomerName = line === customerNameCodeLine || (
         /^\s*[^/]+\s*\/\s*[^/]+\s*$/.test(line)
         && Boolean(extractMaldivianPersonName(line.split('/')[0]))
       );

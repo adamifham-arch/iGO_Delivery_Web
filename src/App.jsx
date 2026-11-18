@@ -2831,6 +2831,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               packages={newestPackages}
               liveMode={Boolean(databaseProfile)}
               onUpdate={updatePackageRecord}
+              onCreated={(created) => setPackages((current) => [created, ...current])}
             />
           )}
           {page === 'Overview' && (
@@ -4193,6 +4194,126 @@ function ApprovalDashboard() {
   );
 }
 
+
+function AdminCustomerPackageCreator({ onCreated }) {
+  const [partners, setPartners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [partnerId, setPartnerId] = useState('');
+  const [form, setForm] = useState({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '' });
+
+  useEffect(() => {
+    let active = true;
+    const loadPartners = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const { data, error: loadError } = await supabase.from('partners')
+          .select('id,name,approval_status,delivery_pricing_mode,agreed_delivery_fee,package_size_rates')
+          .eq('approval_status', 'approved').order('name', { ascending: true });
+        if (loadError) throw loadError;
+        if (active) {
+          const rows = (data || []).map((row) => ({
+            id: row.id, name: row.name || 'Partner',
+            pricingMode: row.delivery_pricing_mode || 'route',
+            agreedDeliveryFee: row.agreed_delivery_fee == null ? null : Number(row.agreed_delivery_fee),
+            packageSizeRates: row.package_size_rates || {},
+          }));
+          setPartners(rows);
+          setPartnerId((current) => current || rows[0]?.id || '');
+        }
+      } catch (loadError) {
+        if (active) setError(loadError.message || 'Could not load approved partner accounts.');
+      } finally { if (active) setLoading(false); }
+    };
+    void loadPartners();
+    return () => { active = false; };
+  }, []);
+
+  const partner = partners.find((row) => row.id === partnerId);
+  const sizeRates = partner?.packageSizeRates || {};
+  const fee = partner ? getPartnerDeliveryFee(form.area, partner, form.packageSize) : null;
+  const areaOptions = partner?.pricingMode === 'package_size'
+    ? ["Malé", "Hulhumalé", "Boat"]
+    : ["Malé", "Hulhumalé Phase 1", "Hulhumalé Phase 2", "Boat"];
+  const update = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: name === 'phone' ? normalizeCustomerPhone(value) : value, ...(name === 'area' ? { packageSize: '' } : {}) }));
+    setError(''); setMessage('');
+  };
+  const submit = async (event) => {
+    event.preventDefault(); setError(''); setMessage('');
+    if (!partner) { setError('Choose an approved partner.'); return; }
+    const address = form.area === 'Boat' ? form.boatName.trim() : form.address.trim();
+    if (!address) { setError(form.area === 'Boat' ? 'Enter the boat name.' : 'Enter the delivery address.'); return; }
+    const contactError = packageContactError(form);
+    if (contactError) { setError(contactError); return; }
+    if (partner.pricingMode === 'package_size' && (!form.packageSize || !(Number(sizeRates[form.packageSize]) > 0))) {
+      setError('Choose a package size with a saved rate for this partner.'); return;
+    }
+    if (!(Number(fee) > 0)) { setError('A delivery rate is not set for this package.'); return; }
+    setSaving(true);
+    try {
+      const [created] = await createPackages([{
+        customer: form.customer.trim(), phone: normalizeCustomerPhone(form.phone), area: form.area, address,
+        boatName: form.area === 'Boat' ? form.boatName.trim() : '',
+        boatLocation: form.area === 'Boat' ? form.boatLocation.trim() : '',
+        departureTime: form.area === 'Boat' ? form.departureTime : '',
+        landmark: form.area === 'Boat' ? '' : form.landmark.trim(),
+        packageSize: form.packageSize, fee: Number(fee), item: form.item.trim(), notes: form.notes.trim(), status: 'Pending',
+      }], partner.id);
+      onCreated?.(created);
+      setMessage((created?.id || 'Package') + ' added for ' + partner.name + '.');
+      setForm({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '' });
+    } catch (saveError) { setError(saveError.message || 'Could not add the package.'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <section className="application-card admin-customer-package-creator" aria-labelledby="admin-add-package-heading">
+      <div className="ops-heading"><div><div className="eyebrow">CUSTOMER DELIVERY</div><h2 id="admin-add-package-heading">Add a package</h2><p>Register a customer delivery under an approved partner.</p></div></div>
+      {loading ? <p className="muted">Loading approved partners…</p> : partners.length ? (
+        <form className="package-form" onSubmit={submit}>
+          <div className="form-grid">
+            <label className="full-width">Partner
+              <select value={partnerId} onChange={(event) => { setPartnerId(event.target.value); setForm((current) => ({ ...current, packageSize: '' })); setError(''); setMessage(''); }} required>
+                {partners.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+              </select>
+            </label>
+            <label>Customer name {form.area === 'Boat' ? '*' : '(optional)'}
+              <input name="customer" value={form.customer} onChange={update} required={form.area === 'Boat'} placeholder="Customer name" />
+            </label>
+            <label>Customer phone {form.area === 'Boat' ? '*' : '(optional)'}
+              <input name="phone" type="tel" inputMode="tel" pattern="[79][0-9]{6}" title="Enter 7 digits starting with 7 or 9." value={form.phone} onChange={update} required={form.area === 'Boat'} placeholder="Phone number" />
+            </label>
+            <label>Location<select name="area" value={form.area} onChange={update}>{areaOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
+            {partner?.pricingMode === 'package_size' && <div className="full-width"><span className="field-label">Package size *</span><div className="package-size-chips" role="group" aria-label="Package size">
+              {Object.entries(packageSizeLabels).filter(([size]) => Number(sizeRates[size]) > 0).map(([size, label]) => <button key={size} type="button" className={form.packageSize === size ? 'selected' : ''} aria-pressed={form.packageSize === size} onClick={() => { setForm((current) => ({ ...current, packageSize: size })); setError(''); }}><span className="package-size-initial">{size}</span><span className="package-size-label">{label} · MVR {sizeRates[size]}</span></button>)}
+              {!Object.values(sizeRates).some((rate) => Number(rate) > 0) && <span className="muted">No package size rates are set for this partner.</span>}
+            </div></div>}
+            {form.area === 'Boat' ? <>
+              <label className="full-width">Boat name *<input name="boatName" value={form.boatName} onChange={update} required placeholder="Boat or launch name" /></label>
+              <label>Boat location (optional)<input name="boatLocation" value={form.boatLocation} onChange={update} placeholder="Jetty or handover point" /></label>
+              <label>Departure time (optional)<input name="departureTime" type="time" value={form.departureTime} onChange={update} /></label>
+            </> : <>
+              <label className="full-width">Delivery address *<input name="address" value={form.address} onChange={update} required placeholder="House, flat, or street" /></label>
+              <label className="full-width">Nearby landmark (optional)<input name="landmark" value={form.landmark} onChange={update} placeholder="Nearby landmark" /></label>
+            </>}
+            <label>Package description (optional)<input name="item" value={form.item} onChange={update} placeholder="Item or order details" /></label>
+            <label>Delivery fee<input value={fee ? 'MVR ' + fee : partner?.pricingMode === 'package_size' ? 'Choose a package size' : 'Rate unavailable'} readOnly /></label>
+            <label className="full-width">Delivery instructions (optional)<textarea name="notes" value={form.notes} onChange={update} rows="2" placeholder="Instructions for the driver" /></label>
+          </div>
+          <div className="form-actions"><button className="primary-btn" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add package for customer'}</button></div>
+          {error && <p className="bulk-notice" role="alert">{error}</p>}
+          {message && <p className="bulk-notice" role="status">{message}</p>}
+        </form>
+      ) : <p className="muted">No approved partner accounts are available.</p>}
+    </section>
+  );
+}
+
 function AdminOperations({ packages, onUpdate, liveMode = false, staffMode = false }) {
   const [driverNames, setDriverNames] = useState([]); const [activeDriverField, setActiveDriverField] = useState(''); useEffect(() => { if (!liveMode) return undefined; let active = true; const refreshDrivers = async () => { try { const rows = staffMode ? (await supabase.from('drivers').select('name').eq('active', true).eq('approval_status', 'approved').order('name')).data || [] : await loadDriverRoster(); if (active) setDriverNames([...new Set(rows.map((driver) => driver.name).filter(Boolean))]); } catch {} }; void refreshDrivers(); const timer = window.setInterval(() => void refreshDrivers(), 15000); return () => { active = false; window.clearInterval(timer); }; }, [liveMode]); const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
@@ -4265,6 +4386,7 @@ function AdminOperations({ packages, onUpdate, liveMode = false, staffMode = fal
   };
   return (
     <div className="operations-dashboard">
+      {!staffMode && liveMode && <AdminCustomerPackageCreator onCreated={onCreated} />}
       <div className="stats-grid overview-summary">
         {[
           ['Needs assignment', 'Unassigned', 'Waiting for a driver'],

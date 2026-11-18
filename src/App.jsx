@@ -55,6 +55,7 @@ import {
   loadPartnerDeliveryPricing,
   loadPartnerDeliveryPricingSettings,
   savePartnerDeliveryPricing,
+  savePartnerPackageSizeRates,
 } from './igoDatabase';
 
 const partnerOperatingLocation = 'Malé'; // Admin-configured partner operating location
@@ -80,12 +81,92 @@ const deliveryRates = {
 };
 const getDeliveryFee = (destination) =>
   deliveryRates[partnerOperatingLocation]?.[destination] ?? 35;
-const getPartnerDeliveryFee = (destination, pricing) => {
+const packageSizeLabels = { S: 'Small', M: 'Medium', L: 'Large', XL: 'Extra large' };
+const getPartnerDeliveryFee = (destination, pricing, packageSize = '') => {
+  if (pricing?.pricingMode === 'package_size') {
+    const sizeFee = Number(pricing?.packageSizeRates?.[packageSize]);
+    return Number.isFinite(sizeFee) && sizeFee > 0 ? sizeFee : null;
+  }
   const agreedFee = Number(pricing?.agreedDeliveryFee);
   return pricing?.pricingMode === 'agreed_flat' && Number.isFinite(agreedFee) && agreedFee > 0
     ? agreedFee
     : getDeliveryFee(destination);
 };
+
+const normalizeMessageText = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/[^a-z0-9+#]+/g, ' ')
+    .trim();
+
+// FollowMe public-vessel names checked against its public list (the list changes).
+const knownVesselAliases = [
+  'mathangee', 'orchid', 'fazaspeed', 'escape wing', 'dream speed', 'dream speed 1', 'dream speed 2', 'dream speed 3', 'aakko express',
+  'aares cruiser', 'aares explorer', 'aqua blue 3', 'aqua gold', 'aqua lily',
+  'astro ocean', 'atoll advisor', 'atoll cute', 'baby shark', 'bankaru speed',
+  'blue speed', 'blue star', 'chill speed', 'coral cruiser', 'coral express',
+  'coral speed', 'altec dash', 'altec keen', 'altec pace', 'altec race',
+  'altec rush', 'altec scoot', 'altec woosh', 'altec zoom', 'ameera tours',
+  'atoll cute king', 'atoll cute queen', 'atoll cute princess',
+  'atoll cute crown', 'aqua dream', 'alira one', 'alioth', 'amilla odi',
+  'angel malak', 'cocogiri eagle', 'cocogiri express', 'blue marine',
+  'blue marlin', 'blue wave', 'black coral', 'black manta', 'beach cruiser',
+  'sea pro', 'seapro express', 'marquis', 'sosun express', 'baadhushaah', 'baadhushaah boat',
+];
+const maldivianNameTokens = [
+  'aadhil', 'aahil', 'aishath', 'aisha', 'aysha', 'ayesha', 'ali',
+  'abdulla', 'abdullah', 'abdhulla', 'abdul', 'abdurrahman', 'adam',
+  'adham', 'ahmed', 'ahsan', 'ameen', 'amin', 'aminath', 'amina', 'anwar',
+  'arif', 'ashraf', 'aslam', 'asif', 'azeel', 'aseel', 'anees', 'aneesa',
+  'anu', 'annuu', 'fathimath', 'fathima', 'fathuma', 'fathumath', 'fathmath',
+  'faazil', 'faiz', 'faiza', 'faheem', 'fairooz', 'farish', 'farhan',
+  'hameed', 'hameeda', 'hamza', 'hassan', 'hasan', 'hussain', 'hussein',
+  'luqman', 'maisha', 'mariyam', 'maryam', 'mariya', 'mishka', 'moosa',
+  'musa', 'mohamed', 'mohammed', 'muhammad', 'mohamad', 'munavvar',
+  'naail', 'naaila', 'naila', 'nashid', 'naseer', 'naseema', 'nazia',
+  'nazim', 'noora', 'nuzha', 'raheem', 'raashid', 'rashid', 'rasheed',
+  'rishma', 'ruqayya', 'sarah', 'safa', 'safiyya', 'saeed', 'shakir',
+  'shareef', 'shareefa', 'shaifa', 'shifa', 'shiyam', 'shiyama', 'shuaib',
+  'sulaiman', 'umar', 'omar', 'yameen', 'yousuf', 'yusuf', 'zainab', 'zaina',
+  'zuleikha', 'zifleen', 'azeema', 'afrah', 'aafath', 'faathin', 'ibna',
+  'xaaitte', 'may', 'hali', 'khadheeja', 'sheeneez', 'faazil', 'niumaiy', 'chandima',
+];
+function extractMaldivianPersonName(line) {
+  const words = Array.from(String(line).matchAll(/[\p{L}]+/gu), (match) => ({
+    text: match[0],
+    index: match.index,
+    normalized: normalizeMessageText(match[0]),
+  }));
+  const known = new Set(maldivianNameTokens);
+  const index = words.findIndex((word) => known.has(word.normalized));
+  if (index < 0) return '';
+  let start = index;
+  let end = index;
+  const joiners = new Set(['bin', 'ibn', 'bint', 'abd']);
+  while (start > 0 && (known.has(words[start - 1].normalized) || joiners.has(words[start - 1].normalized)) && end - start < 3) start -= 1;
+  while (end + 1 < words.length && (known.has(words[end + 1].normalized) || joiners.has(words[end + 1].normalized)) && end - start < 3) end += 1;
+  return String(line).slice(words[start].index, words[end].index + words[end].text.length).trim();
+}
+const messageFieldLabels = 'name\\s*on\\s*package|customer\\s*name|recipient(?:\\s*name)?|your\\s*name|name|customer|recipient|phone(?:\\s*number)?|mobile|contact(?:\\s*(?:number|no\\.?|&\\s*sms\\s*number))?|receive\\s*contact|order\\s*contact|address(?:/building\\s*name)?|building\\s*name|delivery\\s*address|deliver\\s*to|road|street|near\\s*by\\s*(?:location|landmark)|nearby\\s*(?:location|landmark)|landmark|boat\\s*name|vessel\\s*name|boat\\s*location|boat\\s*contact|captain(?:\\s*number)?|departure\\s*time|destination|island(?:\\s*name)?|area|location|city|package(?:\\s*name|\\s*details)?|item(?:\\s*code)?|product|sku|order(?:\\s*(?:info|id|number|no|tracking))?|receive\\s*info|recipient\\s*info|instructions|delivery\\s*instructions|notes|more|time|price|pcs|pieces|qty|quantity|tracking\\s*(?:reference|number|no)|reference|tracking(?:\\s*(?:number|no))?|partner\\s*tracking(?:\\s*(?:reference|number|no))?|harbour|jetty|boat\\s*details';
+const messageLabelLine = new RegExp('^(?:' + messageFieldLabels + ')\\s*[:=-]', 'i');
+const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer|let me know|put(?:ting)? it in the ferry|handle with care|fragile|carefully handle)\b/i;
+const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hiyya?|hyyaa?|hyia|heeya|hiaya|sifco|sifko|sifkoo|sifcu|police|udhares?|udharas?|udhara|dhoadhi|dhoadhee|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|amaan\s*(?:udhares?|dhoadhi|dhodhi)|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
+const isVesselLine = (line) => {
+  const normalized = normalizeMessageText(line);
+  if (!normalized || /^(?:boat|vessel) details$/.test(normalized)) return false;
+  return /\b(?:boat|dhoni|dhoani|ferry|launch|speed[ -]?boat|speed[ -]?launch)\b/.test(normalized)
+    || knownVesselAliases.some((name) => normalized.includes(name));
+};
+const cleanImportedMessageLine = (line) =>
+  String(line || '')
+    .replace(/^\s*\[\d{1,2}[/-]\d{1,2}[^\]]*\]\s*/i, '')
+    .replace(/^\s*(?:\+?960[\s-]*)?[79]\d{6}\s*:\s*/i, '')
+    .replace(/^\s*[>•\-\s]+/, '')
+    .replace(/[🟥🟩🛳️✅☑️]+/gu, '')
+    .trim();
 
 const initialPackages = [
   {
@@ -323,6 +404,22 @@ const normalizeCustomerPhone = (value = '') =>
     .replace(/[\s-]/g, '');
 const isValidCustomerPhone = (value) =>
   /^[79]\d{6}$/.test(normalizeCustomerPhone(value));
+const packageContactError = (entry = {}) => {
+  const customer = String(entry.customer || '').trim();
+  const phone = normalizeCustomerPhone(entry.phone || '');
+  if (entry.area === 'Boat') {
+    if (!customer) return 'Boat deliveries need a customer name.';
+    if (!phone) return 'Boat deliveries need a customer phone number.';
+    if (!isValidCustomerPhone(phone))
+      return 'Customer phone must contain 7 digits and start with 7 or 9.';
+    return '';
+  }
+  if (!customer && !phone)
+    return 'Enter a customer name or phone number.';
+  if (phone && !isValidCustomerPhone(phone))
+    return 'Customer phone must contain 7 digits and start with 7 or 9.';
+  return '';
+};
 
 const normalizeDepartureTime = (value = '') => {
   const text = String(value).trim();
@@ -502,8 +599,8 @@ export default function App() {
   const [riderCardSaving, setRiderCardSaving] = useState(Boolean(supabaseConfigured));
   const [riderCardFeedback, setRiderCardFeedback] = useState('');
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
-  const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null });
-  const getCurrentDeliveryFee = (destination) => getPartnerDeliveryFee(destination, partnerDeliveryPricing);
+  const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
+  const getCurrentDeliveryFee = (destination, packageSize = '') => getPartnerDeliveryFee(destination, partnerDeliveryPricing, packageSize);
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
   const [partnerSetupOpen, setPartnerSetupOpen] = useState(false);
   const [partnerBusinessName, setPartnerBusinessName] = useState('');
@@ -765,6 +862,10 @@ export default function App() {
   const [messageQueue, setMessageQueue] = useState([]);
   const [confirmBulkAdd, setConfirmBulkAdd] = useState(false);
   const [messageNotice, setMessageNotice] = useState('');
+  const [partnerTrackingFormat, setPartnerTrackingFormat] = useState('');
+  const [partnerTrackingNext, setPartnerTrackingNext] = useState('1');
+  const [partnerTrackingNotice, setPartnerTrackingNotice] = useState('');
+  const [partnerTrackingSaving, setPartnerTrackingSaving] = useState(false);
   const [form, setForm] = useState({
     customer: '',
     phone: '',
@@ -774,10 +875,37 @@ export default function App() {
     departureTime: '',
     landmark: '',
     area: 'Malé',
+    packageSize: '',
     item: '',
-    fee: String(getCurrentDeliveryFee('Malé')),
+    fee: String(getCurrentDeliveryFee('Malé') ?? ''),
     notes: '',
+    trackingReference: '',
   });
+
+  useEffect(() => {
+    if (!supabase || !databaseUser || workspace !== 'Partner') return undefined;
+    let active = true;
+    const loadTrackingSettings = async () => {
+      try {
+        let query = supabase.from('partners')
+          .select('id,tracking_reference_format,tracking_reference_next');
+        if (databaseProfile?.role === 'admin' && linkedPartnerProfile?.id) {
+          query = query.eq('id', linkedPartnerProfile.id);
+        } else {
+          query = query.eq('owner_id', databaseUser.id);
+        }
+        const { data, error } = await query.maybeSingle();
+        if (error) throw error;
+        if (!active) return;
+        setPartnerTrackingFormat(data?.tracking_reference_format || '');
+        setPartnerTrackingNext(String(data?.tracking_reference_next || 1));
+      } catch (error) {
+        if (active) setPartnerTrackingNotice(error.message || 'Could not load tracking settings.');
+      }
+    };
+    void loadTrackingSettings();
+    return () => { active = false; };
+  }, [databaseUser?.id, databaseProfile?.role, linkedPartnerProfile?.id, workspace]);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -792,7 +920,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
-        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null });
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseLoading(false);
@@ -838,13 +966,14 @@ export default function App() {
         setLinkedPartnerProfile(additionalProfiles.partner);
         setLinkedDriverProfile(additionalProfiles.driver);
         setPartnerDeliveryPricing(currentPartnerPricing);
-        setForm((current) => ({ ...current, fee: String(getPartnerDeliveryFee(current.area, currentPartnerPricing)) }));
+        setForm((current) => { const area = currentPartnerPricing.pricingMode === 'package_size' && current.area.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : current.area; return { ...current, area, fee: String(getPartnerDeliveryFee(area, currentPartnerPricing, current.packageSize) ?? '') }; });
         const selectedWorkspace = workspaceRef.current;
         const savedRoute = readSavedIgoNavigation();
         const savedWorkspace = savedRoute?.workspace || roleWorkspace;
-        const savedWorkspaceAllowed = savedWorkspace === roleWorkspace
-          || (additionalProfiles.isSuperadmin && savedWorkspace === 'Partner' && additionalProfiles.partner?.approval_status === 'approved')
-          || (additionalProfiles.isSuperadmin && savedWorkspace === 'Driver' && additionalProfiles.driver?.approval_status === 'approved');
+        // On a fresh sign-in or reload, start in the account's own workspace.
+        // Superadmin-linked Partner/Driver workspaces are explicit in-session switches,
+        // not a saved login destination.
+        const savedWorkspaceAllowed = savedWorkspace === roleWorkspace;
         const restoreSavedRoute = Boolean(savedRoute?.page && savedWorkspaceAllowed);
         const keepSelectedWorkspace = activeUserIdRef.current === user.id && (
           selectedWorkspace === roleWorkspace
@@ -866,7 +995,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
-        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null });
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseError(error.message || 'Could not load this iGO account.');
@@ -1514,16 +1643,58 @@ export default function App() {
     const { name, value } = e.target;
     setForm((current) => ({
       ...current,
-      [name]: name === 'phone' ? normalizeCustomerPhone(value) : value,
-      ...(name === 'area' ? { fee: String(getCurrentDeliveryFee(value)) } : {}),
+      [name]: name === 'phone' ? normalizeCustomerPhone(value) : name === 'area' && partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : value,
+      ...(name === 'area' || name === 'packageSize' ? { fee: String(getCurrentDeliveryFee(name === 'area' ? value : current.area, name === 'packageSize' ? value : current.packageSize) ?? '') } : {}),
     }));
   };
+
+  async function savePartnerTrackingSettings(event) {
+    event.preventDefault();
+    setPartnerTrackingNotice('');
+    const format = partnerTrackingFormat.trim().toUpperCase();
+    const nextNumber = Number(partnerTrackingNext);
+    if (!/^[A-Z0-9][A-Z0-9/-]*0{1,8}$/.test(format) || /^0+$/.test(format)) {
+      setPartnerTrackingNotice('Use a prefix followed by 1–8 zeros, such as BBD/0000 or TCMV000.');
+      return;
+    }
+    if (!Number.isSafeInteger(nextNumber) || nextNumber < 1) {
+      setPartnerTrackingNotice('Enter a next number of 1 or higher.');
+      return;
+    }
+    setPartnerTrackingSaving(true);
+    try {
+      if (supabaseConfigured) {
+        let partnerId = '';
+        if (databaseProfile?.role === 'admin') partnerId = linkedPartnerProfile?.id || '';
+        else partnerId = await getCurrentPartnerId();
+        if (!partnerId) throw new Error('No partner account is linked to this workspace.');
+        const { error } = await supabase.from('partners')
+          .update({ tracking_reference_format: format, tracking_reference_next: nextNumber })
+          .eq('id', partnerId);
+        if (error) throw error;
+      } else {
+        localStorage.setItem('igo-demo-partner-tracking-settings', JSON.stringify({ format, nextNumber }));
+      }
+      setPartnerTrackingFormat(format);
+      setPartnerTrackingNext(String(nextNumber));
+      setPartnerTrackingNotice('Tracking format saved. New packages will get the next reference automatically.');
+    } catch (error) {
+      setPartnerTrackingNotice(error.message || 'Could not save tracking settings.');
+    } finally {
+      setPartnerTrackingSaving(false);
+    }
+  }
 
   async function registerPackage(e) {
     e.preventDefault();
 
-    if (!isValidCustomerPhone(form.phone)) {
-      setNotice('Customer phone must contain 7 digits and start with 7 or 9.');
+    const contactError = packageContactError(form);
+    if (contactError) {
+      setNotice(contactError);
+      return;
+    }
+    if (partnerDeliveryPricing.pricingMode === 'package_size' && (!form.packageSize || !getCurrentDeliveryFee(form.area, form.packageSize))) {
+      setNotice('Choose a package size with a rate set by the admin.');
       return;
     }
     const deliveryAddress = (
@@ -1547,6 +1718,7 @@ export default function App() {
       phone: normalizeCustomerPhone(form.phone),
       id: `IGO-${1001 + packages.length}`,
       fee: Number(form.fee),
+      packageSize: form.packageSize || '',
       status: 'Pending',
     };
 
@@ -1584,8 +1756,9 @@ export default function App() {
         departureTime: '',
         landmark: '',
         area: 'Malé',
+        packageSize: '',
         item: '',
-        fee: String(getCurrentDeliveryFee('Malé')),
+        fee: String(getCurrentDeliveryFee('Malé') ?? ''),
         notes: '',
       });
 
@@ -1642,6 +1815,7 @@ export default function App() {
       'Departure time',
       'Delivery instructions',
       'Package description',
+      'Partner tracking reference',
     ];
     const blob = new Blob([headers.join(',') + '\r\n'], {
       type: 'text/csv;charset=utf-8',
@@ -1669,14 +1843,10 @@ export default function App() {
           .toLowerCase()
       );
       const column = (name) => headers.indexOf(name.toLowerCase());
-      if (
-        ['Customer name', 'Phone number', 'Destination'].some(
-          (name) => column(name) < 0
-        )
-      )
-        throw new Error(
-          'Required columns: Customer name, Phone number, and Destination.'
-        );
+      if (column('Destination') < 0)
+        throw new Error('Include a Destination column.');
+      if (column('Customer name') < 0 && column('Phone number') < 0)
+        throw new Error('Include a Customer name or Phone number column.');
       if (
         column('Delivery address / boat name') < 0 &&
         column('Delivery address') < 0 &&
@@ -1703,12 +1873,12 @@ export default function App() {
           landmark: cell('Nearby landmark'),
           notes: cell('Delivery instructions'),
           item: cell('Package description'),
+          trackingReference: cell('Partner tracking reference') || cell('Tracking reference'),
         };
         Object.assign(entry, deliveryDetails(entry));
         if (
-          !entry.customer ||
-          !isValidCustomerPhone(entry.phone) ||
-          !entry.address ||
+          packageContactError(entry) ||
+          !(area === 'Boat' ? entry.boatName : entry.address) ||
           !['Malé', 'Hulhumalé Phase 1', 'Hulhumalé Phase 2', 'Boat'].includes(
             area
           ) ||
@@ -1721,7 +1891,7 @@ export default function App() {
       }
       if (!validRows.length)
         throw new Error(
-          'No valid rows. Boat needs a boat name; other destinations need an address. Check phone numbers and departure times.'
+          'No valid rows. Land deliveries need a name or phone; boat deliveries need both and a boat name. Check the address and departure time.'
         );
       const added = validRows.map((entry, index) => ({
           ...entry,
@@ -1741,7 +1911,7 @@ export default function App() {
           (skipped
             ? ' ' +
               skipped +
-              ' row(s) skipped: check required name, phone, destination, address or boat name, and departure time.'
+              ' row(s) skipped: land deliveries need a name or phone; boat deliveries need both and a boat name. Check destination, address, and departure time.'
             : '')
       );
     } catch (error) {
@@ -1752,186 +1922,224 @@ export default function App() {
   }
 
   function readMessageField(text, labelPattern) {
-    const match = text.match(
-      new RegExp(
-        '(?:^|\\n)\\s*(?:' + labelPattern + ')\\s*[:=-]\\s*(.+)$',
-        'im'
-      )
+    const expression = new RegExp(
+      '(?:^|\\n)\\s*(?:' + labelPattern + ')\\s*[:=-]\\s*([^\\n]*?)(?=\\s+(?:' + messageFieldLabels + ')\\s*[:=-]|\\s*$)',
+      'im'
     );
+    const match = String(text || '').match(expression);
     return match ? match[1].trim() : '';
   }
 
   function fillFromMessage() {
     const text = messageDraft.trim();
     if (!text) {
-      setMessageNotice(
-        'Please paste a customer message before filling the package details.'
-      );
+      setMessageNotice('Please paste a customer message before filling the package details.');
       return;
     }
-    const updates = {};
-    const cleanLines = text
-      .split(/\r?\n/)
-      .map((line) => line.trim().replace(/^[>•\-\s]+/, ''))
-      .filter(Boolean);
-    const phoneLineIndex = cleanLines.findIndex((line) =>
-      /(?:\+?960[\s-]?)?[79]\d{6}/.test(line)
+
+    const cleanLines = text.split(/\r?\n/).map(cleanImportedMessageLine).filter(Boolean);
+    const cleanMessageText = cleanLines.join('\n');
+    const packageSectionStart = text.search(/(?:package\s*details|recipient\s*details|customer\s*details)\s*[:=-]?/i);
+    const rawCustomerText = packageSectionStart >= 0
+      ? text.slice(packageSectionStart).replace(/^(?:package\s*details|recipient\s*details|customer\s*details)\s*[:=-]?/i, '')
+      : text;
+    const customerLines = rawCustomerText.split(/\r?\n/).map(cleanImportedMessageLine).filter(Boolean);
+    const customerText = customerLines.join('\n');
+    const customer = readMessageField(
+      customerText,
+      'name\\s*on\\s*package|customer\\s*name|recipient\\s*name|your\\s*name|package\\s*name|name|customer|recipient'
     );
-    const unlabelledLines = cleanLines.filter(
-      (line) =>
-        !/^(?:name|customer|customer\s*name|phone|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package|item|order|instructions|delivery\s*instructions|notes)\s*[:=-]/i.test(
-          line
-        ) && !/(?:\+?960[\s-]?)?[79]\d{6}/.test(line)
+    const receiveInfo = readMessageField(customerText, 'receive\\s*info|recipient\\s*info');
+    const orderInfo = readMessageField(customerText, 'order\\s*info');
+    const structuredInfo = receiveInfo || orderInfo;
+    const structuredName = structuredInfo
+      ? structuredInfo.split(/[.,;|]/)[0].trim()
+      : '';
+    const receiveContact = readMessageField(customerText, 'receive\\s*contact|recipient\\s*contact');
+    const labeledPhone = receiveContact || readMessageField(
+      customerText,
+      'phone|phone\\s*number|mobile|contact(?:\\s*(?:number|no\\.?|&\\s*sms\\s*number))?|order\\s*contact'
     );
-    const customer = readMessageField(text, 'customer\\s*name|name|customer');
-    const labeledPhone = readMessageField(
-      text,
-      'phone|phone\\s*number|mobile|contact'
-    );
-    const phoneMatch = text.match(/(?<![\d+])(?:\+960[ -]*)?[79]\d{6}(?!\d)/);
+    const phoneMatch = customerText.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/)
+      || text.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/);
     const phone = labeledPhone || phoneMatch?.[0] || '';
+
     const address = readMessageField(
-      text,
-      'delivery\\s*address|address|deliver\\s*to'
+      customerText,
+      'delivery\\s*address|address(?:/building\\s*name)?|building\\s*name|deliver\\s*to'
     );
-    const item = readMessageField(text, 'package|item|order');
-    const notes = readMessageField(
-      text,
-      'delivery\\s*instructions|instructions|notes'
+    const road = readMessageField(customerText, 'road|street');
+    const landmark = readMessageField(customerText, 'nearby\\s*landmark|near\\s*by\\s*(?:location|landmark)|landmark') || customerLines.find((line) => /^(?:near|nearby|near by|next to|opposite|in front of|behind)\\b/i.test(line)) || '';
+    const itemCodeIndex = customerLines.findIndex((line) => /^[A-Z]{2,}\s*-\s*\d{3,}$/i.test(line));
+    const inlineItemLine = customerLines.find((line) => /^(?:item|package|product)\s+(?:is|:|-)\s*.+/i.test(line)) || '';
+    const itemFromCodeLine = customerLines.map((line) => line.match(/^([A-Z]{2,}\s*-\s*\d{3,})\s+(.+)$/i)?.[2]?.trim()).find(Boolean) || '';
+    const itemAfterCode = itemCodeIndex >= 0 ? customerLines.slice(itemCodeIndex + 1).find((line) => !messageLabelLine.test(line) && !/(?:\+?960[\s-]*)?[79]\d{6}/.test(line) && !isVesselLine(line) && !messageAddressLine.test(line)) || '' : '';
+    const inlineItem = inlineItemLine.match(/^(?:item|package|product)\s+(?:is|:|-)\s*(.+)$/i)?.[1]?.trim()
+      || itemFromCodeLine
+      || itemAfterCode
+      || customerLines.find((line) => /^\s*\d+\s+[\p{L}]/u.test(line) && !messageAddressLine.test(line) && !isVesselLine(line))?.trim()
+      || '';
+    const item = readMessageField(customerText, 'package|item|order') || inlineItem;
+    const labeledNotes = readMessageField(
+      customerText,
+      'delivery\\s*instructions|instructions|notes|more'
     );
-    if (customer) updates.customer = customer;
-    if (!customer && unlabelledLines.length) {
-      const inferredName = unlabelledLines[0]
-        .replace(/^(?:hi|hello|assalamu alaikum)[,!. ]+/i, '')
-        .trim();
-      if (inferredName) updates.customer = inferredName;
-    }
-    if (!address) {
-      const afterPhone =
-        phoneLineIndex >= 0
-          ? cleanLines
-              .slice(phoneLineIndex + 1)
-              .find(
-                (line) =>
-                  /[a-z]/i.test(line) &&
-                  !/^(?:boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package|item|order|instructions|notes)\s*[:=-]/i.test(
-                    line
-                  )
-              )
-          : '';
-      const inferredAddress =
-        afterPhone ||
-        (unlabelledLines.length > 1
-          ? unlabelledLines[unlabelledLines.length - 1]
-          : '');
-      if (inferredAddress && inferredAddress !== updates.customer)
-        updates.address = inferredAddress;
-    }
+    const explicitArea = readMessageField(
+      customerText,
+      'destination|island(?:\\s*name)?|area|location|city'
+    );
+
+    const boatSectionMatch = cleanMessageText.match(/(?:boat|ferry)\s*details\b([\s\S]*?)(?=package\s*details|recipient\s*details|customer\s*details|$)/i);
+    const boatSection = boatSectionMatch?.[1] || '';
+    const boatLine = cleanLines.find((line) =>
+      isVesselLine(line)
+      && !messageLabelLine.test(line)
+      && !/^(?:boat|ferry|vessel)\s*details\b/i.test(line)
+    ) || '';
+    const explicitBoatField = readMessageField(cleanMessageText, 'boat\s*name|vessel\s*name');
+    const sectionBoatField = readMessageField(boatSection, 'vessel\s*name|boat\s*name');
+    const boatTimingSource = [boatSection, boatLine, cleanMessageText].join('\n');
+    const boatTimingMatch = boatTimingSource.match(/\b(?:before|by|at|around|after)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)(?:\s+today)?\b/i);
+    const boatTimingNote = boatTimingSource.match(/\b(?:before|by|at|around|after)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?(?:\s+today)?\b/i)?.[0] || '';
+    const labeledDeparture = readMessageField(text, 'departure\s*time|departure') || readMessageField(boatSection, 'time');
+    const labeledDeliveryTime = readMessageField(customerText, 'time');
+    const labeledDepartureClock = labeledDeparture.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i)?.[1] || '';
+    const boatCandidates = [explicitBoatField, sectionBoatField, isVesselLine(explicitArea) ? explicitArea : '', boatLine]
+      .map((value) => String(value || '')
+        .replace(/^(?:location|destination|boat|boat\s*name|vessel|deliver\s*to)\s*[:=-]?\s*/i, '')
+        .replace(/^.*?(?:would it be possible to )?(?:deliver|drop)(?: it)? (?:to|at) (?:the )+/i, '')
+        .replace(/\s+(?:or|\/|,)\s+.+$/i, '')
+        .replace(/\b(?:before|by|at|around|after)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?(?:\s+today)?\b.*$/i, '')
+        .replace(/\s+(?:boat|vessel|ferry|speed launch|speedboat)$/i, '')
+        .trim())
+      .filter(Boolean);
+    const detectedBoat = boatCandidates[0] || '';
+    const candidateLines = customerLines.map((line) => line.replace(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/g, '').trim()).filter(Boolean).filter((line) =>
+      !messageLabelLine.test(line)
+      && !/^(?:item|package|product)\s+(?:is|:|-)\s*/i.test(line)
+      && line !== inlineItem
+      && !/(?:\+?960[\s-]*)?[79]\d{6}/.test(line)
+      && !/^\s*(?:[A-Z]{2,}\s*[/#-]\s*\d{2,}|[A-Z]{2,}-\d{3,})\s*$/i.test(line)
+    );
+    const isAddressCandidate = (line) =>
+      messageAddressLine.test(line)
+      || /^[MGH]\.\s*[A-Z][\w'-]+(?:\s+[A-Z][\w'-]+)*$/i.test(line)
+      || /\b(?:male|hulhumale|hml|mle)\b/i.test(line);
+    const customerNameCodeLine = candidateLines.find((line) =>
+      /^\s*[\p{L}][\p{L}.'’ -]*\s*(?:\/\s*|\s+)[A-Z]{1,4}\s*-?\s*\d[\w-]*\s*$/iu.test(line)
+    ) || '';
+    const isNameCandidate = (line) => {
+      const slashSeparatedCustomerName = line === customerNameCodeLine || (
+        /^\s*[^/]+\s*\/\s*[^/]+\s*$/.test(line)
+        && Boolean(extractMaldivianPersonName(line.split('/')[0]))
+      );
+      return slashSeparatedCustomerName || (
+        line.length <= 72
+        && !isVesselLine(line)
+        && !isAddressCandidate(line)
+        && !messageInstructionLine.test(line)
+        && !/^\s*(?:boat|captain|departure|jetty|time|island|location|package|order)\b/i.test(line)
+        && /^[\p{L}][\p{L}.'’ -]*$/u.test(line)
+        && line.split(/\s+/).length <= 5
+      );
+    };
+    const inferredName = candidateLines.find(isNameCandidate) || '';
+    const knownNameLine = candidateLines.find((line) =>
+      isNameCandidate(line)
+      && maldivianNameTokens.some((name) => new RegExp('(?:^|\\b)' + name + '(?:$|\\b)', 'i').test(normalizeMessageText(line)))
+    ) || '';
+    const safeKnownNameLines = candidateLines.filter((line) =>
+      !isVesselLine(line) && !isAddressCandidate(line)
+    );
+    const knownNameFromMessage = safeKnownNameLines
+      .map(extractMaldivianPersonName)
+      .find(Boolean) || '';
+    // Prefer a recognized person name to an unlabelled first line, which can be a vessel or address.
+    const nameFromLine = customerNameCodeLine || knownNameLine || knownNameFromMessage || inferredName;
+    const customerName = customer || structuredName || customerNameCodeLine || nameFromLine || knownNameFromMessage;
+    const trackingReference = readMessageField(customerText, 'partner\\s*tracking(?:\\s*(?:number|no))?|tracking\\s*(?:reference|number|no)|order\\s*tracking(?:\\s*(?:number|no))?|reference') || customerText.match(/\b[A-Z]{2,5}\/\d{2,6}\b/i)?.[0] || '';
+    const instructionLines = customerLines.filter((line) => line !== boatLine && (messageInstructionLine.test(line) || /\b(?:before|after|by|around|at)\s+\d{1,2}(?::|\.)?\d{0,2}\s*(?:am|pm)?\b/i.test(line)));
+    const notes = [...new Set([labeledNotes, ...instructionLines, boatTimingNote, /^(?:before|by|after|around)\b/i.test(labeledDeparture) ? labeledDeparture : '', labeledDeliveryTime ? 'Delivery time: ' + labeledDeliveryTime : ''].filter(Boolean))].join('; ');
+    const addressCandidates = candidateLines.filter((line) =>
+      line !== nameFromLine && line !== inferredName && !isVesselLine(line)
+      && !messageInstructionLine.test(line)
+      && !/^(?:near|nearby|near by|next to|opposite|in front of|behind)\b/i.test(line)
+      && isAddressCandidate(line)
+    );
+    const addressCandidate = addressCandidates.join(', ')
+      || candidateLines.find((line) => line !== nameFromLine && line !== inferredName && !isVesselLine(line) && !messageInstructionLine.test(line))
+      || '';
+    const inferredAddress = [...new Set([address, road, addressCandidate].filter(Boolean))].join(', ');
+
+    const updates = {};
+    if (customerName) updates.customer = customerName.replace(/^(?:hi|hello|assalamu alaikum)[,!. ]+/i, '').trim();
     if (phone) updates.phone = normalizeCustomerPhone(phone);
-    if (address) updates.address = address;
+    if (inferredAddress) updates.address = inferredAddress;
     if (item) updates.item = item;
     if (notes) updates.notes = notes;
-    const locationText = [
-      readMessageField(text, 'destination|island|area'),
-      address,
-      text,
-    ]
-      .join(' ')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
-    const hasHulhumale = /\bhulhu?\s*male\b/.test(locationText);
-    const isPhase2 =
-      /\bphase[\s-]*(?:2|ii|two)\b|\bp2\b/.test(locationText) ||
-      (hasHulhumale && /\b(?:lot|plot)\s*20\d{3}\b/.test(locationText));
-    const isPhase1 =
-      /\bphase[\s-]*(?:1|i|one)\b|\bp1\b/.test(locationText) ||
-      (hasHulhumale && /\b(?:lot|plot)\s*1\d{4}\b/.test(locationText));
-    if (isPhase2) updates.area = 'Hulhumalé Phase 2';
-    else if (isPhase1) updates.area = 'Hulhumalé Phase 1';
-    else if (/\bboat\b|\b(?:dhoani|launch)\b/.test(locationText))
-      updates.area = 'Boat';
-    else if (
-      /\bmale\b|\bmaafannu\b|\bhenveiru\b|\bgalolhu\b|\bmachchangolhi\b|\bvillimale\b|\bvillingili\b/.test(
-        locationText
-      )
-    )
-      updates.area = 'Malé';
+
+    const normalizedAreaText = normalizeMessageText([explicitArea, inferredAddress, detectedBoat].join(' '));
+    const hasHulhumale = /\bhulhu?male(?:e)?\b|\bhml\b|\bh\s*mle\b|\bh\s*male\b/.test(normalizedAreaText);
+    const phase2 = /\bphase\s*(?:2|ii|two)\b|\bp2\b/.test(normalizedAreaText)
+      || /\b(?:lot|plot)\s*20\d{3}\b/.test(normalizedAreaText);
+    const phase1 = /\bphase\s*(?:1|i|one)\b|\bp1\b/.test(normalizedAreaText)
+      || /\b(?:lot|plot)\s*1\d{4}\b/.test(normalizedAreaText);
+    const knownHulhumaleFlat = /\b(?:hiyaa?|hyyaa?|sifco|sifko|sifkoo|police\s*flats?|amaan\s*(?:udhares?|dhoadhi|dhodhi)|udhares?|udhara|dhoadhi|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc)\b|\b(?:ud|dh)\s*\+?\s*\d{1,5}\b|\b(?:lot|plot|lott)\s*[#/-]?\s*\d{1,5}\b/.test(normalizedAreaText);
+    const explicitHml = /\bhulhu?male(?:e)?\b|\bhml\b|\bh\s*mle\b|\bh\s*male\b/.test(normalizeMessageText(explicitArea));
+    const explicitMale = /\b(?:male|mle|maale)\b/.test(normalizeMessageText(explicitArea))
+      && !/\bh\s*(?:mle|male)\b/.test(normalizeMessageText(explicitArea));
+    const isBoatDelivery = Boolean(detectedBoat) || /\b(?:boat|dhoni|dhoani|ferry|launch|speed boat|speed launch)\b/.test(normalizedAreaText);
+
+    if (explicitHml || hasHulhumale || knownHulhumaleFlat) {
+      if (partnerDeliveryPricing.pricingMode === 'package_size') updates.area = 'Hulhumalé';
+      else if (phase2) updates.area = 'Hulhumalé Phase 2';
+      else updates.area = 'Hulhumalé Phase 1';
+    } else if (isBoatDelivery) updates.area = 'Boat';
+    else if (explicitMale || /\b(?:maafannu|henveiru|galolhu|machchangolhi|villimale|villingili)\b/.test(normalizedAreaText)) updates.area = 'Malé';
+
     if (!Object.keys(updates).length) {
-      setMessageNotice(
-        'No customer details recognized. Use labels such as Name:, Phone:, Address:, and Destination:.'
-      );
+      setMessageNotice('No customer details recognized. Use labels such as Name:, Phone:, Address:, and Destination:.');
       return;
     }
-    const boatName = readMessageField(text, 'boat\\s*name|vessel\\s*name');
-    const explicitArea = readMessageField(text, 'destination|island|area');
-    const destinations = [
-      'Malé',
-      'Hulhumalé Phase 1',
-      'Hulhumalé Phase 2',
-      'Boat',
-    ];
-    const matchedArea = destinations.find(
-      (area) =>
-        normalizePackageText(area) === normalizePackageText(explicitArea)
-    );
-    const draftArea =
-      matchedArea || (boatName ? 'Boat' : updates.area) || form.area || 'Malé';
+
+    const draftArea = updates.area || form.area || 'Malé';
+    const boatName = draftArea === 'Boat'
+      ? (detectedBoat || (inferredAddress && isVesselLine(inferredAddress) ? inferredAddress : ''))
+      : '';
+    if (draftArea === 'Boat' && boatName) {
+      updates.address = boatName;
+      if (!updates.customer && nameFromLine) updates.customer = nameFromLine;
+    }
     const draft = {
       customer: updates.customer || '',
       phone: updates.phone || '',
-      address: updates.address || '',
+      trackingReference,
+      address: draftArea === 'Boat' ? boatName : updates.address || '',
       area: draftArea,
+      packageSize: '',
       item: updates.item || '',
       notes: updates.notes || '',
-      boatName: draftArea === 'Boat' ? boatName || address || '' : '',
-      boatLocation: readMessageField(
-        text,
-        'boat\\s*location|harbour|jetty|location'
-      ),
-      departureTime: normalizeDepartureTime(
-        readMessageField(text, 'departure\\s*time|departure')
-      ),
-      landmark: readMessageField(text, 'nearby\\s*landmark|landmark'),
-      fee: String(getCurrentDeliveryFee(draftArea)),
+      boatName,
+      boatLocation: readMessageField(text, 'boat\\s*location|harbour|jetty'),
+      departureTime: normalizeDepartureTime((labeledDepartureClock || boatTimingMatch?.[1] || '').replace(/^(\d{1,2})\.(\d{2})$/, '$1:$2')),
+      landmark: landmark || readMessageField(customerText, 'nearby\\s*landmark|landmark'),
+      fee: String(getCurrentDeliveryFee(draftArea, '') ?? ''),
     };
     Object.assign(draft, deliveryDetails(draft));
     const duplicateKey = packageDuplicateKey(draft);
-    if (
-      messageQueue.some((entry) => packageDuplicateKey(entry) === duplicateKey)
-    ) {
-      setMessageNotice(
-        'This package is already in the review list. It was not added again.'
-      );
+    if (messageQueue.some((entry) => packageDuplicateKey(entry) === duplicateKey)) {
+      setMessageNotice('This package is already in the review list. It was not added again.');
       return;
     }
     if (packages.some((entry) => packageDuplicateKey(entry) === duplicateKey)) {
-      setMessageNotice(
-        'This package is already registered. It was not added again.'
-      );
+      setMessageNotice('This package is already registered. It was not added again.');
       return;
     }
-    setMessageQueue((current) => [
-      ...current,
-      { ...draft, queueId: Date.now() + Math.random() },
-    ]);
+    setMessageQueue((current) => [...current, { ...draft, queueId: Date.now() + Math.random() }]);
     setConfirmBulkAdd(false);
     setMessageDraft('');
-    const labels = {
-      customer: 'name',
-      phone: 'phone',
-      address: 'address',
-      area: 'destination',
-      item: 'description',
-      notes: 'instructions',
-    };
-    setMessageNotice(
-      'Added to review list: ' +
-        Object.keys(updates)
-          .map((key) => labels[key])
-          .join(', ') +
-        '. Check the list before adding packages.'
-    );
+    const labels = { customer: 'name', phone: 'phone', address: 'address', area: 'destination', item: 'description', notes: 'instructions' };
+    setMessageNotice('Added to review list: ' + Object.keys(updates).map((key) => labels[key]).filter(Boolean).join(', ') + '. Check the list before adding packages.');
     window.requestAnimationFrame(() => customerMessageInputRef.current?.focus());
   }
 
@@ -1941,10 +2149,9 @@ export default function App() {
         entry.queueId === queueId
           ? {
               ...entry,
-              [field]:
-                field === 'phone' ? normalizeCustomerPhone(value) : value,
-              ...(field === 'area'
-                ? { fee: String(getCurrentDeliveryFee(value)) }
+              [field]: field === 'phone' ? normalizeCustomerPhone(value) : field === 'area' && partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : value,
+              ...(field === 'area' || field === 'packageSize'
+                ? { fee: String(getCurrentDeliveryFee(field === 'area' ? value : entry.area, field === 'packageSize' ? value : entry.packageSize) ?? '') }
                 : {}),
             }
           : entry
@@ -1955,8 +2162,8 @@ export default function App() {
   async function confirmAddQueuedPackages() {
     const incomplete = messageQueue.filter(
       (entry) =>
-        !entry.customer.trim() ||
-        !isValidCustomerPhone(entry.phone) ||
+        packageContactError(entry) ||
+        (partnerDeliveryPricing.pricingMode === 'package_size' && (!entry.packageSize || !getCurrentDeliveryFee(entry.area, entry.packageSize))) ||
         !(entry.area === 'Boat' ? entry.boatName : entry.address)?.trim() ||
         !validDepartureTime(
           entry.area === 'Boat'
@@ -1966,7 +2173,7 @@ export default function App() {
     );
     if (incomplete.length) {
       setMessageNotice(
-        'Each package needs a customer name, valid 7-digit phone starting with 7 or 9, and a boat name for Boat or an address for other destinations. Check any departure time.'
+        'Land deliveries need a customer name or phone. Boat deliveries need both, plus a boat name. Check the delivery address, package size, and departure time.'
       );
       setConfirmBulkAdd(false);
       return;
@@ -1994,7 +2201,8 @@ export default function App() {
         ...deliveryDetails(entry),
         phone: normalizeCustomerPhone(entry.phone),
         id: 'IGO-' + (1001 + packages.length + index),
-        fee: getCurrentDeliveryFee(entry.area),
+        fee: getCurrentDeliveryFee(entry.area, entry.packageSize),
+        packageSize: entry.packageSize || '',
         status: 'Pending',
       }));
     if (supabaseConfigured) {
@@ -2096,6 +2304,7 @@ export default function App() {
           ['Register Package', '+'],
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
+          ['Tracking Settings', '↗'],
         ];
 
   if (supabaseConfigured && databaseProfile && accountApprovalStatus && accountApprovalStatus !== 'approved') {
@@ -2715,9 +2924,29 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
             </div>
           )}
 
+          {page === 'Tracking Settings' && workspace === 'Partner' && (
+            <section className="simple-list partner-tracking-settings">
+              <h2>Partner tracking reference</h2>
+              <p>Set the format and next number for your customer tracking references.</p>
+              <form className="message-queue-fields" onSubmit={savePartnerTrackingSettings}>
+                <label>
+                  Tracking format
+                  <input value={partnerTrackingFormat} onChange={(event) => setPartnerTrackingFormat(event.target.value)} placeholder="BBD/0000 or TCMV000" />
+                </label>
+                <label>
+                  Next number
+                  <input type="number" min="1" step="1" value={partnerTrackingNext} onChange={(event) => setPartnerTrackingNext(event.target.value)} />
+                </label>
+                <button className="primary-btn" type="submit" disabled={partnerTrackingSaving}>{partnerTrackingSaving ? 'Saving…' : 'Save format'}</button>
+                {partnerTrackingNotice && <p role="status">{partnerTrackingNotice}</p>}
+                <small>For example, BBD/0000 starts at BBD/0001. The number advances as packages are added.</small>
+              </form>
+            </section>
+          )}
+
           {page === 'Register Package' && (
             <>
-              <div className="package-import-actions">
+                            <div className="package-import-actions">
                 {showForm && (
                   <details className="bulk-upload-panel message-import-panel">
                     <summary>Fill from customer message</summary>
@@ -2760,6 +2989,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                       <button
                         type="button"
                         onClick={() => {
+                          if (!window.confirm('Clear all packages in the review list?')) return;
                           setMessageQueue([]);
                           setConfirmBulkAdd(false);
                         }}
@@ -2771,20 +3001,35 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                       {messageQueue.map((entry, index) => (
                         <div className="message-queue-row" key={entry.queueId}>
                           <div className="message-queue-row-title">
-                            <strong>Package {index + 1}</strong>
+                            <div className="message-queue-row-summary">
+                              <strong>Package {index + 1} · {entry.customer || 'Name needed'}</strong>
+                              <span>{entry.phone || 'Phone needed'} · {entry.area === 'Boat' ? (entry.boatName || 'Boat needed') : (entry.address || 'Address needed')} · {entry.fee ? 'MVR ' + entry.fee : 'Fee needed'}</span>
+                            </div>
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
+                                if (!window.confirm('Remove this package from the review list?')) return;
                                 setMessageQueue((current) =>
-                                  current.filter(
-                                    (item) => item.queueId !== entry.queueId
-                                  )
-                                )
-                              }
+                                  current.filter((item) => item.queueId !== entry.queueId)
+                                );
+                              }}
                             >
                               Remove
                             </button>
                           </div>
+                          {partnerDeliveryPricing.pricingMode === 'package_size' && (
+                            <div className="package-size-chips message-queue-size-chips" role="group" aria-label="Package size">
+                              {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
+                                <button key={size} type="button" className={entry.packageSize === size ? 'selected' : ''} aria-pressed={entry.packageSize === size} onClick={() => updateQueuedPackage(entry.queueId, 'packageSize', size)}>
+                                  {size}<span>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
+                                </button>
+                              ))}
+                              {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}
+                            </div>
+                          )}
+                          <details className="message-queue-edit">
+                            <summary>Edit package details</summary>
+                            <div className="message-queue-fields">
                           <label>
                             Name
                             <input
@@ -2816,6 +3061,10 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                             />
                           </label>
                           <label>
+                            Partner tracking reference (optional)
+                            <input value={entry.trackingReference || ''} placeholder="e.g. BBD/0036" onChange={(event) => updateQueuedPackage(entry.queueId, 'trackingReference', event.target.value)} />
+                          </label>
+                          <label>
                             Island / area *
                             <select
                               value={entry.area}
@@ -2828,8 +3077,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                               }
                             >
                               <option>Malé</option>
-                              <option>Hulhumalé Phase 1</option>
-                              <option>Hulhumalé Phase 2</option>
+                              {partnerDeliveryPricing.pricingMode === 'package_size' ? <option>Hulhumalé</option> : <><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
                               <option>Boat</option>
                             </select>
                           </label>
@@ -2866,11 +3114,24 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                               />
                             </label>
                           ))}
+                          <label className="message-queue-instructions">
+                            Delivery instructions (optional)
+                            <textarea
+                              rows={2}
+                              value={entry.notes || ''}
+                              placeholder="Call before delivery, fragile item, etc."
+                              onChange={(event) =>
+                                updateQueuedPackage(entry.queueId, 'notes', event.target.value)
+                              }
+                            />
+                          </label>
                           <p className="message-queue-fee">
-                            Delivery fee: MVR {entry.fee}
+                            {partnerDeliveryPricing.pricingMode === 'package_size' && entry.packageSize ? `${packageSizeLabels[entry.packageSize]} package · ` : ''}{entry.fee ? `Delivery fee: MVR ${entry.fee}` : partnerDeliveryPricing.pricingMode === 'package_size' ? 'Choose a priced package size' : 'Delivery fee not available'}
                           </p>
                           {entry.item && <p>Package: {entry.item}</p>}
                           {entry.notes && <p>Instructions: {entry.notes}</p>}
+                            </div>
+                          </details>
                         </div>
                       ))}
                     </div>
@@ -2905,48 +3166,12 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                     )}
                   </section>
                 )}
-                {showForm && (
-                  <details className="bulk-upload-panel">
-                    <summary>
-                      <span aria-hidden="true">▤</span> Bulk
-                    </summary>
-                    <div>
-                      <h3>Add packages in bulk</h3>
-                      <p>
-                        Download the template, fill in one row per package in
-                        Excel, then save it as CSV and upload it here. For Boat,
-                        fill Boat name; location and departure time are
-                        optional. For other destinations, fill Delivery address;
-                        Nearby landmark is optional. Use HH:MM or AM/PM for
-                        departure times. Fees are calculated automatically.
-                      </p>
-                    </div>
-                    <div className="bulk-upload-actions">
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={downloadBulkTemplate}
-                      >
-                        Download spreadsheet template
-                      </button>
-                      <label className="bulk-file-label">
-                        Upload completed spreadsheet (.csv)
-                        <input
-                          type="file"
-                          accept=".csv,text/csv"
-                          onChange={handleBulkUpload}
-                        />
-                      </label>
-                    </div>
-                    {bulkNotice && (
-                      <p className="bulk-notice" role="status">
-                        {bulkNotice}
-                      </p>
-                    )}
-                  </details>
-                )}
+                
               </div>
               {showForm && (
+                <details className="bulk-upload-panel single-package-panel">
+                  <summary>Register a single package</summary>
+                  <div className="single-package-panel-body">
                 <form
                   className="package-form"
                   onSubmit={(e) => {
@@ -2986,18 +3211,18 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   <h3>Customer and delivery details</h3>
                   <div className="form-grid">
                     <label>
-                      Customer name *
+                      Customer name {form.area === 'Boat' ? '*' : '(optional)'}
                       <input
                         ref={customerNameInputRef}
                         name="customer"
                         value={form.customer}
                         onChange={updateForm}
-                        required
+                        required={form.area === 'Boat'}
                         placeholder="Full name"
                       />
                     </label>
                     <label>
-                      Customer phone *
+                      Customer phone {form.area === 'Boat' ? '*' : '(optional)'}
                       <input
                         type="tel"
                         inputMode="tel"
@@ -3006,7 +3231,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                         name="phone"
                         value={form.phone}
                         onChange={updateForm}
-                        required
+                        required={form.area === 'Boat'}
                         placeholder="Phone number"
                       />
                     </label>
@@ -3019,11 +3244,20 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                         required
                       >
                         <option>Malé</option>
-                        <option>Hulhumalé Phase 1</option>
-                        <option>Hulhumalé Phase 2</option>
+                        {partnerDeliveryPricing.pricingMode === 'package_size' ? <option>Hulhumalé</option> : <><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
                         <option>Boat</option>
                       </select>
                     </label>
+                    {partnerDeliveryPricing.pricingMode === 'package_size' && (
+                      <div className="package-size-chips" role="group" aria-label="Package size">
+                        {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
+                          <button key={size} type="button" className={form.packageSize === size ? 'selected' : ''} aria-pressed={form.packageSize === size} onClick={() => updateForm({ target: { name: 'packageSize', value: size } })}>
+                            {size}<span>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
+                          </button>
+                        ))}
+                        {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}
+                      </div>
+                    )}
                     {form.area === 'Boat' ? (
                       <>
                         <label className="full-width">
@@ -3089,6 +3323,15 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                       />
                     </label>
                     <label>
+                      Partner tracking reference (optional)
+                      <input
+                        name="trackingReference"
+                        value={form.trackingReference}
+                        onChange={updateForm}
+                        placeholder="e.g. BBD/0036"
+                      />
+                    </label>
+                    <label>
                       Package description (optional)
                       <input
                         name="item"
@@ -3128,7 +3371,49 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                     </button>
                   </div>
                 </form>
+                  </div>
+                </details>
               )}
+              {showForm && (
+                  <details className="bulk-upload-panel">
+                    <summary>
+                      <span aria-hidden="true">▤</span> Bulk
+                    </summary>
+                    <div>
+                      <h3>Add packages in bulk</h3>
+                      <p>
+                        Download the template, fill in one row per package in
+                        Excel, then save it as CSV and upload it here. For Boat,
+                        fill Boat name; location and departure time are
+                        optional. For other destinations, fill Delivery address;
+                        Nearby landmark is optional. Use HH:MM or AM/PM for
+                        departure times. Fees are calculated automatically.
+                      </p>
+                    </div>
+                    <div className="bulk-upload-actions">
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={downloadBulkTemplate}
+                      >
+                        Download spreadsheet template
+                      </button>
+                      <label className="bulk-file-label">
+                        Upload completed spreadsheet (.csv)
+                        <input
+                          type="file"
+                          accept=".csv,text/csv"
+                          onChange={handleBulkUpload}
+                        />
+                      </label>
+                    </div>
+                    {bulkNotice && (
+                      <p className="bulk-notice" role="status">
+                        {bulkNotice}
+                      </p>
+                    )}
+                  </details>
+                )}
             </>
           )}
 
@@ -3404,6 +3689,7 @@ function PartnerDeliveryPricingManagement() {
   const [savingId, setSavingId] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
 
   const refresh = async () => {
     setLoading(true);
@@ -3414,11 +3700,15 @@ function PartnerDeliveryPricingManagement() {
       setDrafts(Object.fromEntries(rows.map((partner) => [partner.id, {
         pricingMode: partner.pricingMode || 'route',
         agreedDeliveryFee: partner.agreedDeliveryFee == null ? '' : String(partner.agreedDeliveryFee),
+        packageSizeRates: Object.fromEntries(['S', 'M', 'L', 'XL'].map((size) => [
+          size,
+          partner.packageSizeRates?.[size] == null ? '' : String(partner.packageSizeRates[size]),
+        ])),
       }])));
     } catch (loadError) {
       const detail = String(loadError.message || '').toLowerCase();
       setError(
-        detail.includes('delivery_pricing_mode') || detail.includes('agreed_delivery_fee')
+        detail.includes('delivery_pricing_mode') || detail.includes('agreed_delivery_fee') || detail.includes('package_size_rates')
           ? 'Partner pricing needs the Supabase migration before rates can load.'
           : loadError.message || 'Could not load customer delivery rates.'
       );
@@ -3437,19 +3727,30 @@ function PartnerDeliveryPricingManagement() {
   const save = async (partner) => {
     const draft = drafts[partner.id] || {};
     const agreedDeliveryFee = Number(draft.agreedDeliveryFee);
+    const rates = Object.fromEntries(Object.entries(draft.packageSizeRates || {})
+      .filter(([, value]) => value !== '' && value != null)
+      .map(([size, value]) => [size, Number(value)]));
     if (draft.pricingMode === 'agreed_flat' && (!Number.isFinite(agreedDeliveryFee) || agreedDeliveryFee <= 0)) {
       setError('Enter an agreed delivery amount greater than MVR 0.');
+      return;
+    }
+    if (draft.pricingMode === 'package_size' && (!Object.keys(rates).length || Object.values(rates).some((rate) => !Number.isFinite(rate) || rate <= 0))) {
+      setError('Enter a positive price for each size you want this partner to use. Leave unused sizes blank.');
       return;
     }
     setSavingId(partner.id);
     setError('');
     setMessage('');
     try {
-      await savePartnerDeliveryPricing({
-        partnerId: partner.id,
-        pricingMode: draft.pricingMode,
-        agreedDeliveryFee: draft.pricingMode === 'agreed_flat' ? agreedDeliveryFee : null,
-      });
+      if (draft.pricingMode === 'package_size') {
+        await savePartnerPackageSizeRates({ partnerId: partner.id, packageSizeRates: rates });
+      } else {
+        await savePartnerDeliveryPricing({
+          partnerId: partner.id,
+          pricingMode: draft.pricingMode,
+          agreedDeliveryFee: draft.pricingMode === 'agreed_flat' ? agreedDeliveryFee : null,
+        });
+      }
       setMessage('Saved delivery pricing for ' + partner.name + '. It applies to new packages; existing packages keep their saved fee.');
       await refresh();
     } catch (saveError) {
@@ -3459,36 +3760,51 @@ function PartnerDeliveryPricingManagement() {
     }
   };
 
+  const visiblePartners = partners.filter((partner) => partner.name.toLowerCase().includes(search.trim().toLowerCase()));
+
   return (
     <section id="partner-delivery-pricing" className="card" style={{ padding: 20, display: 'grid', gap: 16 }}>
       <div>
         <p className="eyebrow">CUSTOMER BILLING</p>
-        <h2 style={{ margin: '4px 0 6px' }}>Agreed delivery rates</h2>
+        <h2 style={{ margin: '4px 0 6px' }}>Partner delivery rates</h2>
         <p style={{ margin: 0, color: '#748094' }}>
-          Choose standard route rates or an agreed flat amount per delivery for each partner. Flat rates ignore destination; invoices remain separate by partner and show each delivery as a line.
+          Choose route pricing, one agreed rate, or separate prices by package size.
         </p>
       </div>
+      {partners.length > 1 && <label>Find partner
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search partner name…" />
+      </label>}
       {message && <p role="status" className="notice">{message}</p>}
       {error && <p role="alert" className="notice">{error}</p>}
-      {loading ? <p>Loading customer rates…</p> : error ? null : partners.length ? partners.map((partner) => {
-        const draft = drafts[partner.id] || { pricingMode: 'route', agreedDeliveryFee: '' };
+      {loading ? <p>Loading partner rates…</p> : error ? null : visiblePartners.length ? visiblePartners.map((partner) => {
+        const draft = drafts[partner.id] || { pricingMode: 'route', agreedDeliveryFee: '', packageSizeRates: {} };
         return (
           <article key={partner.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end', padding: 14, border: '1px solid var(--border, #d8dee8)', borderRadius: 12 }}>
             <strong>{partner.name}</strong>
             <label>Rate type
               <select value={draft.pricingMode} onChange={(event) => updateDraft(partner.id, { pricingMode: event.target.value })}>
-                <option value="route">Standard route rates</option>
-                <option value="agreed_flat">Agreed per-delivery rate</option>
+                <option value="route">By delivery location</option>
+                <option value="agreed_flat">Agreed amount per delivery</option>
+                <option value="package_size">By package size</option>
               </select>
             </label>
-            <label>Agreed amount (MVR)
-              <input type="number" min="0.01" step="0.01" inputMode="decimal" value={draft.agreedDeliveryFee} disabled={draft.pricingMode !== 'agreed_flat'} onChange={(event) => updateDraft(partner.id, { agreedDeliveryFee: event.target.value })} placeholder="e.g. 25.00" />
-            </label>
+            {draft.pricingMode === 'agreed_flat' && <label>Agreed amount (MVR)
+              <input type="number" min="0.01" step="0.01" inputMode="decimal" value={draft.agreedDeliveryFee} onChange={(event) => updateDraft(partner.id, { agreedDeliveryFee: event.target.value })} placeholder="e.g. 25" />
+            </label>}
+            {draft.pricingMode === 'package_size' && (
+              <div className="partner-size-rate-grid" style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: 10 }}>
+                {Object.entries(packageSizeLabels).map(([size, label]) => (
+                  <label key={size}>{label} (MVR)
+                    <input type="number" min="0.01" step="0.01" inputMode="decimal" value={draft.packageSizeRates?.[size] || ''} onChange={(event) => updateDraft(partner.id, { packageSizeRates: { ...(draft.packageSizeRates || {}), [size]: event.target.value } })} placeholder="Leave blank to hide" />
+                  </label>
+                ))}
+              </div>
+            )}
             <button className="primary-btn" type="button" onClick={() => void save(partner)} disabled={savingId === partner.id || (draft.pricingMode === 'agreed_flat' && !(Number(draft.agreedDeliveryFee) > 0))}>{savingId === partner.id ? 'Saving…' : 'Save rate'}</button>
           </article>
         );
-      }) : <p>No partner accounts yet.</p>}
-      <p style={{ margin: 0, color: '#748094' }}>A rate change affects packages registered after it is saved. It does not rewrite fees on packages already registered.</p>
+      }) : <p>{partners.length ? 'No matching partner.' : 'No partner accounts yet.'}</p>}
+      <p style={{ margin: 0, color: '#748094' }}>Only sizes with a saved price appear when registering packages. Rate changes apply to new packages; registered package fees stay unchanged.</p>
     </section>
   );
 }
@@ -4646,6 +4962,7 @@ function DriverWorkflowDashboard({
         </div>
         <button
           type="button"
+          id="driver-availability-switch"
           className={`driver-availability-switch ${online ? 'is-online' : 'is-offline'}`}
           onClick={changeOnline}
           role="switch"
@@ -4697,7 +5014,15 @@ function DriverWorkflowDashboard({
           <span className="driver-count">{waiting.length} waiting</span>
         </div>
         {!online && (
-          <p className="notice">Go online to accept delivery jobs.</p>
+          <button
+            type="button"
+            className="notice driver-online-notice"
+            onClick={() => document.getElementById('driver-availability-switch')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            aria-label="Go to the online control"
+            style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+          >
+            Go online to accept delivery jobs.
+          </button>
         )}
         {waiting.length ? (
           <>

@@ -46,6 +46,7 @@ export function packageFromDb(row) {
     driverPhone: row.drivers?.phone || '',
     customer: row.customer_name,
     phone: row.customer_phone,
+    trackingReference: row.partner_tracking_reference || '',
     address: row.address,
     area: row.area,
     boatName: row.boat_name || '',
@@ -54,6 +55,7 @@ export function packageFromDb(row) {
     landmark: row.landmark || '',
     item: row.item_description,
     fee: Number(row.delivery_fee || 0),
+    packageSize: row.package_size || '',
     notes: row.notes || '',
     status: statusFromDb(row.status),
     driverId: row.assigned_driver_id,
@@ -75,6 +77,7 @@ export function packageToDb(entry) {
   const fields = {
     customer: 'customer_name',
     phone: 'customer_phone',
+    trackingReference: 'partner_tracking_reference',
     address: 'address',
     area: 'area',
     boatName: 'boat_name',
@@ -83,6 +86,7 @@ export function packageToDb(entry) {
     landmark: 'landmark',
     item: 'item_description',
     fee: 'delivery_fee',
+    packageSize: 'package_size',
     notes: 'notes',
     status: 'status',
     assignedDriverId: 'assigned_driver_id',
@@ -558,31 +562,33 @@ export async function savePaymentAccount({ id, bankName = '', accountName, accou
 }
 
 export async function loadPartnerDeliveryPricing(partnerId) {
-  if (!partnerId) return { pricingMode: 'route', agreedDeliveryFee: null };
+  if (!partnerId) return { pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} };
   const { data, error } = await requireClient()
     .from('partners')
-    .select('delivery_pricing_mode,agreed_delivery_fee')
+    .select('delivery_pricing_mode,agreed_delivery_fee,package_size_rates')
     .eq('id', partnerId)
     .maybeSingle();
   if (error) {
     const message = String(error.message || '').toLowerCase();
     if (['42703', 'pgrst204', 'pgrst205'].includes(String(error.code || '').toLowerCase())
         || message.includes('delivery_pricing_mode')
-        || message.includes('agreed_delivery_fee')) {
-      return { pricingMode: 'route', agreedDeliveryFee: null };
+        || message.includes('agreed_delivery_fee')
+        || message.includes('package_size_rates')) {
+      return { pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} };
     }
     throw error;
   }
   return {
     pricingMode: data?.delivery_pricing_mode || 'route',
     agreedDeliveryFee: data?.agreed_delivery_fee == null ? null : Number(data.agreed_delivery_fee),
+    packageSizeRates: data?.package_size_rates || {},
   };
 }
 
 export async function loadPartnerDeliveryPricingSettings() {
   const { data, error } = await requireClient()
     .from('partners')
-    .select('id,name,delivery_pricing_mode,agreed_delivery_fee')
+    .select('id,name,delivery_pricing_mode,agreed_delivery_fee,package_size_rates')
     .order('name', { ascending: true });
   if (error) throw error;
   return (data || []).map((row) => ({
@@ -590,6 +596,7 @@ export async function loadPartnerDeliveryPricingSettings() {
     name: row.name || 'Partner',
     pricingMode: row.delivery_pricing_mode || 'route',
     agreedDeliveryFee: row.agreed_delivery_fee == null ? null : Number(row.agreed_delivery_fee),
+    packageSizeRates: row.package_size_rates || {},
   }));
 }
 
@@ -601,6 +608,15 @@ export async function savePartnerDeliveryPricing({ partnerId, pricingMode, agree
   });
   if (error) throw error;
   if (data !== true) throw new Error('The customer delivery rate was not saved.');
+}
+
+export async function savePartnerPackageSizeRates({ partnerId, packageSizeRates }) {
+  const { data, error } = await requireClient().rpc('save_partner_package_size_rates', {
+    p_partner_id: partnerId,
+    p_package_size_rates: packageSizeRates,
+  });
+  if (error) throw error;
+  if (data !== true) throw new Error('The package size rates were not saved.');
 }
 
 export async function saveInvoiceCutoff(time) {

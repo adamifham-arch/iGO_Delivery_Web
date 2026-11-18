@@ -905,6 +905,42 @@ tbody tr:last-child td {
 .message-queue-fee {
   grid-column: 1 / -1;
 }
+.message-queue-row-summary {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.message-queue-row-summary span {
+  color: var(--muted, #748094);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.message-queue-size-chips,
+.message-queue-edit,
+.message-queue-fields {
+  grid-column: 1 / -1;
+}
+.message-queue-edit > summary {
+  color: var(--muted, #687385);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.message-queue-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 8px;
+}
+.single-package-panel-body {
+  padding-top: 12px;
+}
+@media (max-width: 520px) {
+  .message-queue-fields {
+    grid-template-columns: 1fr;
+  }
+}
 .message-queue-row label {
   display: grid;
   gap: 4px;
@@ -3226,7 +3262,7 @@ header.topbar > .workspace-switch:has(select) {
 .profile-logo-editor label { display: grid; gap: 7px; color: #777d86; font-size: 12px; }
 .profile-logo-editor input[type='file'] { max-width: 100%; font: inherit; color: #202124; }
 .profile-logo-preview { width: 82px; height: 82px; padding: 6px; object-fit: contain; background: #fff; border: 1px solid #e3e6e9; border-radius: 10px; }
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+
 
 :root {
   font-family: 'DM Sans', sans-serif;
@@ -8364,3 +8400,38 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .finance-report-summary-table { min-width: 360px; max-width: 620px; }
 .finance-report-summary-table th:last-child, .finance-report-summary-table td:last-child { text-align: right; }
 .finance-report-summary-table .finance-report-highlight { background: #fff7d6; color: #263746; }
+
+
+/* Package size pricing controls */
+.package-size-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0 8px;
+}
+.package-size-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #d8dee8);
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  color: var(--text, #172033);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.package-size-chips button span {
+  color: var(--muted, #748094);
+  font-size: 11px;
+  font-weight: 500;
+}
+.package-size-chips button.selected,
+.package-size-chips button[aria-pressed="true"] {
+  border-color: #087653;
+  background: #e5f6ef;
+  color: #075d42;
+}

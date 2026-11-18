@@ -8435,3 +8435,66 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   background: #e5f6ef;
   color: #075d42;
 }
+
+
+/* Compact package import review rows */
+.message-queue-panel {
+  margin: 8px 0;
+  padding: 8px;
+}
+.message-queue-list {
+  gap: 6px;
+  margin: 8px 0;
+}
+.message-queue-row {
+  gap: 6px;
+  padding: 8px;
+}
+.message-queue-row-summary {
+  gap: 1px;
+}
+.message-queue-row-summary strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+.message-queue-row-summary span {
+  font-size: 11px;
+  line-height: 1.25;
+}
+.message-queue-edit > summary {
+  font-size: 11px;
+  line-height: 1.2;
+}
+.message-queue-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding-top: 6px;
+}
+.message-queue-row label {
+  gap: 3px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.message-queue-row input,
+.message-queue-row select {
+  height: 36px;
+  padding: 6px 9px;
+  font-size: 13px;
+}
+.message-queue-row textarea {
+  min-height: 56px;
+  padding: 6px 9px;
+  font-size: 13px;
+}
+.message-queue-instructions {
+  grid-column: 1 / -1;
+}
+.message-queue-fee {
+  align-self: center;
+  line-height: 1.2;
+}
+@media (max-width: 360px) {
+  .message-queue-fields {
+    grid-template-columns: 1fr;
+  }
+}

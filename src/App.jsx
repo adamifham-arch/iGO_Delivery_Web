@@ -1885,8 +1885,13 @@ export default function App() {
       customerText,
       'delivery\\s*address|address|deliver\\s*to'
     );
+    const itemCodeIndex = customerLines.findIndex((line) => /^[A-Z]{2,}\s*-\s*\d{3,}$/i.test(line));
     const inlineItemLine = customerLines.find((line) => /^(?:item|package|product)\s+(?:is|:|-)\s*.+/i.test(line)) || '';
+    const itemFromCodeLine = customerLines.map((line) => line.match(/^([A-Z]{2,}\s*-\s*\d{3,})\s+(.+)$/i)?.[2]?.trim()).find(Boolean) || '';
+    const itemAfterCode = itemCodeIndex >= 0 ? customerLines.slice(itemCodeIndex + 1).find((line) => !messageLabelLine.test(line) && !/(?:\+?960[\s-]*)?[79]\d{6}/.test(line) && !isVesselLine(line) && !messageAddressLine.test(line)) || '' : '';
     const inlineItem = inlineItemLine.match(/^(?:item|package|product)\s+(?:is|:|-)\s*(.+)$/i)?.[1]?.trim()
+      || itemFromCodeLine
+      || itemAfterCode
       || customerLines.find((line) => /^\s*\d+\s+[\p{L}]/u.test(line) && !messageAddressLine.test(line) && !isVesselLine(line))?.trim()
       || '';
     const item = readMessageField(customerText, 'package|item|order') || inlineItem;
@@ -1906,12 +1911,13 @@ export default function App() {
     const boatLine = cleanLines.find((line) => isVesselLine(line)) || '';
     const boatTimingMatch = boatLine.match(/\b(?:before|by|at|around|after)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)(?:\s+today)?\b/i);
     const boatTimingNote = boatLine.match(/\b(?:before|by|at|around|after)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?(?:\s+today)?\b/i)?.[0] || '';
-    const detectedBoat = boatField || (boatLine
-      ? boatLine.split(/[,;|]/)[0]
-        .replace(/\b(?:before|by|at|around|after)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?(?:\s+today)?\b.*$/i, '')
-        .replace(/\s+(?:boat|vessel)$/i, '')
-        .trim()
-      : '');
+    const labeledDeparture = readMessageField(text, 'departure\\s*time|departure');
+    const labeledDepartureClock = labeledDeparture.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i)?.[1] || '';
+    const rawBoatName = boatField || (boatLine ? boatLine.split(/[,;|]/)[0] : '');
+    const detectedBoat = rawBoatName
+      .replace(/\b(?:before|by|at|around|after)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?(?:\s+today)?\b.*$/i, '')
+      .replace(/\s+(?:boat|vessel)$/i, '')
+      .trim();
     const candidateLines = customerLines.filter((line) =>
       !messageLabelLine.test(line)
       && !/^(?:item|package|product)\s+(?:is|:|-)\s*/i.test(line)
@@ -1956,7 +1962,7 @@ export default function App() {
     const nameFromLine = customerNameCodeLine || knownNameLine || knownNameFromMessage || inferredName;
     const customerName = customer || structuredName || customerNameCodeLine || nameFromLine || knownNameFromMessage;
     const instructionLines = customerLines.filter((line) => line !== boatLine && messageInstructionLine.test(line));
-    const notes = [labeledNotes, ...instructionLines, boatTimingNote].filter(Boolean).join('; ');
+    const notes = [...new Set([labeledNotes, ...instructionLines, boatTimingNote, /^(?:before|by|after|around)\b/i.test(labeledDeparture) ? labeledDeparture : ''].filter(Boolean))].join('; ');
     const addressCandidate = candidateLines.find((line) =>
       line !== nameFromLine && line !== inferredName && !isVesselLine(line)
       && !messageInstructionLine.test(line) && isAddressCandidate(line)
@@ -2015,7 +2021,7 @@ export default function App() {
       notes: updates.notes || '',
       boatName,
       boatLocation: readMessageField(text, 'boat\\s*location|harbour|jetty'),
-      departureTime: normalizeDepartureTime(readMessageField(text, 'departure\\s*time|departure') || boatTimingMatch?.[1] || ''),
+      departureTime: normalizeDepartureTime(labeledDepartureClock || boatTimingMatch?.[1] || ''),
       landmark: readMessageField(customerText, 'nearby\\s*landmark|landmark'),
       fee: String(getCurrentDeliveryFee(draftArea, '') ?? ''),
     };

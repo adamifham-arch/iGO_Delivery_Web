@@ -2074,11 +2074,16 @@ export default function App() {
     const customerNameCodeLine = candidateLines.find((line) =>
       /^\s*[\p{L}][\p{L}.'’ -]*\s*(?:\/\s*|\s+)[A-Z]{1,4}\s*-?\s*\d[\w-]*\s*$/iu.test(line)
     ) || '';
+    const slashCustomerNameLine = candidateLines.find((line) =>
+      /^\s*[\p{L}][\p{L}.'’ -]*\s*\/\s*(?:[A-Z]\.\s*)?[\p{L}][\p{L}.'’ -]*\s*$/u.test(line)
+    ) || '';
     const isNameCandidate = (line) => {
-      const slashSeparatedCustomerName = line === customerNameCodeLine || (
-        /^\s*[^/]+\s*\/\s*[^/]+\s*$/.test(line)
-        && Boolean(extractMaldivianPersonName(line.split('/')[0]))
-      );
+      const slashSeparatedCustomerName = line === customerNameCodeLine
+        || line === slashCustomerNameLine
+        || (
+          /^\s*[^/]+\s*\/\s*[^/]+\s*$/.test(line)
+          && Boolean(extractMaldivianPersonName(line.split('/')[0]))
+        );
       return slashSeparatedCustomerName || (
         line.length <= 72
         && !isVesselLine(line)
@@ -2101,8 +2106,8 @@ export default function App() {
       .map(extractMaldivianPersonName)
       .find(Boolean) || '';
     // Prefer a recognized person name to an unlabelled first line, which can be a vessel or address.
-    const nameFromLine = customerNameCodeLine || knownNameLine || knownNameFromMessage || inferredName;
-    const customerName = customer || structuredName || customerNameCodeLine || nameFromLine || knownNameFromMessage;
+    const nameFromLine = customerNameCodeLine || slashCustomerNameLine || knownNameLine || knownNameFromMessage || inferredName;
+    const customerName = customer || structuredName || customerNameCodeLine || slashCustomerNameLine || nameFromLine || knownNameFromMessage;
     const trackingReference = readMessageField(customerText, 'partner\\s*tracking(?:\\s*(?:number|no))?|tracking\\s*(?:reference|number|no)|order\\s*tracking(?:\\s*(?:number|no))?|reference') || customerText.match(/\b[A-Z]{2,5}\/\d{2,6}\b/i)?.[0] || '';
     const instructionLines = customerLines.filter((line) => line !== boatLine && (messageInstructionLine.test(line) || /\b(?:before|after|by|around|at)\s+\d{1,2}(?::|\.)?\d{0,2}\s*(?:am|pm)?\b/i.test(line)));
     const notes = [...new Set([labeledNotes, ...instructionLines, boatTimingNote, /^(?:before|by|after|around)\b/i.test(labeledDeparture) ? labeledDeparture : '', labeledDeliveryTime ? 'Delivery time: ' + labeledDeliveryTime : ''].filter(Boolean))].join('; ');

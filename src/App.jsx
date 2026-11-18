@@ -1923,7 +1923,7 @@ export default function App() {
       || /^[MGH]\.\s*[A-Z][\w'-]+(?:\s+[A-Z][\w'-]+)*$/i.test(line)
       || /\b(?:male|hulhumale|hml|mle)\b/i.test(line);
     const slashCustomerNameLine = candidateLines.find((line) =>
-      /^\s*[\p{L}][\p{L}.'’ -]*\s*\/\s*[A-Z]{1,4}-?\d[\w-]*\s*$/iu.test(line)
+      /^\s*[\p{L}][\p{L}.'’ -]*\s*(?:\/\s*|\s+)[A-Z]{1,4}\s*-?\s*\d[\w-]*\s*$/iu.test(line)
     ) || '';
     const isNameCandidate = (line) => {
       const slashSeparatedCustomerName = line === slashCustomerNameLine || (

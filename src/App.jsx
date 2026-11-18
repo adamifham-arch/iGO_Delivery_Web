@@ -150,7 +150,7 @@ function extractMaldivianPersonName(line) {
   while (end + 1 < words.length && (known.has(words[end + 1].normalized) || joiners.has(words[end + 1].normalized)) && end - start < 3) end += 1;
   return String(line).slice(words[start].index, words[end].index + words[end].text.length).trim();
 }
-const messageFieldLabels = 'name\\s*on\\s*package|customer\\s*name|recipient(?:\\s*name)?|your\\s*name|name|customer|recipient|phone(?:\\s*number)?|mobile|contact(?:\\s*(?:number|no\\.?|&\\s*sms\\s*number))?|receive\\s*contact|order\\s*contact|address(?:/building\\s*name)?|building\\s*name|delivery\\s*address|deliver\\s*to|road|street|near\\s*by\\s*(?:location|landmark)|nearby\\s*(?:location|landmark)|landmark|boat\\s*name|vessel\\s*name|boat\\s*location|boat\\s*contact|captain(?:\\s*number)?|departure\\s*time|destination|island(?:\\s*name)?|area|location|city|package(?:\\s*name|\\s*details)?|item(?:\\s*code)?|product|sku|order(?:\\s*(?:info|id|number|no|tracking))?|receive\\s*info|recipient\\s*info|instructions|delivery\\s*instructions|notes|more|time|price|pcs|pieces|qty|quantity|tracking(?:\\s*(?:number|no))?|partner\\s*tracking(?:\\s*(?:number|no))?|harbour|jetty|boat\\s*details';
+const messageFieldLabels = 'name\\s*on\\s*package|customer\\s*name|recipient(?:\\s*name)?|your\\s*name|name|customer|recipient|phone(?:\\s*number)?|mobile|contact(?:\\s*(?:number|no\\.?|&\\s*sms\\s*number))?|receive\\s*contact|order\\s*contact|address(?:/building\\s*name)?|building\\s*name|delivery\\s*address|deliver\\s*to|road|street|near\\s*by\\s*(?:location|landmark)|nearby\\s*(?:location|landmark)|landmark|boat\\s*name|vessel\\s*name|boat\\s*location|boat\\s*contact|captain(?:\\s*number)?|departure\\s*time|destination|island(?:\\s*name)?|area|location|city|package(?:\\s*name|\\s*details)?|item(?:\\s*code)?|product|sku|order(?:\\s*(?:info|id|number|no|tracking))?|receive\\s*info|recipient\\s*info|instructions|delivery\\s*instructions|notes|more|time|price|pcs|pieces|qty|quantity|tracking\\s*(?:reference|number|no)|reference|tracking(?:\\s*(?:number|no))?|partner\\s*tracking(?:\\s*(?:reference|number|no))?|harbour|jetty|boat\\s*details';
 const messageLabelLine = new RegExp('^(?:' + messageFieldLabels + ')\\s*[:=-]', 'i');
 const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer|let me know|put(?:ting)? it in the ferry|handle with care|fragile|carefully handle)\b/i;
 const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hiyya?|hyyaa?|hyia|heeya|hiaya|sifco|sifko|sifkoo|sifcu|police|udhares?|udharas?|udhara|dhoadhi|dhoadhee|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|amaan\s*(?:udhares?|dhoadhi|dhodhi)|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
@@ -859,6 +859,7 @@ export default function App() {
     item: '',
     fee: String(getCurrentDeliveryFee('Malé') ?? ''),
     notes: '',
+    trackingReference: '',
   });
 
   useEffect(() => {
@@ -1731,6 +1732,7 @@ export default function App() {
       'Departure time',
       'Delivery instructions',
       'Package description',
+      'Partner tracking reference',
     ];
     const blob = new Blob([headers.join(',') + '\r\n'], {
       type: 'text/csv;charset=utf-8',
@@ -1792,6 +1794,7 @@ export default function App() {
           landmark: cell('Nearby landmark'),
           notes: cell('Delivery instructions'),
           item: cell('Package description'),
+          trackingReference: cell('Partner tracking reference') || cell('Tracking reference'),
         };
         Object.assign(entry, deliveryDetails(entry));
         if (
@@ -1976,6 +1979,7 @@ export default function App() {
     // Prefer a recognized person name to an unlabelled first line, which can be a vessel or address.
     const nameFromLine = customerNameCodeLine || knownNameLine || knownNameFromMessage || inferredName;
     const customerName = customer || structuredName || customerNameCodeLine || nameFromLine || knownNameFromMessage;
+    const trackingReference = readMessageField(customerText, 'partner\\s*tracking(?:\\s*(?:number|no))?|tracking\\s*(?:reference|number|no)|order\\s*tracking(?:\\s*(?:number|no))?|reference') || customerText.match(/\b[A-Z]{2,5}\/\d{2,6}\b/i)?.[0] || '';
     const instructionLines = customerLines.filter((line) => line !== boatLine && (messageInstructionLine.test(line) || /\b(?:before|after|by|around|at)\s+\d{1,2}(?::|\.)?\d{0,2}\s*(?:am|pm)?\b/i.test(line)));
     const notes = [...new Set([labeledNotes, ...instructionLines, boatTimingNote, /^(?:before|by|after|around)\b/i.test(labeledDeparture) ? labeledDeparture : '', labeledDeliveryTime ? 'Delivery time: ' + labeledDeliveryTime : ''].filter(Boolean))].join('; ');
     const addressCandidates = candidateLines.filter((line) =>
@@ -2031,6 +2035,7 @@ export default function App() {
     const draft = {
       customer: updates.customer || '',
       phone: updates.phone || '',
+      trackingReference,
       address: draftArea === 'Boat' ? boatName : updates.address || '',
       area: draftArea,
       packageSize: '',
@@ -2958,6 +2963,10 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                             />
                           </label>
                           <label>
+                            Partner tracking reference (optional)
+                            <input value={entry.trackingReference || ''} placeholder="e.g. BBD/0036" onChange={(event) => updateQueuedPackage(entry.queueId, 'trackingReference', event.target.value)} />
+                          </label>
+                          <label>
                             Island / area *
                             <select
                               value={entry.area}
@@ -3213,6 +3222,15 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                         onChange={updateForm}
                         placeholder="Optional notes for the driver"
                         rows="3"
+                      />
+                    </label>
+                    <label>
+                      Partner tracking reference (optional)
+                      <input
+                        name="trackingReference"
+                        value={form.trackingReference}
+                        onChange={updateForm}
+                        placeholder="e.g. BBD/0036"
                       />
                     </label>
                     <label>

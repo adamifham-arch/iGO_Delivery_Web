@@ -1479,7 +1479,7 @@ export default function App() {
       item.related_section,
       item.target_section,
     ].find((value) => typeof value === 'string' && value.trim());
-    const pages = ['Admin Operations', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Website controls', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
+    const pages = ['Admin Operations', 'Add Package', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Website controls', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
     let destination = pages.find((page) => page.toLowerCase() === String(explicitPage || '').trim().toLowerCase());
     const notificationText = [item.type, item.category, item.entity_type, item.related_type, item.title, item.message]
       .filter(Boolean).join(' ');
@@ -1565,7 +1565,7 @@ export default function App() {
         : '';
     }
     if (!targetWorkspace) {
-      if (['Admin Operations', 'User Management', 'Approvals', 'Finance Management'].includes(destination)) targetWorkspace = 'Admin';
+      if (['Admin Operations', 'Add Package', 'User Management', 'Approvals', 'Finance Management'].includes(destination)) targetWorkspace = 'Admin';
       else if (destination === 'Driver Overview' || destination === 'My Deliveries' || destination === 'About') targetWorkspace = 'Driver';
       else if (destination === 'Invoices & Payments' || destination === 'Register Package') targetWorkspace = 'Partner';
       else if (destination === 'Staff Operations') targetWorkspace = 'Staff';
@@ -2351,6 +2351,7 @@ export default function App() {
       : workspace === 'Admin'
       ? [
           ['Admin Operations', '⌂'],
+          ['Add Package', '+'],
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
           ['Finance Management', '♙'],
@@ -2831,8 +2832,10 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               packages={newestPackages}
               liveMode={Boolean(databaseProfile)}
               onUpdate={updatePackageRecord}
-              onCreated={(created) => setPackages((current) => [created, ...current])}
             />
+          )}
+          {page === 'Add Package' && workspace === 'Admin' && (
+            <AdminCustomerPackageCreator onCreated={(created) => setPackages((current) => [created, ...current])} />
           )}
           {page === 'Overview' && (
             <>
@@ -4386,7 +4389,6 @@ function AdminOperations({ packages, onUpdate, onCreated, liveMode = false, staf
   };
   return (
     <div className="operations-dashboard">
-      {!staffMode && liveMode && <AdminCustomerPackageCreator onCreated={onCreated} />}
       <div className="stats-grid overview-summary">
         {[
           ['Needs assignment', 'Unassigned', 'Waiting for a driver'],

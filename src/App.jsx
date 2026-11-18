@@ -151,11 +151,11 @@ function extractMaldivianPersonName(line) {
 }
 const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name)?|item|order|order\s*info|receive\s*info|recipient\s*info|instructions|delivery\s*instructions|notes|time|captain(?:\s*number)?|boat\s*details|package\s*details)\s*[:=-]/i;
 const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer)\b/i;
-const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hyyaa?|sifco|sifko|sifkoo|police|udhares?|udhara|dhoadhi|dhodhi|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
+const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hiyya?|hyyaa?|hyia|heeya|hiaya|sifco|sifko|sifkoo|sifcu|police|udhares?|udharas?|udhara|dhoadhi|dhoadhee|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|amaan\\s*(?:udhares?|dhoadhi|dhodhi)|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
 const isVesselLine = (line) => {
   const normalized = normalizeMessageText(line);
   if (!normalized || /^(?:boat|vessel) details$/.test(normalized)) return false;
-  return /\b(?:boat|dhoni|dhoani|ferry|launch|speed boat|speed launch)\b/.test(normalized)
+  return /\b(?:boat|dhoni|dhoani|ferry|launch|speed[ -]?boat|speed[ -]?launch)\b/.test(normalized)
     || knownVesselAliases.some((name) => normalized.includes(name));
 };
 const cleanImportedMessageLine = (line) =>

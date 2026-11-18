@@ -5366,20 +5366,24 @@ function DriverWorkflowDashboard({
           </div>
           <span className="driver-count">{delivered.length} delivered</span>
         </div>
-        {delivered.length ? (
-          <div className="driver-delivery-list">
-            {delivered.map((p) => (
-              <article className="driver-delivery-card" key={p.id}>
-                <strong>{p.id} · {p.customer}</strong>
-                <span>Delivery fee MVR {p.fee} · Driver share {rate}%</span>
-                <strong>MVR {(((Number(p.fee) || 0) * rate) / 100).toFixed(2)}</strong>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p>No completed deliveries yet.</p>
+        {delivered.length > 0 && (
+          <details className="driver-earnings-history">
+            <summary>Completed deliveries ({delivered.length})</summary>
+            <div className="driver-delivery-list">
+              {delivered.map((p) => (
+                <article className="driver-delivery-card" key={p.id}>
+                  <strong>{p.id} · {p.customer}</strong>
+                  <span>Delivery fee MVR {p.fee} · Driver share {rate}%</span>
+                  <strong>MVR {(((Number(p.fee) || 0) * rate) / 100).toFixed(2)}</strong>
+                </article>
+              ))}
+            </div>
+          </details>
         )}
-        <p>Total earned: <strong>MVR {earned.toFixed(2)}</strong></p>
+        <div className="driver-earnings-total">
+          <span>Total earned</span>
+          <strong>MVR {earned.toFixed(2)}</strong>
+        </div>
         <div className="driver-withdrawal-request">
           <div>
             <strong>Available to withdraw: MVR {withdrawable.toFixed(2)}</strong>

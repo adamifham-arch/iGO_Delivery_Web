@@ -113,7 +113,7 @@ const knownVesselAliases = [
   'atoll cute king', 'atoll cute queen', 'atoll cute princess',
   'atoll cute crown', 'aqua dream', 'alira one', 'alioth', 'amilla odi',
   'angel malak', 'cocogiri eagle', 'cocogiri express', 'blue marine',
-  'blue marlin', 'blue wave', 'black manta', 'beach cruiser',
+  'blue marlin', 'blue wave', 'black coral', 'black manta', 'beach cruiser',
 ];
 const maldivianNameTokens = [
   'aadhil', 'aahil', 'aishath', 'aisha', 'aysha', 'ayesha', 'ali',
@@ -134,7 +134,7 @@ const maldivianNameTokens = [
   'xaaitte', 'may',
 ];
 function extractMaldivianPersonName(line) {
-  const words = Array.from(String(line).matchAll(/[\\p{L}]+/gu), (match) => ({
+  const words = Array.from(String(line).matchAll(/[\p{L}]+/gu), (match) => ({
     text: match[0],
     index: match.index,
     normalized: normalizeMessageText(match[0]),
@@ -151,7 +151,7 @@ function extractMaldivianPersonName(line) {
 }
 const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name)?|item|order|order\s*info|receive\s*info|recipient\s*info|instructions|delivery\s*instructions|notes|time|captain(?:\s*number)?|boat\s*details|package\s*details)\s*[:=-]/i;
 const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer|handle with care|fragile|carefully handle)\b/i;
-const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hiyya?|hyyaa?|hyia|heeya|hiaya|sifco|sifko|sifkoo|sifcu|police|udhares?|udharas?|udhara|dhoadhi|dhoadhee|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|amaan\\s*(?:udhares?|dhoadhi|dhodhi)|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
+const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hiyya?|hyyaa?|hyia|heeya|hiaya|sifco|sifko|sifkoo|sifcu|police|udhares?|udharas?|udhara|dhoadhi|dhoadhee|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|amaan\s*(?:udhares?|dhoadhi|dhodhi)|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
 const isVesselLine = (line) => {
   const normalized = normalizeMessageText(line);
   if (!normalized || /^(?:boat|vessel) details$/.test(normalized)) return false;
@@ -1883,7 +1883,7 @@ export default function App() {
 
     const address = readMessageField(
       customerText,
-      'delivery\s*address|address|deliver\s*to'
+      'delivery\\s*address|address|deliver\\s*to'
     );
     const inlineItemLine = customerLines.find((line) => /^(?:item|package|product)\s+(?:is|:|-)\s*.+/i.test(line)) || '';
     const inlineItem = inlineItemLine.match(/^(?:item|package|product)\s+(?:is|:|-)\s*(.+)$/i)?.[1]?.trim()
@@ -1892,11 +1892,11 @@ export default function App() {
     const item = readMessageField(customerText, 'package|item|order') || inlineItem;
     const labeledNotes = readMessageField(
       customerText,
-      'delivery\s*instructions|instructions|notes'
+      'delivery\\s*instructions|instructions|notes'
     );
     const explicitArea = readMessageField(
       customerText,
-      'destination|island(?:\s*name)?|area|location'
+      'destination|island(?:\\s*name)?|area|location'
     );
 
     const boatSectionMatch = cleanMessageText.match(/(?:boat|ferry)\s*details\b([\s\S]*?)(?=package\s*details|recipient\s*details|customer\s*details|$)/i);
@@ -1915,6 +1915,7 @@ export default function App() {
     const candidateLines = customerLines.filter((line) =>
       !messageLabelLine.test(line)
       && !/^(?:item|package|product)\s+(?:is|:|-)\s*/i.test(line)
+      && line !== inlineItem
       && !/(?:\+?960[\s-]*)?[79]\d{6}/.test(line)
       && !/^\s*(?:[A-Z]{2,}\s*[/#-]\s*\d{2,}|[A-Z]{2,}-\d{3,})\s*$/i.test(line)
     );
@@ -1922,7 +1923,7 @@ export default function App() {
       messageAddressLine.test(line)
       || /^[MGH]\.\s*[A-Z][\w'-]+(?:\s+[A-Z][\w'-]+)*$/i.test(line)
       || /\b(?:male|hulhumale|hml|mle)\b/i.test(line);
-    const slashCustomerNameLine = candidateLines.find((line) =>
+    const customerNameCodeLine = candidateLines.find((line) =>
       /^\s*[\p{L}][\p{L}.'’ -]*\s*(?:\/\s*|\s+)[A-Z]{1,4}\s*-?\s*\d[\w-]*\s*$/iu.test(line)
     ) || '';
     const isNameCandidate = (line) => {
@@ -1952,8 +1953,8 @@ export default function App() {
       .map(extractMaldivianPersonName)
       .find(Boolean) || '';
     // Prefer a recognized person name to an unlabelled first line, which can be a vessel or address.
-    const nameFromLine = slashCustomerNameLine || knownNameLine || knownNameFromMessage || inferredName;
-    const customerName = customer || structuredName || nameFromLine || knownNameFromMessage;
+    const nameFromLine = customerNameCodeLine || knownNameLine || knownNameFromMessage || inferredName;
+    const customerName = customer || structuredName || customerNameCodeLine || nameFromLine || knownNameFromMessage;
     const instructionLines = customerLines.filter((line) => line !== boatLine && messageInstructionLine.test(line));
     const notes = [labeledNotes, ...instructionLines, boatTimingNote].filter(Boolean).join('; ');
     const addressCandidate = candidateLines.find((line) =>

@@ -110,9 +110,11 @@ const maldivianNameTokens = [
   'aishath', 'aminath', 'fathimath', 'khadheeja', 'mariyam', 'shifa',
   'zaina', 'zifleen', 'naila', 'mishka', 'faazil', 'aseel', 'annuu',
   'anu', 'zuleikha', 'sarah', 'abdulla', 'abdullah', 'ismail', 'yusuf',
+  'rasheed', 'shareef', 'anees', 'arif', 'shakir', 'sulaiman', 'ilyas',
+  'ameen', 'faheem', 'aslam', 'nashid', 'saeed', 'shaan', 'shaifa', 'aseel',
   'yousuf', 'raheem', 'raashid', 'rasheed', 'imran', 'azeel', 'shiyam',
 ];
-const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name)?|item|order|instructions|delivery\s*instructions|notes|time|captain(?:\s*number)?|boat\s*details|package\s*details)\s*[:=-]/i;
+const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name)?|item|order|order\s*info|receive\s*info|recipient\s*info|instructions|delivery\s*instructions|notes|time|captain(?:\s*number)?|boat\s*details|package\s*details)\s*[:=-]/i;
 const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer)\b/i;
 const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hyyaa?|sifco|sifko|sifkoo|police|udhares?|udhara|dhoadhi|dhodhi|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
 const isVesselLine = (line) => {
@@ -1818,18 +1820,27 @@ export default function App() {
     }
 
     const cleanLines = text.split(/\r?\n/).map(cleanImportedMessageLine).filter(Boolean);
+    const cleanMessageText = cleanLines.join('\n');
     const packageSectionStart = text.search(/(?:package\s*details|recipient\s*details|customer\s*details)\s*[:=-]?/i);
-    const customerText = packageSectionStart >= 0
+    const rawCustomerText = packageSectionStart >= 0
       ? text.slice(packageSectionStart).replace(/^(?:package\s*details|recipient\s*details|customer\s*details)\s*[:=-]?/i, '')
       : text;
-    const customerLines = customerText.split(/\r?\n/).map(cleanImportedMessageLine).filter(Boolean);
+    const customerLines = rawCustomerText.split(/\r?\n/).map(cleanImportedMessageLine).filter(Boolean);
+    const customerText = customerLines.join('\n');
     const customer = readMessageField(
       customerText,
-      'customer\s*name|recipient\s*name|package\s*name|name|customer|recipient'
+      'customer\\s*name|recipient\\s*name|package\\s*name|name|customer|recipient'
     );
-    const labeledPhone = readMessageField(
+    const receiveInfo = readMessageField(customerText, 'receive\\s*info|recipient\\s*info');
+    const orderInfo = readMessageField(customerText, 'order\\s*info');
+    const structuredInfo = receiveInfo || orderInfo;
+    const structuredName = structuredInfo
+      ? structuredInfo.split(/[.,;|]/)[0].trim()
+      : '';
+    const receiveContact = readMessageField(customerText, 'receive\\s*contact|recipient\\s*contact');
+    const labeledPhone = receiveContact || readMessageField(
       customerText,
-      'phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?'
+      'phone|phone\\s*number|mobile|contact(?:\\s*(?:number|&\\s*sms\\s*number))?|order\\s*contact'
     );
     const phoneMatch = customerText.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/)
       || text.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/);
@@ -1848,9 +1859,9 @@ export default function App() {
       'destination|island(?:\s*name)?|area|location'
     );
 
-    const boatSectionMatch = text.match(/(?:boat|ferry)\s*details\b([\s\S]*?)(?=package\s*details|recipient\s*details|customer\s*details|$)/i);
+    const boatSectionMatch = cleanMessageText.match(/(?:boat|ferry)\s*details\b([\s\S]*?)(?=package\s*details|recipient\s*details|customer\s*details|$)/i);
     const boatSection = boatSectionMatch?.[1] || '';
-    const boatField = readMessageField(text, 'boat\\s*name|vessel\\s*name')
+    const boatField = readMessageField(cleanMessageText, 'boat\\s*name|vessel\\s*name')
       || readMessageField(boatSection, 'vessel\\s*name|boat\\s*name|name');
     const boatLine = cleanLines.find((line) => isVesselLine(line)) || '';
     const detectedBoat = boatField || (boatLine ? boatLine.split(/[,;|]/)[0].replace(/\s+(?:boat|vessel)$/i, '').trim() : '');
@@ -1885,7 +1896,7 @@ export default function App() {
       ))
       .find(Boolean) || '';
     const nameFromLine = inferredName || knownNameLine;
-    const customerName = customer || nameFromLine || knownNameFromMessage;
+    const customerName = customer || structuredName || nameFromLine || knownNameFromMessage;
     const instructionLines = customerLines.filter((line) => messageInstructionLine.test(line));
     const notes = labeledNotes || instructionLines.join('; ');
     const addressCandidate = candidateLines.find((line) =>

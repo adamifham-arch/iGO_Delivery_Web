@@ -861,6 +861,8 @@ export default function App() {
   const [messageDraft, setMessageDraft] = useState('');
   const [messageQueue, setMessageQueue] = useState([]);
   const [confirmBulkAdd, setConfirmBulkAdd] = useState(false);
+  const [confirmClearQueue, setConfirmClearQueue] = useState(false);
+  const [confirmRemoveQueueId, setConfirmRemoveQueueId] = useState('');
   const [messageNotice, setMessageNotice] = useState('');
   const [partnerTrackingFormat, setPartnerTrackingFormat] = useState('');
   const [partnerTrackingNext, setPartnerTrackingNext] = useState('1');
@@ -2988,14 +2990,22 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                       <strong>Packages to add ({messageQueue.length})</strong>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!window.confirm('Clear all packages in the review list?')) return;
-                          setMessageQueue([]);
-                          setConfirmBulkAdd(false);
-                        }}
+                        onClick={() => setConfirmClearQueue((current) => !current)}
                       >
-                        Clear list
+                        {confirmClearQueue ? 'Cancel' : 'Clear list'}
                       </button>
+                      {confirmClearQueue && (
+                        <div className="message-queue-action-confirm" role="group" aria-label="Confirm clearing the review list">
+                          <span>Clear all {messageQueue.length} packages?</span>
+                          <button type="button" className="message-queue-confirm-danger" onClick={() => {
+                            setMessageQueue([]);
+                            setConfirmBulkAdd(false);
+                            setConfirmClearQueue(false);
+                            setConfirmRemoveQueueId('');
+                          }}>Clear</button>
+                          <button type="button" onClick={() => setConfirmClearQueue(false)}>Keep</button>
+                        </div>
+                      )}
                     </div>
                     <div className="message-queue-list">
                       {messageQueue.map((entry, index) => (
@@ -3005,17 +3015,20 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                               <strong>Package {index + 1} · {entry.customer || 'Name needed'}</strong>
                               <span>{entry.phone || 'Phone needed'} · {entry.area === 'Boat' ? (entry.boatName || 'Boat needed') : (entry.address || 'Address needed')} · {entry.fee ? 'MVR ' + entry.fee : 'Fee needed'}</span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (!window.confirm('Remove this package from the review list?')) return;
-                                setMessageQueue((current) =>
-                                  current.filter((item) => item.queueId !== entry.queueId)
-                                );
-                              }}
-                            >
-                              Remove
-                            </button>
+                            {confirmRemoveQueueId === entry.queueId ? (
+                              <div className="message-queue-action-confirm message-queue-remove-confirm" role="group" aria-label="Confirm removing package">
+                                <span>Remove this package?</span>
+                                <button type="button" className="message-queue-confirm-danger" onClick={() => {
+                                  setMessageQueue((current) => current.filter((item) => item.queueId !== entry.queueId));
+                                  setConfirmRemoveQueueId('');
+                                }}>Remove</button>
+                                <button type="button" onClick={() => setConfirmRemoveQueueId('')}>Keep</button>
+                              </div>
+                            ) : (
+                              <button type="button" onClick={() => setConfirmRemoveQueueId(entry.queueId)}>
+                                Remove
+                              </button>
+                            )}
                           </div>
                           {partnerDeliveryPricing.pricingMode === 'package_size' && (
                             <div className="package-size-chips message-queue-size-chips" role="group" aria-label="Package size">

@@ -8624,3 +8624,73 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
 .app[data-theme="night"] .main .package-size-chips button[aria-pressed="true"] .package-size-label {
   color: #172033 !important;
 }
+
+
+/* Driver workspace: compact spacing and clearer information density */
+.driver-dashboard { gap: 12px; }
+.driver-banner { padding: 14px 18px; border-radius: 14px; }
+.driver-banner h2 { margin: 1px 0 4px; font-size: 22px; }
+.driver-metrics { gap: 8px; }
+.driver-metrics article { gap: 4px; padding: 11px 12px; border-radius: 12px; }
+.driver-metrics article span { font-size: 11px; }
+.driver-metrics article strong { font-size: 21px; }
+.driver-metrics article small { font-size: 10px; }
+.driver-section { padding: 14px; border-radius: 14px; }
+.driver-section-heading { gap: 8px; margin-bottom: 10px; }
+.driver-section-heading h3 { font-size: 17px; }
+.driver-section-heading .driver-kicker { margin: 0 0 2px; font-size: 9px; }
+.driver-count { padding: 5px 9px; font-size: 11px; }
+.driver-delivery-list { gap: 6px; }
+.driver-partner-groups { gap: 6px; }
+.driver-partner-card { border-radius: 10px; }
+.driver-partner-card > summary { gap: 8px; padding: 9px 10px; }
+.driver-partner-summary-copy { gap: 2px; }
+.driver-partner-summary-copy strong { font-size: 13px; }
+.driver-partner-summary-copy small { font-size: 10px; }
+.driver-partner-count { min-width: 24px; height: 24px; font-size: 11px; }
+.driver-job-row { gap: 6px; padding: 8px 9px; }
+.driver-job-identity > strong, .driver-job-customer > strong, .driver-job-destination > strong { font-size: 11px; }
+.driver-job-identity .status { padding: 3px 5px; font-size: 9px; }
+.driver-job-customer small, .driver-job-destination small { font-size: 10px; }
+.driver-job-fee { font-size: 11px; }
+.driver-assigned-card { border-radius: 10px; }
+.driver-assigned-summary { gap: 6px 8px; padding: 8px 9px; }
+.driver-assigned-body { gap: 6px; padding: 8px; }
+.driver-assigned-body .driver-delivery-details { gap: 6px; }
+.driver-assigned-body .driver-contact-group { gap: 4px; padding: 7px 8px; font-size: 11px; line-height: 1.35; }
+.driver-assigned-body .driver-contact-label { font-size: 9px; }
+.driver-assigned-body .driver-contact-actions { gap: 5px 10px; font-size: 11px; }
+.driver-assigned-body .driver-delivery-footer { padding-top: 6px; font-size: 10px; }
+.driver-route-filter { gap: 7px; margin: -2px 0 8px; }
+.driver-route-filter select { min-width: 140px; padding: 7px 28px 7px 9px; }
+.driver-online-notice { margin-bottom: 8px; padding: 8px 10px; }
+@media (max-width: 560px) {
+  .driver-dashboard { gap: 10px; }
+  .driver-banner { align-items: center; flex-direction: row; gap: 10px; padding: 12px 13px; }
+  .driver-banner h2 { font-size: 19px; }
+  .driver-banner p { font-size: 12px; }
+  .driver-banner > button { min-height: 34px; padding: 7px 10px; font-size: 11px; }
+  .driver-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .driver-metrics article { padding: 9px 10px; }
+  .driver-metrics article strong { font-size: 19px; }
+  .driver-section { padding: 11px; }
+  .driver-section-heading { align-items: center; flex-direction: row; margin-bottom: 8px; }
+  .driver-section-heading h3 { font-size: 16px; }
+  .driver-job-row { grid-template-columns: 16px minmax(0, 1fr) auto; gap: 4px 6px; padding: 7px; }
+  .driver-job-row > input { grid-row: 1 / 3; }
+  .driver-job-customer, .driver-job-destination { gap: 1px; }
+  .driver-assigned-summary { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 7px; }
+  .driver-assigned-summary .driver-job-identity > strong,
+  .driver-assigned-summary .driver-job-customer > strong,
+  .driver-assigned-summary .driver-job-destination > strong { font-size: 11px; }
+  .driver-assigned-summary .driver-job-customer small,
+  .driver-assigned-summary .driver-job-destination small { font-size: 9px; }
+  .driver-assigned-body { gap: 5px; padding: 7px; }
+  .driver-assigned-body .driver-delivery-details { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .driver-assigned-body .driver-contact-group { gap: 3px; min-width: 0; padding: 7px; font-size: 10px; line-height: 1.3; overflow-wrap: anywhere; }
+  .driver-assigned-body .driver-contact-label { font-size: 8px; letter-spacing: .04em; }
+  .driver-assigned-body .driver-contact-actions { gap: 4px 8px; font-size: 10px; }
+  .driver-assigned-body .driver-delivery-footer { padding-top: 5px; font-size: 10px; }
+  .driver-route-filter { margin: 0 0 7px; }
+  .driver-route-filter select { min-width: 0; flex: 1; }
+}

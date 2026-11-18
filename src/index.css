@@ -905,6 +905,42 @@ tbody tr:last-child td {
 .message-queue-fee {
   grid-column: 1 / -1;
 }
+.message-queue-row-summary {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.message-queue-row-summary span {
+  color: var(--muted, #748094);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.message-queue-size-chips,
+.message-queue-edit,
+.message-queue-fields {
+  grid-column: 1 / -1;
+}
+.message-queue-edit > summary {
+  color: var(--muted, #687385);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.message-queue-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 8px;
+}
+.single-package-panel-body {
+  padding-top: 12px;
+}
+@media (max-width: 520px) {
+  .message-queue-fields {
+    grid-template-columns: 1fr;
+  }
+}
 .message-queue-row label {
   display: grid;
   gap: 4px;

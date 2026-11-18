@@ -1932,7 +1932,51 @@ export default function App() {
     return match ? match[1].trim() : '';
   }
 
-  function fillFromMessage() {
+  async function reservePartnerTrackingReference() {
+    const defaultFormat = 'IGO-0000';
+    let format = String(partnerTrackingFormat || defaultFormat).trim().toUpperCase();
+    let nextNumber = Number(partnerTrackingNext) || 1;
+
+    if (supabaseConfigured) {
+      if (!databaseUser) throw new Error('Sign in before adding packages.');
+      let query = supabase.from('partners')
+        .select('id,tracking_reference_format,tracking_reference_next');
+      if (databaseProfile?.role === 'admin' && linkedPartnerProfile?.id) {
+        query = query.eq('id', linkedPartnerProfile.id);
+      } else {
+        query = query.eq('owner_id', databaseUser.id);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (error) throw error;
+      if (!data?.id) throw new Error('No partner account is linked to this workspace.');
+      format = String(data.tracking_reference_format || format).trim().toUpperCase();
+      nextNumber = Number(data.tracking_reference_next) || 1;
+      const zeroes = format.match(/0+$/)?.[0]?.length || 4;
+      const normalizedFormat = /0+$/.test(format) ? format : defaultFormat;
+      const reference = normalizedFormat.slice(0, -zeroes) + String(nextNumber).padStart(zeroes, '0');
+      const { error: saveError } = await supabase.from('partners')
+        .update({
+          tracking_reference_format: normalizedFormat,
+          tracking_reference_next: nextNumber + 1,
+        })
+        .eq('id', data.id);
+      if (saveError) throw saveError;
+      setPartnerTrackingFormat(normalizedFormat);
+      setPartnerTrackingNext(String(nextNumber + 1));
+      return reference;
+    }
+
+    const zeroes = format.match(/0+$/)?.[0]?.length || 4;
+    if (!/0+$/.test(format)) format = defaultFormat;
+    const reference = format.slice(0, -zeroes) + String(nextNumber).padStart(zeroes, '0');
+    const next = nextNumber + 1;
+    setPartnerTrackingFormat(format);
+    setPartnerTrackingNext(String(next));
+    localStorage.setItem('igo-demo-partner-tracking-settings', JSON.stringify({ format, nextNumber: next }));
+    return reference;
+  }
+
+  async function fillFromMessage() {
     const text = messageDraft.trim();
     if (!text) {
       setMessageNotice('Please paste a customer message before filling the package details.');
@@ -2136,6 +2180,14 @@ export default function App() {
     if (packages.some((entry) => packageDuplicateKey(entry) === duplicateKey)) {
       setMessageNotice('This package is already registered. It was not added again.');
       return;
+    }
+    if (!draft.trackingReference) {
+      try {
+        draft.trackingReference = await reservePartnerTrackingReference();
+      } catch (error) {
+        setMessageNotice(error.message || 'Could not assign a partner tracking reference.');
+        return;
+      }
     }
     setMessageQueue((current) => [...current, { ...draft, queueId: Date.now() + Math.random() }]);
     setConfirmBulkAdd(false);

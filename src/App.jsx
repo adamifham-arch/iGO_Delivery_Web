@@ -846,6 +846,10 @@ export default function App() {
   const [messageQueue, setMessageQueue] = useState([]);
   const [confirmBulkAdd, setConfirmBulkAdd] = useState(false);
   const [messageNotice, setMessageNotice] = useState('');
+  const [partnerTrackingFormat, setPartnerTrackingFormat] = useState('');
+  const [partnerTrackingNext, setPartnerTrackingNext] = useState('1');
+  const [partnerTrackingNotice, setPartnerTrackingNotice] = useState('');
+  const [partnerTrackingSaving, setPartnerTrackingSaving] = useState(false);
   const [form, setForm] = useState({
     customer: '',
     phone: '',
@@ -861,6 +865,31 @@ export default function App() {
     notes: '',
     trackingReference: '',
   });
+
+  useEffect(() => {
+    if (!supabase || !databaseUser || workspace !== 'Partner') return undefined;
+    let active = true;
+    const loadTrackingSettings = async () => {
+      try {
+        let query = supabase.from('partners')
+          .select('id,tracking_reference_format,tracking_reference_next');
+        if (databaseProfile?.role === 'admin' && linkedPartnerProfile?.id) {
+          query = query.eq('id', linkedPartnerProfile.id);
+        } else {
+          query = query.eq('owner_id', databaseUser.id);
+        }
+        const { data, error } = await query.maybeSingle();
+        if (error) throw error;
+        if (!active) return;
+        setPartnerTrackingFormat(data?.tracking_reference_format || '');
+        setPartnerTrackingNext(String(data?.tracking_reference_next || 1));
+      } catch (error) {
+        if (active) setPartnerTrackingNotice(error.message || 'Could not load tracking settings.');
+      }
+    };
+    void loadTrackingSettings();
+    return () => { active = false; };
+  }, [databaseUser?.id, databaseProfile?.role, linkedPartnerProfile?.id, workspace]);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -1602,6 +1631,43 @@ export default function App() {
       ...(name === 'area' || name === 'packageSize' ? { fee: String(getCurrentDeliveryFee(name === 'area' ? value : current.area, name === 'packageSize' ? value : current.packageSize) ?? '') } : {}),
     }));
   };
+
+  async function savePartnerTrackingSettings(event) {
+    event.preventDefault();
+    setPartnerTrackingNotice('');
+    const format = partnerTrackingFormat.trim().toUpperCase();
+    const nextNumber = Number(partnerTrackingNext);
+    if (!/^[A-Z0-9][A-Z0-9/-]*0{1,8}$/.test(format) || /^0+$/.test(format)) {
+      setPartnerTrackingNotice('Use a prefix followed by 1–8 zeros, such as BBD/0000 or TCMV000.');
+      return;
+    }
+    if (!Number.isSafeInteger(nextNumber) || nextNumber < 1) {
+      setPartnerTrackingNotice('Enter a next number of 1 or higher.');
+      return;
+    }
+    setPartnerTrackingSaving(true);
+    try {
+      if (supabaseConfigured) {
+        let partnerId = '';
+        if (databaseProfile?.role === 'admin') partnerId = linkedPartnerProfile?.id || '';
+        else partnerId = await getCurrentPartnerId();
+        if (!partnerId) throw new Error('No partner account is linked to this workspace.');
+        const { error } = await supabase.from('partners')
+          .update({ tracking_reference_format: format, tracking_reference_next: nextNumber })
+          .eq('id', partnerId);
+        if (error) throw error;
+      } else {
+        localStorage.setItem('igo-demo-partner-tracking-settings', JSON.stringify({ format, nextNumber }));
+      }
+      setPartnerTrackingFormat(format);
+      setPartnerTrackingNext(String(nextNumber));
+      setPartnerTrackingNotice('Tracking format saved. New packages will get the next reference automatically.');
+    } catch (error) {
+      setPartnerTrackingNotice(error.message || 'Could not save tracking settings.');
+    } finally {
+      setPartnerTrackingSaving(false);
+    }
+  }
 
   async function registerPackage(e) {
     e.preventDefault();
@@ -2848,6 +2914,24 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
 
           {page === 'Register Package' && (
             <>
+              {workspace === 'Partner' && (
+                <details className="bulk-upload-panel partner-tracking-settings">
+                  <summary>Partner tracking number format</summary>
+                  <form className="message-queue-fields" onSubmit={savePartnerTrackingSettings}>
+                    <label>
+                      Format
+                      <input value={partnerTrackingFormat} onChange={(event) => setPartnerTrackingFormat(event.target.value)} placeholder="BBD/0000 or TCMV000" />
+                    </label>
+                    <label>
+                      Next number
+                      <input type="number" min="1" step="1" value={partnerTrackingNext} onChange={(event) => setPartnerTrackingNext(event.target.value)} />
+                    </label>
+                    <button className="primary-btn" type="submit" disabled={partnerTrackingSaving}>{partnerTrackingSaving ? 'Saving…' : 'Save format'}</button>
+                    {partnerTrackingNotice && <p role="status">{partnerTrackingNotice}</p>}
+                    <small>Zeros set the number width. Example: BBD/0000 starts at BBD/0001.</small>
+                  </form>
+                </details>
+              )}
               <div className="package-import-actions">
                 {showForm && (
                   <details className="bulk-upload-panel message-import-panel">

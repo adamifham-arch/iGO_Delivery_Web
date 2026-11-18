@@ -8694,3 +8694,28 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   .driver-route-filter { margin: 0 0 7px; }
   .driver-route-filter select { min-width: 0; flex: 1; }
 }
+
+
+/* Compact expanded route cards without shrinking the driver's main actions */
+article.driver-delivery-card { padding: 12px; border-radius: 13px; line-height: 1.35; }
+article.driver-delivery-card .driver-delivery-top { gap: 8px; margin-bottom: 5px; }
+article.driver-delivery-card .driver-package-id { font-size: 10px; letter-spacing: .07em; }
+article.driver-delivery-card .driver-delivery-top h4 { margin: 2px 0 0; font-size: 15px; }
+article.driver-delivery-card .status { padding: 5px 8px; font-size: 10px; }
+article.driver-delivery-card > p { margin: 0 0 6px !important; padding: 7px 9px !important; border-radius: 8px !important; font-size: 12px; line-height: 1.3; }
+article.driver-delivery-card > details { margin-top: 3px; }
+article.driver-delivery-card > details > summary { padding: 3px 0; font-size: 12px; line-height: 1.25; }
+article.driver-delivery-card .driver-delivery-details { gap: 7px; margin: 5px 0; }
+article.driver-delivery-card .driver-stop-group { gap: 5px; padding: 8px; border-radius: 9px; font-size: 11px; line-height: 1.3; }
+article.driver-delivery-card .driver-stop-group > strong { font-size: 11px; }
+article.driver-delivery-card .driver-stop-actions { gap: 5px; }
+article.driver-delivery-card > a { min-height: 32px; margin: 4px 5px 0 0; padding: 6px 9px; font-size: 11px; }
+article.driver-delivery-card > button { min-height: 38px; margin-top: 7px; padding: 8px 12px; border-radius: 9px; }
+article.driver-delivery-card .driver-delivery-footer { gap: 7px; padding-top: 7px; font-size: 11px; }
+article.driver-delivery-card .driver-failed-attempt { margin-top: 4px; }
+article.driver-delivery-card .driver-failed-attempt > summary { padding: 4px 0; font-size: 11px; }
+@media (max-width: 520px) {
+  article.driver-delivery-card { padding: 10px; }
+  article.driver-delivery-card .driver-delivery-details { grid-template-columns: 1fr; gap: 6px; }
+  article.driver-delivery-card .driver-stop-group { padding: 7px 8px; }
+}

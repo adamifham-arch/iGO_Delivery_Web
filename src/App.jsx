@@ -134,16 +134,20 @@ const maldivianNameTokens = [
   'xaaitte', 'may',
 ];
 function extractMaldivianPersonName(line) {
-  const words = normalizeMessageText(line).match(/[a-z]+/g) || [];
+  const words = Array.from(String(line).matchAll(/[\\p{L}]+/gu), (match) => ({
+    text: match[0],
+    index: match.index,
+    normalized: normalizeMessageText(match[0]),
+  }));
   const known = new Set(maldivianNameTokens);
-  const index = words.findIndex((word) => known.has(word));
+  const index = words.findIndex((word) => known.has(word.normalized));
   if (index < 0) return '';
   let start = index;
   let end = index;
   const joiners = new Set(['bin', 'ibn', 'bint', 'abd']);
-  while (start > 0 && (known.has(words[start - 1]) || joiners.has(words[start - 1])) && end - start < 3) start -= 1;
-  while (end + 1 < words.length && (known.has(words[end + 1]) || joiners.has(words[end + 1])) && end - start < 3) end += 1;
-  return words.slice(start, end + 1).join(' ');
+  while (start > 0 && (known.has(words[start - 1].normalized) || joiners.has(words[start - 1].normalized)) && end - start < 3) start -= 1;
+  while (end + 1 < words.length && (known.has(words[end + 1].normalized) || joiners.has(words[end + 1].normalized)) && end - start < 3) end += 1;
+  return String(line).slice(words[start].index, words[end].index + words[end].text.length).trim();
 }
 const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name)?|item|order|order\s*info|receive\s*info|recipient\s*info|instructions|delivery\s*instructions|notes|time|captain(?:\s*number)?|boat\s*details|package\s*details)\s*[:=-]/i;
 const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer)\b/i;
@@ -1876,6 +1880,10 @@ export default function App() {
     const phoneMatch = customerText.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/)
       || text.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/);
     const phone = labeledPhone || phoneMatch?.[0] || '';
+    const partnerTracking = readMessageField(
+      customerText,
+      'partner\\s*tracking(?:\\s*number)?|tracking(?:\\s*(?:number|id))?|order\\s*(?:tracking|number)|reference'
+    ) || customerLines.find((line) => /^\\s*[A-Z]{2,}\\s*[/#-]\\s*\\d{2,}\\s*$/i.test(line)) || '';
     const address = readMessageField(
       customerText,
       'delivery\s*address|address|deliver\s*to'
@@ -1941,6 +1949,7 @@ export default function App() {
     const updates = {};
     if (customerName) updates.customer = customerName.replace(/^(?:hi|hello|assalamu alaikum)[,!. ]+/i, '').trim();
     if (phone) updates.phone = normalizeCustomerPhone(phone);
+    if (partnerTracking) updates.partnerTracking = partnerTracking.trim();
     if (inferredAddress) updates.address = inferredAddress;
     if (item) updates.item = item;
     if (notes) updates.notes = notes;
@@ -1983,6 +1992,7 @@ export default function App() {
       address: draftArea === 'Boat' ? boatName : updates.address || '',
       area: draftArea,
       packageSize: '',
+      partnerTracking: updates.partnerTracking || '',
       item: updates.item || '',
       notes: updates.notes || '',
       boatName,
@@ -2004,7 +2014,7 @@ export default function App() {
     setMessageQueue((current) => [...current, { ...draft, queueId: Date.now() + Math.random() }]);
     setConfirmBulkAdd(false);
     setMessageDraft('');
-    const labels = { customer: 'name', phone: 'phone', address: 'address', area: 'destination', item: 'description', notes: 'instructions' };
+    const labels = { customer: 'name', phone: 'phone', partnerTracking: 'tracking number', address: 'address', area: 'destination', item: 'description', notes: 'instructions' };
     setMessageNotice('Added to review list: ' + Object.keys(updates).map((key) => labels[key]).filter(Boolean).join(', ') + '. Check the list before adding packages.');
     window.requestAnimationFrame(() => customerMessageInputRef.current?.focus());
   }
@@ -2070,6 +2080,7 @@ export default function App() {
         id: 'IGO-' + (1001 + packages.length + index),
         fee: getCurrentDeliveryFee(entry.area, entry.packageSize),
         packageSize: entry.packageSize || '',
+        partnerTracking: entry.partnerTracking || '',
         status: 'Pending',
       }));
     if (supabaseConfigured) {
@@ -2835,6 +2846,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                       <button
                         type="button"
                         onClick={() => {
+                          if (!window.confirm('Clear all packages in the review list?')) return;
                           setMessageQueue([]);
                           setConfirmBulkAdd(false);
                         }}
@@ -2849,13 +2861,12 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                             <strong>Package {index + 1}</strong>
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
+                                if (!window.confirm('Remove this package from the review list?')) return;
                                 setMessageQueue((current) =>
-                                  current.filter(
-                                    (item) => item.queueId !== entry.queueId
-                                  )
-                                )
-                              }
+                                  current.filter((item) => item.queueId !== entry.queueId)
+                                );
+                              }}
                             >
                               Remove
                             </button>
@@ -2989,48 +3000,12 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                     )}
                   </section>
                 )}
-                {showForm && (
-                  <details className="bulk-upload-panel">
-                    <summary>
-                      <span aria-hidden="true">▤</span> Bulk
-                    </summary>
-                    <div>
-                      <h3>Add packages in bulk</h3>
-                      <p>
-                        Download the template, fill in one row per package in
-                        Excel, then save it as CSV and upload it here. For Boat,
-                        fill Boat name; location and departure time are
-                        optional. For other destinations, fill Delivery address;
-                        Nearby landmark is optional. Use HH:MM or AM/PM for
-                        departure times. Fees are calculated automatically.
-                      </p>
-                    </div>
-                    <div className="bulk-upload-actions">
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={downloadBulkTemplate}
-                      >
-                        Download spreadsheet template
-                      </button>
-                      <label className="bulk-file-label">
-                        Upload completed spreadsheet (.csv)
-                        <input
-                          type="file"
-                          accept=".csv,text/csv"
-                          onChange={handleBulkUpload}
-                        />
-                      </label>
-                    </div>
-                    {bulkNotice && (
-                      <p className="bulk-notice" role="status">
-                        {bulkNotice}
-                      </p>
-                    )}
-                  </details>
-                )}
+                
               </div>
               {showForm && (
+                <details className="bulk-upload-panel single-package-panel">
+                  <summary>Register a single package</summary>
+                  <div className="single-package-panel-body">
                 <form
                   className="package-form"
                   onSubmit={(e) => {
@@ -3221,7 +3196,49 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                     </button>
                   </div>
                 </form>
+                  </div>
+                </details>
               )}
+              {showForm && (
+                  <details className="bulk-upload-panel">
+                    <summary>
+                      <span aria-hidden="true">▤</span> Bulk
+                    </summary>
+                    <div>
+                      <h3>Add packages in bulk</h3>
+                      <p>
+                        Download the template, fill in one row per package in
+                        Excel, then save it as CSV and upload it here. For Boat,
+                        fill Boat name; location and departure time are
+                        optional. For other destinations, fill Delivery address;
+                        Nearby landmark is optional. Use HH:MM or AM/PM for
+                        departure times. Fees are calculated automatically.
+                      </p>
+                    </div>
+                    <div className="bulk-upload-actions">
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={downloadBulkTemplate}
+                      >
+                        Download spreadsheet template
+                      </button>
+                      <label className="bulk-file-label">
+                        Upload completed spreadsheet (.csv)
+                        <input
+                          type="file"
+                          accept=".csv,text/csv"
+                          onChange={handleBulkUpload}
+                        />
+                      </label>
+                    </div>
+                    {bulkNotice && (
+                      <p className="bulk-notice" role="status">
+                        {bulkNotice}
+                      </p>
+                    )}
+                  </details>
+                )}
             </>
           )}
 

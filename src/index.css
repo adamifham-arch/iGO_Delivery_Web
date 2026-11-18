@@ -8536,3 +8536,25 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
   background: #fff1f0;
   color: #a61b14;
 }
+
+
+/* Make the chosen package size unmistakable in dark mode. */
+.app[data-theme="night"] .main .package-size-chips button {
+  background: #1e2c41 !important;
+  border-color: #62748d !important;
+  color: #f1f5f9 !important;
+}
+.app[data-theme="night"] .main .package-size-chips button span {
+  color: #cbd5e1 !important;
+}
+.app[data-theme="night"] .main .package-size-chips button.selected,
+.app[data-theme="night"] .main .package-size-chips button[aria-pressed="true"] {
+  background: #facc15 !important;
+  border-color: #fde047 !important;
+  color: #172033 !important;
+  box-shadow: 0 0 0 2px rgb(250 204 21 / 28%) !important;
+}
+.app[data-theme="night"] .main .package-size-chips button.selected span,
+.app[data-theme="night"] .main .package-size-chips button[aria-pressed="true"] span {
+  color: #334155 !important;
+}

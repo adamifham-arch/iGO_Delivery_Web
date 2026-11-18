@@ -1913,9 +1913,14 @@ export default function App() {
       messageAddressLine.test(line)
       || /^[MGH]\.\s*[A-Z][\w'-]+(?:\s+[A-Z][\w'-]+)*$/i.test(line)
       || /\b(?:male|hulhumale|hml|mle)\b/i.test(line);
+    const slashCustomerNameLine = candidateLines.find((line) =>
+      /^\s*[\p{L}][\p{L}.'’ -]*\s*\/\s*[A-Z]{1,4}-?\d[\w-]*\s*$/iu.test(line)
+    ) || '';
     const isNameCandidate = (line) => {
-      const slashSeparatedCustomerName = /^\s*[^/]+\s*\/\s*[^/]+\s*$/.test(line)
-        && Boolean(extractMaldivianPersonName(line.split('/')[0]));
+      const slashSeparatedCustomerName = line === slashCustomerNameLine || (
+        /^\s*[^/]+\s*\/\s*[^/]+\s*$/.test(line)
+        && Boolean(extractMaldivianPersonName(line.split('/')[0]))
+      );
       return slashSeparatedCustomerName || (
         line.length <= 72
         && !isVesselLine(line)
@@ -1938,7 +1943,7 @@ export default function App() {
       .map(extractMaldivianPersonName)
       .find(Boolean) || '';
     // Prefer a recognized person name to an unlabelled first line, which can be a vessel or address.
-    const nameFromLine = knownNameLine || knownNameFromMessage || inferredName;
+    const nameFromLine = slashCustomerNameLine || knownNameLine || knownNameFromMessage || inferredName;
     const customerName = customer || structuredName || nameFromLine || knownNameFromMessage;
     const instructionLines = customerLines.filter((line) => messageInstructionLine.test(line));
     const notes = labeledNotes || instructionLines.join('; ');

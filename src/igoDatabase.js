@@ -233,7 +233,7 @@ export async function getDriverIdByName(name) {
 export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}) {
   const isAdmin = workspace === 'Admin';
   const client = requireClient();
-  let invoiceQuery = client.from('invoices').select('*,partners(name),invoice_items(id,package_id,amount,packages(package_number,customer_name,customer_phone,address,area,item_description,delivery_fee))').order('created_at', { ascending: false });
+  let invoiceQuery = client.from('invoices').select('*,partners(name),invoice_items(id,package_id,amount,packages(package_number,customer_name,customer_phone,address,area,item_description,delivery_fee)),invoice_charges(id,description,amount,created_at)').order('created_at', { ascending: false });
   let paymentQuery = client.from('payments').select('*,partners(name),invoices!payments_target_invoice_id_fkey(invoice_number),payment_allocations(invoice_id,amount,invoices(invoice_number))').order('submitted_at', { ascending: false });
   let creditQuery = client.from('partner_credit_ledger').select('partner_id,amount');
   if (partnerId) {
@@ -268,14 +268,28 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
       amount: Number(row.subtotal || 0),
       paidAmount: Number(row.paid_amount || 0),
       status: row.status,
-      lines: (row.invoice_items || []).map((line) => ({
-        packageId: line.packages?.package_number ? `IGO-${line.packages.package_number}` : line.package_id,
-        packageDbId: line.package_id,
-        customer: line.packages?.customer_name || '',
-        area: line.packages?.area || '',
-        description: line.packages?.item_description || '',
-        amount: Number(line.amount || 0),
-      })),
+      lines: [
+        ...(row.invoice_items || []).map((line) => ({
+          id: line.id,
+          packageId: line.packages?.package_number ? `IGO-${line.packages.package_number}` : line.package_id,
+          packageDbId: line.package_id,
+          customer: line.packages?.customer_name || '',
+          area: line.packages?.area || '',
+          description: line.packages?.item_description || '',
+          amount: Number(line.amount || 0),
+          kind: 'package',
+        })),
+        ...(row.invoice_charges || []).map((charge) => ({
+          id: charge.id,
+          packageId: null,
+          customer: '',
+          area: '',
+          description: charge.description,
+          amount: Number(charge.amount || 0),
+          kind: 'charge',
+          createdAt: charge.created_at,
+        })),
+      ],
     })),
     payments: (paymentResult.data || []).map((row) => ({
       id: row.id,
@@ -326,6 +340,16 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
     invoiceCutoff: savedCutoffs.length === 1 ? savedCutoffs[0] || null : null,
     invoiceCutoffMixed: savedCutoffs.length > 1,
   };
+}
+
+export async function addInvoiceCharge(invoiceId, description, amount) {
+  const { data, error } = await requireClient().rpc('add_invoice_charge', {
+    p_invoice_id: invoiceId,
+    p_description: description.trim(),
+    p_amount: Number(amount),
+  });
+  if (error) throw error;
+  return data;
 }
 
 export async function submitInvoicePayment({ partnerId, invoices, amount, reference, transferDate, note, file }) {

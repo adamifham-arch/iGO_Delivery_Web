@@ -8498,3 +8498,41 @@ article.driver-delivery-card > details > summary { padding: 4px 0; font-weight: 
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Small inline confirmations for package review actions */
+.message-queue-action-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.message-queue-heading > .message-queue-action-confirm {
+  flex-basis: 100%;
+  justify-content: flex-end;
+}
+.message-queue-remove-confirm {
+  flex: 1 0 100%;
+  justify-content: flex-end;
+}
+.message-queue-action-confirm > span {
+  color: var(--muted, #687385);
+  margin-right: auto;
+}
+.message-queue-action-confirm button {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #d8ddd8;
+  border-radius: 7px;
+  background: #fff;
+  color: #26322e;
+  font: inherit;
+  font-weight: 650;
+}
+.message-queue-action-confirm button.message-queue-confirm-danger {
+  border-color: #b42318;
+  background: #fff1f0;
+  color: #a61b14;
+}

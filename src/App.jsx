@@ -149,7 +149,8 @@ function extractMaldivianPersonName(line) {
   while (end + 1 < words.length && (known.has(words[end + 1].normalized) || joiners.has(words[end + 1].normalized)) && end - start < 3) end += 1;
   return String(line).slice(words[start].index, words[end].index + words[end].text.length).trim();
 }
-const messageLabelLine = /^(?:name|customer|customer\s*name|recipient(?:\s*name)?|your\s*name|phone|phone\s*number|mobile|contact(?:\s*(?:number|&\s*sms\s*number))?|address|delivery\s*address|deliver\s*to|boat\s*name|vessel\s*name|boat\s*location|departure\s*time|departure|nearby\s*landmark|landmark|location|harbour|jetty|destination|island|area|package(?:\s*name|\s*details)?|item(?:\s*code)?|product|sku|order(?:\s*(?:info|id|number|no|tracking))?|receive\s*info|recipient\s*info|instructions|delivery\s*instructions|notes|more|time|price|pcs|pieces|qty|quantity|tracking(?:\s*(?:number|no))?|partner\s*tracking(?:\s*(?:number|no))?|captain(?:\s*number)?|boat\s*details)\s*[:=-]/i;
+const messageFieldLabels = String.raw\`name\s*on\s*package|customer\s*name|recipient(?:\s*name)?|your\s*name|name|customer|recipient|phone(?:\s*number)?|mobile|contact(?:\s*(?:number|no\.?|&\s*sms\s*number))?|receive\s*contact|order\s*contact|address(?:\/building\s*name)?|building\s*name|delivery\s*address|deliver\s*to|road|street|near\s*by\s*(?:location|landmark)|nearby\s*(?:location|landmark)|landmark|boat\s*name|vessel\s*name|boat\s*location|boat\s*contact|captain(?:\s*number)?|departure\s*time|destination|island(?:\s*name)?|area|location|city|package(?:\s*name|\s*details)?|item(?:\s*code)?|product|sku|order(?:\s*(?:info|id|number|no|tracking))?|receive\s*info|recipient\s*info|instructions|delivery\s*instructions|notes|more|time|price|pcs|pieces|qty|quantity|tracking(?:\s*(?:number|no))?|partner\s*tracking(?:\s*(?:number|no))?|harbour|jetty|boat\s*details\`;
+const messageLabelLine = new RegExp('^(?:' + messageFieldLabels + ')\\s*[:=-]', 'i');
 const messageInstructionLine = /\b(?:call|text|sms|whatsapp|before delivery|after delivery|customer before|deliver before|please deliver|call before|call customer|leave at|hand over|ring customer|inform customer|handle with care|fragile|carefully handle)\b/i;
 const messageAddressLine = /\b(?:magu|hingun|goalhi|goli|flat|flats|apartment|tower|block|villa|lot|plot|hiyaa?|hiyya?|hyyaa?|hyia|heeya|hiaya|sifco|sifko|sifkoo|sifcu|police|udhares?|udharas?|udhara|dhoadhi|dhoadhee|dhodhi|macl|vinares?|vinare|stelco|mpl|mwsc|amaan\s*(?:udhares?|dhoadhi|dhodhi)|maafannu|henveiru|galolhu|machchangolhi|vaijeheyge|vaijehey|near|next to|in front of|opposite|backside)\b/i;
 const isVesselLine = (line) => {
@@ -1838,12 +1839,11 @@ export default function App() {
   }
 
   function readMessageField(text, labelPattern) {
-    const match = text.match(
-      new RegExp(
-        '(?:^|\\n)\\s*(?:' + labelPattern + ')\\s*[:=-]\\s*(.+)$',
-        'im'
-      )
+    const expression = new RegExp(
+      '(?:^|\\n)\\s*(?:' + labelPattern + ')\\s*[:=-]\\s*([^\\n]*?)(?=\\s+(?:' + messageFieldLabels + ')\\s*[:=-]|\\s*$)',
+      'im'
     );
+    const match = String(text || '').match(expression);
     return match ? match[1].trim() : '';
   }
 
@@ -1864,7 +1864,7 @@ export default function App() {
     const customerText = customerLines.join('\n');
     const customer = readMessageField(
       customerText,
-      'customer\\s*name|recipient\\s*name|your\\s*name|package\\s*name|name|customer|recipient'
+      'name\\s*on\\s*package|customer\\s*name|recipient\\s*name|your\\s*name|package\\s*name|name|customer|recipient'
     );
     const receiveInfo = readMessageField(customerText, 'receive\\s*info|recipient\\s*info');
     const orderInfo = readMessageField(customerText, 'order\\s*info');
@@ -1875,7 +1875,7 @@ export default function App() {
     const receiveContact = readMessageField(customerText, 'receive\\s*contact|recipient\\s*contact');
     const labeledPhone = receiveContact || readMessageField(
       customerText,
-      'phone|phone\\s*number|mobile|contact(?:\\s*(?:number|&\\s*sms\\s*number))?|order\\s*contact'
+      'phone|phone\\s*number|mobile|contact(?:\\s*(?:number|no\\.?|&\\s*sms\\s*number))?|order\\s*contact'
     );
     const phoneMatch = customerText.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/)
       || text.match(/(?<![\d+])(?:\+?960[ -]*)?[79]\d{6}(?!\d)/);
@@ -1883,7 +1883,7 @@ export default function App() {
 
     const address = readMessageField(
       customerText,
-      'delivery\\s*address|address|deliver\\s*to'
+      'delivery\\s*address|address(?:/building\\s*name)?|building\\s*name|deliver\\s*to'
     );
     const itemCodeIndex = customerLines.findIndex((line) => /^[A-Z]{2,}\s*-\s*\d{3,}$/i.test(line));
     const inlineItemLine = customerLines.find((line) => /^(?:item|package|product)\s+(?:is|:|-)\s*.+/i.test(line)) || '';
@@ -1901,7 +1901,7 @@ export default function App() {
     );
     const explicitArea = readMessageField(
       customerText,
-      'destination|island(?:\\s*name)?|area|location'
+      'destination|island(?:\\s*name)?|area|location|city'
     );
 
     const boatSectionMatch = cleanMessageText.match(/(?:boat|ferry)\s*details\b([\s\S]*?)(?=package\s*details|recipient\s*details|customer\s*details|$)/i);

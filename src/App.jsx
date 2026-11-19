@@ -4275,8 +4275,8 @@ function AdminCustomerPackageCreator({ onCreated }) {
   };
 
   return (
-    <section className="application-card admin-customer-package-creator" aria-labelledby="admin-add-package-heading">
-      <div className="ops-heading"><div><div className="eyebrow">CUSTOMER DELIVERY</div><h2 id="admin-add-package-heading">Add a package</h2><p>Register a customer delivery under an approved partner.</p></div></div>
+    <section className="application-card admin-customer-package-creator" aria-label="Add package for a customer">
+      <p className="muted">Choose a partner and enter the customer’s delivery details.</p>
       {loading ? <p className="muted">Loading approved partners…</p> : partners.length ? (
         <form className="package-form" onSubmit={submit}>
           <div className="form-grid">

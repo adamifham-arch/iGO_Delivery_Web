@@ -2666,6 +2666,16 @@ button {
 .public-auth-card .public-remember-option { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .public-auth-card .public-remember-option input { width: 18px; min-height: 18px; margin: 0; accent-color: #c7a900; }
 
+
+.partner-agreement { border: 1px solid #dfe3e8; border-radius: 10px; background: #f8fafc; padding: 12px 14px; }
+.partner-agreement > summary { cursor: pointer; color: #253247; font-size: .9rem; font-weight: 700; line-height: 1.45; }
+.partner-agreement-content { max-height: 340px; overflow: auto; margin-top: 12px; padding: 12px 4px 4px 0; border-top: 1px solid #e1e5ea; color: #405066; font-size: .84rem; line-height: 1.55; }
+.partner-agreement-content h3 { margin: 16px 0 6px; color: #202b3b; font-size: .9rem; }
+.partner-agreement-content p { margin: 7px 0; }
+.partner-agreement-content ul { margin: 6px 0 10px; padding-left: 20px; }
+.partner-agreement-content blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid #e6c52e; }
+.public-auth-card label.partner-agreement-acceptance { display: flex; align-items: flex-start; gap: 10px; color: #334155; font-size: .9rem; font-weight: 500; line-height: 1.5; }
+.public-auth-card label.partner-agreement-acceptance input { flex: 0 0 18px; width: 18px; min-height: 18px; height: 18px; margin: 2px 0 0; padding: 0; accent-color: #c7a900; }
 .public-auth-card .public-form-note { margin: 0; color: #687486; font-size: .9rem; line-height: 1.5; }
 .public-auth-card .public-forgot-link { justify-self: end; margin-top: -6px; }
 .public-auth-switch { text-align: center; font-size: .92rem; }

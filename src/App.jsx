@@ -83,6 +83,49 @@ const deliveryRates = {
 const getDeliveryFee = (destination) =>
   deliveryRates[partnerOperatingLocation]?.[destination] ?? 35;
 const packageSizeLabels = { S: 'Small', M: 'Medium', L: 'Large', XL: 'Extra large' };
+const PARTNER_SERVICE_AGREEMENT_VERSION = '2026-11-19-v1';
+function PartnerServiceAgreement() {
+  return (
+    <details className="partner-agreement">
+      <summary>Read Partner Service Agreement &amp; Prohibited Items Declaration</summary>
+      <article className="partner-agreement-content">
+        <p><strong>Service Provider:</strong> BAIRUHA INVESTMENTS PRIVATE LIMITED, operating as iGO Delivery (“iGO”)</p>
+        <p><strong>Effective Date:</strong> Upon electronic acceptance by the Partner</p>
+        <h3>1. Acceptance of Agreement</h3>
+        <p>By registering as a Partner, accessing the Partner Portal, or requesting delivery services, the Partner confirms that they have read, understood, and agreed to this Agreement. The Partner confirms that they are authorised to enter into this Agreement on behalf of the business or individual account being registered.</p>
+        <h3>2. Responsibility for Package Contents</h3>
+        <p>The Partner is responsible for ensuring that every package submitted for collection or delivery contains only lawful items that may legally be transported in the Republic of Maldives. The Partner declares and warrants that:</p>
+        <ul><li>All packages are free from illegal, prohibited or unlawfully restricted items.</li><li>Package descriptions provided to iGO are truthful and accurate.</li><li>The Partner has the legal right and necessary authorisation to send the items.</li><li>Packages do not contain concealed unlawful substances or materials.</li><li>The Partner will not use iGO Delivery to facilitate any unlawful activity.</li></ul>
+        <p>These obligations apply whether the package is prepared by the Partner or by another person acting on the Partner’s behalf.</p>
+        <h3>3. Prohibited Items</h3>
+        <p>Partners must not submit packages containing:</p>
+        <ul><li>Illegal drugs, narcotics or controlled substances without lawful authorisation.</li><li>Unlawful weapons, ammunition, explosives or dangerous devices.</li><li>Stolen, counterfeit or otherwise unlawfully possessed goods.</li><li>Hazardous, toxic or dangerous substances prohibited from transport.</li><li>Any other item whose possession, distribution or transportation would violate applicable Maldivian law.</li></ul>
+        <p>Items requiring licences, permits or special handling must not be submitted without prior written approval from iGO and all legally required authorisations.</p>
+        <h3>4. Sealed Packages and Inspection</h3>
+        <p>iGO primarily operates as a collection and delivery service. Acceptance or collection of a sealed package does not constitute verification, approval or certification of its contents. The Partner acknowledges that iGO and its riders may not know the actual contents of a sealed package.</p>
+        <p>iGO may refuse collection, request clarification or supporting documentation, and require a package to be opened by an authorised person for inspection where lawful and appropriate. iGO reserves the right to suspend or cancel a delivery where there are reasonable safety or legality concerns.</p>
+        <h3>5. Police Investigations and Legal Proceedings</h3>
+        <p>If any package is suspected or found to contain illegal or prohibited items, the Partner agrees to cooperate with lawful investigations by the Maldives Police Service, Maldives Customs Service and other competent authorities.</p>
+        <p>iGO may, where legally permitted or required, provide relevant information, including Partner registration and identity details; delivery requests, package descriptions and transaction records; collection and delivery information; and relevant communications and available evidence.</p>
+        <p>The Partner remains responsible for their own unlawful conduct, inaccurate declarations, and breaches of this Agreement. Nothing in this Agreement prevents any competent authority from investigating iGO, its riders or other involved parties, or determines criminal responsibility.</p>
+        <h3>6. Indemnification and Allocation of Liability</h3>
+        <p>To the extent permitted by applicable law, the Partner agrees to indemnify and hold harmless BAIRUHA INVESTMENTS PRIVATE LIMITED, iGO Delivery, its directors, officers, employees and delivery riders against reasonable losses, damages, third-party claims and legal costs arising directly from illegal or prohibited goods supplied by the Partner; false or misleading declarations about package contents; a Partner’s breach of applicable law; or the Partner’s breach of this Agreement.</p>
+        <p>This indemnity shall not apply to the extent that a loss is caused by iGO’s own unlawful conduct, negligence, wilful misconduct or any liability that cannot legally be excluded or transferred.</p>
+        <h3>7. Refusal, Suspension and Termination</h3>
+        <p>iGO reserves the right to reject a package, suspend a delivery, restrict a Partner account, or terminate its business relationship with a Partner where there are reasonable grounds to suspect unlawful activity or a breach of this Agreement. Where a package has already been collected, iGO will handle it in accordance with applicable law and lawful instructions from competent authorities.</p>
+        <h3>8. Partner’s Continuing Obligations</h3>
+        <p>The Partner shall ensure that every employee, representative or other person submitting packages through the Partner account understands and complies with the requirements of this Agreement. The Partner agrees to provide accurate package descriptions and requested supporting information for each delivery.</p>
+        <h3>9. Governing Law</h3>
+        <p>This Agreement shall be governed by the applicable laws of the Republic of Maldives. Any contractual dispute shall be subject to the jurisdiction of the competent courts of the Maldives.</p>
+        <h3>10. Electronic Acceptance</h3>
+        <p>By selecting the acceptance checkbox and submitting the registration form, the Partner confirms:</p>
+        <blockquote>“I have read and agree to the iGO Delivery Partner Service Agreement. I confirm that packages submitted through my Partner account will not contain illegal or prohibited items. I accept responsibility for the accuracy of package declarations and agree to cooperate with lawful investigations.”</blockquote>
+        <p>The Partner acknowledges that this electronic acceptance may be recorded together with the account identity, date, time and Agreement version as evidence of acceptance.</p>
+      </article>
+    </details>
+  );
+}
+
 const getPartnerDeliveryFee = (destination, pricing, packageSize = '') => {
   if (pricing?.pricingMode === 'package_size') {
     const sizeFee = Number(pricing?.packageSizeRates?.[packageSize]);
@@ -1311,6 +1354,10 @@ export default function App() {
       setDatabaseError('Passwords do not match.');
       return;
     }
+    if (role === 'partner' && values.get('partner_service_agreement_accepted') !== 'on') {
+      setDatabaseError('Please read and accept the Partner Service Agreement to continue.');
+      return;
+    }
     const logoFile = role === 'partner' ? values.get('logo') : null;
     let logoDataUrl = '';
     if (logoFile?.size) {
@@ -1348,6 +1395,8 @@ export default function App() {
             business_name: String(values.get('business_name') || '').trim(),
             address: String(values.get('address') || '').trim(),
             logo_data_url: logoDataUrl || null,
+            partner_service_agreement_accepted: role === 'partner' && values.get('partner_service_agreement_accepted') === 'on',
+            partner_service_agreement_version: role === 'partner' ? PARTNER_SERVICE_AGREEMENT_VERSION : null,
           },
         },
       });
@@ -2495,7 +2544,7 @@ export default function App() {
     if (authMode === 'register-partner' || authMode === 'register-driver') {
       const isPartnerRegistration = authMode === 'register-partner';
       return (
-        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><label>Confirm password *<input name="confirm_password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('signin'); }}>Log in</button></p></form></main>
+        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label></>}{isPartnerRegistration && <><PartnerServiceAgreement /><label className="partner-agreement-acceptance"><input type="checkbox" name="partner_service_agreement_accepted" required /><span>I have read and agree to the iGO Delivery Partner Service Agreement. I confirm packages will not contain illegal or prohibited items, and I accept responsibility for accurate declarations.</span></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><label>Confirm password *<input name="confirm_password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('signin'); }}>Log in</button></p></form></main>
       );
     }
 

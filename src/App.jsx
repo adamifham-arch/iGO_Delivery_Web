@@ -459,7 +459,7 @@ async function loadSuperadminLinkedProfiles(user, profile) {
   if (roleError) throw roleError;
   if (isSuperadmin !== true) return { isSuperadmin: false, partner: null, driver: null };
   const [partnerResult, driverResult] = await Promise.all([
-    supabase.from('partners').select('id,name,contact_name,phone,email,approval_status').eq('owner_id', user.id).maybeSingle(),
+    supabase.from('partners').select('id,name,contact_name,phone,email,approval_status,logo_data_url').eq('owner_id', user.id).maybeSingle(),
     supabase.from('drivers').select('id,name,phone,approval_status,active').eq('user_id', user.id).maybeSingle(),
   ]);
   if (partnerResult.error) throw partnerResult.error;
@@ -1007,6 +1007,7 @@ export default function App() {
         setDatabaseProfile(profile);
         setIsSuperadmin(additionalProfiles.isSuperadmin);
         setLinkedPartnerProfile(additionalProfiles.partner);
+        if (profile.role === 'admin' && additionalProfiles.isSuperadmin) setPartnerLogo(additionalProfiles.partner?.logo_data_url || '');
         setLinkedDriverProfile(additionalProfiles.driver);
         setPartnerDeliveryPricing(currentPartnerPricing);
         setForm((current) => { const area = currentPartnerPricing.pricingMode === 'package_size' && current.area.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : current.area; return { ...current, area, fee: String(getPartnerDeliveryFee(area, currentPartnerPricing, current.packageSize) ?? '') }; });
@@ -1159,6 +1160,7 @@ export default function App() {
         setDatabaseProfile(profile);
         setIsSuperadmin(additionalProfiles.isSuperadmin);
         setLinkedPartnerProfile(additionalProfiles.partner);
+        if (profile.role === 'admin' && additionalProfiles.isSuperadmin) setPartnerLogo(additionalProfiles.partner?.logo_data_url || '');
         setLinkedDriverProfile(additionalProfiles.driver);
         setPackages(rows);
         if (finance) applyDatabaseFinanceSnapshot(finance);
@@ -2762,7 +2764,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 <div><dt>Email</dt><dd>{databaseUser?.email || 'Demo profile'}</dd></div>
                 <div><dt>Profile</dt><dd>{viewedProfileType}</dd></div>
                 </dl>
-                {workspace === 'Partner' && databaseProfile?.role === 'partner' && (
+                {workspace === 'Partner' && (databaseProfile?.role === 'partner' || (isSuperadmin && linkedPartnerProfile?.id)) && (
                   <form className="profile-logo-editor" onSubmit={savePartnerLogoFromProfile}>
                     <h3>Profile image</h3>
                     <p>Add or change the image shown in your partner workspace. It also helps drivers recognize your packages. PNG, JPEG, or WebP · up to 256 KB after automatic compression.</p>

@@ -1128,6 +1128,24 @@ export default function App() {
     }
   };
 
+  const removePartnerLogoFromProfile = async () => {
+    setLogoSaving(true);
+    setLogoFeedback('');
+    try {
+      await savePartnerLogo(null);
+      setPartnerLogo('');
+      setLogoFeedbackKind('success');
+      setLogoFeedback('Profile image removed.');
+      setLogoFileSelected(false);
+      document.querySelector('.profile-logo-editor')?.reset();
+    } catch (error) {
+      setLogoFeedbackKind('error');
+      setLogoFeedback(error.message || 'Could not remove the profile image. Please try again.');
+    } finally {
+      setLogoSaving(false);
+    }
+  };
+
   const signInToDatabase = async (event) => {
     event.preventDefault();
     if (!supabase) return;
@@ -2771,7 +2789,10 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                     {partnerLogo && <img src={partnerLogo} alt="Current profile image" className="profile-logo-preview" />}
                     <label>Choose profile image<input name="partner_logo" type="file" accept="image/png,image/jpeg,image/webp" required onChange={(event) => { setLogoFileSelected(Boolean(event.currentTarget.files?.[0])); setLogoFeedback(''); setNotice(''); }} /></label>
                     <p className="profile-logo-hint">{logoFileSelected ? 'Image selected. Save to apply it.' : 'Choose an image above to enable the save button.'}</p>
-                    <button className="secondary-btn" type="submit" disabled={logoSaving || !logoFileSelected}>{logoSaving ? 'Saving…' : partnerLogo ? 'Save profile image' : 'Add profile image'}</button>
+                    <div className="profile-logo-actions">
+                      <button className="secondary-btn" type="submit" disabled={logoSaving || !logoFileSelected}>{logoSaving ? 'Saving…' : partnerLogo ? 'Save profile image' : 'Add profile image'}</button>
+                      {partnerLogo && <button className="secondary-btn" type="button" onClick={() => { void removePartnerLogoFromProfile(); }} disabled={logoSaving}>{logoSaving ? 'Saving…' : 'Remove image'}</button>}
+                    </div>
                     {logoFeedback && <p className={'profile-logo-feedback ' + logoFeedbackKind} role={logoFeedbackKind === 'error' ? 'alert' : 'status'}>{logoFeedback}</p>}
                   </form>
                 )}

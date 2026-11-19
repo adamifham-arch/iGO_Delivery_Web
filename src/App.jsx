@@ -541,6 +541,46 @@ function saveIgoNavigation(route) {
   }
 }
 
+
+const readImageFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result || ''));
+  reader.onerror = () => reject(new Error('Could not read that image. Please choose it again.'));
+  reader.readAsDataURL(file);
+});
+
+async function preparePartnerProfileImage(file, maxBytes = 256 * 1024) {
+  if (file.size <= maxBytes) return readImageFileAsDataUrl(file);
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = objectUrl;
+    await image.decode();
+    const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+    let scale = Math.min(1, 1200 / longestSide);
+    let width = Math.max(1, Math.round(image.naturalWidth * scale));
+    let height = Math.max(1, Math.round(image.naturalHeight * scale));
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Image compression is unavailable in this browser.');
+      context.drawImage(image, 0, 0, width, height);
+      const quality = Math.max(0.42, 0.86 - Math.floor(attempt / 2) * 0.1);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+      if (blob && blob.size <= maxBytes) return readImageFileAsDataUrl(blob);
+      if (attempt % 2 === 1) {
+        width = Math.max(1, Math.round(width * 0.82));
+        height = Math.max(1, Math.round(height * 0.82));
+      }
+    }
+    throw new Error('Could not compress this image below 256 KB. Please choose a smaller image.');
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export default function App() {
   const customerNameInputRef = useRef(null);
   const customerMessageInputRef = useRef(null);
@@ -1061,39 +1101,30 @@ export default function App() {
     const file = formElement.elements.partner_logo.files?.[0];
     if (!file) {
       setLogoFeedbackKind('error');
-      setLogoFeedback('Choose a logo image before saving.');
+      setLogoFeedback('Choose a profile image before saving.');
       return;
     }
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 256 * 1024) {
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       setLogoFeedbackKind('error');
-      setLogoFeedback('Choose a PNG, JPEG, or WebP image up to 256 KB.');
+      setLogoFeedback('Choose a PNG, JPEG, or WebP image.');
       return;
     }
     setLogoSaving(true);
     setLogoFeedback('');
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const logoDataUrl = String(reader.result || '');
-        await savePartnerLogo(logoDataUrl);
-        setPartnerLogo(logoDataUrl);
-        setLogoFeedbackKind('success');
-        setLogoFeedback('Logo saved. Drivers will see it on your job tiles.');
-        formElement.reset();
-        setLogoFileSelected(false);
-      } catch (error) {
-        setLogoFeedbackKind('error');
-        setLogoFeedback(error.message || 'Could not save the logo. Please try again.');
-      } finally {
-        setLogoSaving(false);
-      }
-    };
-    reader.onerror = () => {
+    try {
+      const imageDataUrl = await preparePartnerProfileImage(file);
+      await savePartnerLogo(imageDataUrl);
+      setPartnerLogo(imageDataUrl);
+      setLogoFeedbackKind('success');
+      setLogoFeedback('Profile image saved. It now appears in your workspace and on driver job tiles.');
+      formElement.reset();
+      setLogoFileSelected(false);
+    } catch (error) {
       setLogoFeedbackKind('error');
-      setLogoFeedback('Could not read that image. Please choose it again.');
+      setLogoFeedback(error.message || 'Could not save the profile image. Please try again.');
+    } finally {
       setLogoSaving(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const signInToDatabase = async (event) => {
@@ -2444,7 +2475,7 @@ export default function App() {
     if (authMode === 'register-partner' || authMode === 'register-driver') {
       const isPartnerRegistration = authMode === 'register-partner';
       return (
-        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label><label>Partner logo (optional)<input name="logo" type="file" accept="image/png,image/jpeg,image/webp" /><small>Upload a PNG, JPEG, or WebP image, up to 256 KB.</small></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><label>Confirm password *<input name="confirm_password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('signin'); }}>Log in</button></p></form></main>
+        <main className="public-auth-page" data-theme={localStorage.getItem('igo-theme') === 'night' ? 'night' : 'day'}><button className="auth-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const page = event.currentTarget.closest('.public-auth-page'); const night = page.dataset.theme !== 'night'; page.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('landing'); }}>← Back to iGO</button><form className="public-auth-card" onSubmit={registerPublicAccount}><h1>{isPartnerRegistration ? 'Register as a partner' : 'Become an iGO rider'}</h1><p>{isPartnerRegistration ? 'Apply to join iGO as a delivery partner.' : 'Apply to deliver with iGO.'}</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<label>Full name *<input name="full_name" autoComplete="name" required /></label><label>Email *<input name="email" type="email" autoComplete="email" required /></label><label>Registered phone number *<input name="phone" type="tel" autoComplete="tel" required /></label>{isPartnerRegistration && <><label>Business name *<input name="business_name" autoComplete="organization" required /></label><label>Business address *<input name="address" autoComplete="street-address" required /></label></>}<label>Create password *<input name="password" type="password" autoComplete="new-password" minLength={8} required /></label><label>Confirm password *<input name="confirm_password" type="password" autoComplete="new-password" minLength={8} required /></label><p className="public-form-note">Every account must have a registered phone number. Partner and rider accounts need admin approval.</p><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending application…' : 'Submit application'}</button><p className="public-auth-switch">Already have an account? <button type="button" onClick={() => { setDatabaseError(''); navigateAuthMode('signin'); }}>Log in</button></p></form></main>
       );
     }
 
@@ -2619,7 +2650,9 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
               onClick={() => setShowProfileMenu((open) => !open)}
             >
               <span className="profile-avatar">
-                {databaseProfile?.full_name?.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || (workspace === 'Admin' ? 'OP' : workspace === 'Driver' ? 'DR' : 'SH')}
+                {workspace === 'Partner' && partnerLogo
+                  ? <img src={partnerLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                  : databaseProfile?.full_name?.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || (workspace === 'Admin' ? 'OP' : workspace === 'Driver' ? 'DR' : 'SH')}
               </span>
               <span className="profile-trigger-name">
                 {''}
@@ -2731,12 +2764,12 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                 </dl>
                 {workspace === 'Partner' && databaseProfile?.role === 'partner' && (
                   <form className="profile-logo-editor" onSubmit={savePartnerLogoFromProfile}>
-                    <h3>Business logo</h3>
-                    <p>Add a logo to help drivers recognize your packages. PNG, JPEG, or WebP · up to 256 KB.</p>
-                    {partnerLogo && <img src={partnerLogo} alt="Current partner logo" className="profile-logo-preview" />}
-                    <label>Choose logo<input name="partner_logo" type="file" accept="image/png,image/jpeg,image/webp" required onChange={(event) => { setLogoFileSelected(Boolean(event.currentTarget.files?.[0])); setLogoFeedback(''); setNotice(''); }} /></label>
-                    <p className="profile-logo-hint">{logoFileSelected ? 'Logo selected. Save to apply it.' : 'Choose an image above to enable the save button.'}</p>
-                    <button className="secondary-btn" type="submit" disabled={logoSaving || !logoFileSelected}>{logoSaving ? 'Saving…' : partnerLogo ? 'Save logo' : 'Add logo'}</button>
+                    <h3>Profile image</h3>
+                    <p>Add or change the image shown in your partner workspace. It also helps drivers recognize your packages. PNG, JPEG, or WebP · up to 256 KB after automatic compression.</p>
+                    {partnerLogo && <img src={partnerLogo} alt="Current profile image" className="profile-logo-preview" />}
+                    <label>Choose profile image<input name="partner_logo" type="file" accept="image/png,image/jpeg,image/webp" required onChange={(event) => { setLogoFileSelected(Boolean(event.currentTarget.files?.[0])); setLogoFeedback(''); setNotice(''); }} /></label>
+                    <p className="profile-logo-hint">{logoFileSelected ? 'Image selected. Save to apply it.' : 'Choose an image above to enable the save button.'}</p>
+                    <button className="secondary-btn" type="submit" disabled={logoSaving || !logoFileSelected}>{logoSaving ? 'Saving…' : partnerLogo ? 'Save profile image' : 'Add profile image'}</button>
                     {logoFeedback && <p className={'profile-logo-feedback ' + logoFeedbackKind} role={logoFeedbackKind === 'error' ? 'alert' : 'status'}>{logoFeedback}</p>}
                   </form>
                 )}

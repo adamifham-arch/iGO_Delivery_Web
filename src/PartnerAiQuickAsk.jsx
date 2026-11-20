@@ -69,7 +69,7 @@ export default function PartnerAiQuickAsk() {
           type="text"
           autoComplete="off"
           aria-label="Ask iGO AI"
-          placeholder="Ask iGO anything…"
+          placeholder="What would you like help with?"
           maxLength={1200}
           value={question}
           onChange={event => setQuestion(event.target.value)}

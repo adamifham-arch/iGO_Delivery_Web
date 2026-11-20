@@ -108,3 +108,50 @@
   .igo-ledger-print-sheet thead{display:table-header-group}
   .igo-ledger-paper-header{print-color-adjust:exact;-webkit-print-color-adjust:exact}
 }
+
+
+/* Official iGO invoice reference layout: white paper, logo, yellow billing header,
+   and right-aligned total/payment instructions. */
+.igo-ledger-paper-header{border:0;padding-bottom:4px;min-height:132px;align-items:start}
+.igo-ledger-paper-brand{display:block;text-align:left!important}
+.igo-ledger-paper-brand img{display:block;width:185px;max-width:100%;height:auto;mix-blend-mode:multiply}
+.igo-ledger-paper-company{display:grid!important;text-align:right!important;gap:7px;justify-items:end;line-height:1.45}
+.igo-ledger-paper-company>strong{font-size:27px!important;font-weight:500;letter-spacing:1px}
+.igo-ledger-paper-company small{color:#748075;font-size:11px;display:block}
+.igo-ledger-paper-company b{display:block;color:#5b645c}
+.igo-ledger-paper-meta{display:grid;grid-template-columns:1fr 1fr;border:0;gap:22px;margin:30px 0 34px;padding:0}
+.igo-ledger-paper-bill{display:grid;gap:8px;align-content:start;justify-items:start}
+.igo-ledger-paper-bill small{font-size:12px;color:#151515;font-weight:800;letter-spacing:0}
+.igo-ledger-paper-bill strong{font-size:14px;font-weight:500}
+.igo-ledger-paper-invoice-meta{display:grid;gap:7px;align-content:start}
+.igo-ledger-paper-invoice-meta>div{display:grid;grid-template-columns:1fr auto;gap:12px}
+.igo-ledger-paper-invoice-meta span{font-size:12px;color:#353c36}
+.igo-ledger-paper-invoice-meta strong{font-size:12px;font-weight:800;overflow-wrap:anywhere;text-align:right}
+.igo-ledger-method{margin-top:12px}
+.igo-ledger-print-sheet table.igo-ledger-paper-billing{width:100%;table-layout:auto;border-collapse:collapse;font-size:11px;margin:0}
+.igo-ledger-paper-billing thead th{background:#f3ff6c!important;color:#141414;font-size:10px;font-weight:850;letter-spacing:.02em;border:0!important;padding:13px 9px!important;white-space:nowrap}
+.igo-ledger-paper-billing tbody td{border-bottom:1px solid #e9ece8!important;padding:18px 9px!important;font-size:11px;vertical-align:top}
+.igo-ledger-paper-billing tbody td:not(:first-child){text-align:right;white-space:nowrap}
+.igo-ledger-paper-billing tbody td:first-child{width:36%}
+.igo-ledger-paper-billing tbody td:first-child strong{display:block;font-size:12px;font-weight:500}
+.igo-ledger-paper-billing tbody td:first-child small{display:block;color:#898f8a;margin-top:5px;font-size:10px;line-height:1.5}
+.igo-ledger-paper-total{margin:24px 0 30px auto;max-width:400px;width:min(100%,400px);font-size:12px}
+.igo-ledger-paper-total>div{align-items:baseline}
+.igo-ledger-paper-total>div span{font-weight:600}
+.igo-ledger-paper-bold-total{border-top:2px solid #eafa72!important;padding-top:12px!important;font-size:16px}
+.igo-ledger-paper-bold-total strong{font-size:20px;font-weight:500}
+.igo-ledger-paper-bank{border-top:1px solid #e3e8e4;margin-top:40px;padding-top:15px}
+.igo-ledger-paper-bank h3{font-size:12px;font-weight:800;margin:0 0 12px}
+.igo-ledger-paper-bank p{font-size:11px;margin:6px 0}
+.igo-ledger-paper-note{color:#818981;font-size:10px;margin:34px 0 14px}
+.igo-ledger-paper-footer{margin-top:46px;padding-top:11px;color:#9b9f9b;font-size:10px;font-weight:400}
+.igo-ledger-paper-breakdown{break-inside:auto;margin:20px 0}
+.igo-ledger-paper-breakdown h3,.igo-ledger-payment-heading{font-size:12px;margin:13px 0 6px}
+.igo-ledger-paper-breakdown table thead th,.igo-ledger-payment-history thead th{background:#f3ff6c!important}
+.igo-ledger-statement-table tbody td:first-child{width:auto}
+@media print{
+  .igo-ledger-paper-brand img{width:160px}
+  .igo-ledger-print-sheet table.igo-ledger-paper-billing{font-size:10px}
+  .igo-ledger-paper-billing thead th{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .igo-ledger-paper-breakdown table thead th,.igo-ledger-payment-history thead th{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+}

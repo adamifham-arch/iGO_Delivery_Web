@@ -5,12 +5,13 @@ import './PartnerAiQuickAsk.css';
 // Short examples rotate only while the input is empty and not focused.
 // These are suggestions, never automatic requests to the AI service.
 const suggestedQuestions = [
-  'How do I register a package?',
-  'Where can I track my packages?',
-  'How do I check my invoices?',
-  'How can I submit a payment?',
-  'What are the delivery rates?',
-  'Which areas does iGO cover?',
+  'I want to register a package…',
+  'I want to add multiple packages…',
+  'I want to register a boat delivery…',
+  'I want to check my unpaid invoices…',
+  'I want to review my pending deliveries…',
+  'I want help submitting my payment slip…',
+  'I want to check the delivery fee…',
 ];
 const randomSuggestion = () => Math.floor(Math.random() * suggestedQuestions.length);
 

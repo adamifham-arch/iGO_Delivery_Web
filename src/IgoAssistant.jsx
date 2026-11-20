@@ -77,6 +77,16 @@ export default function IgoAssistant() {
     };
   }, []);
 
+  // Keep other floating controls clear of the launcher. When the chat is
+  // expanded, hide Back to Top so it does not sit behind the chat panel.
+  useEffect(() => {
+    document.body.classList.toggle('igo-ai-visible', visible);
+    document.body.classList.toggle('igo-ai-open', visible && open);
+    return () => {
+      document.body.classList.remove('igo-ai-visible', 'igo-ai-open');
+    };
+  }, [visible, open]);
+
   // A shared browser must not expose one account's previous chat after logout/login.
   useEffect(() => {
     if (!supabase) return undefined;

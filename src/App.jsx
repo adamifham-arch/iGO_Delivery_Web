@@ -1,6 +1,7 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import './index.css';
 import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
+import PartnerInvoiceLedger from './PartnerInvoiceLedger';
 import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
 import { supabase, supabaseConfigured, setAuthRememberMe } from './supabase';
 import { StaffOperations } from './StaffOperations';
@@ -7375,6 +7376,13 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <p>Rates are set at registration.</p>
         {!liveMode && <div className="notice">Demo only. Payments and slips aren't saved.</div>}
 
+        <PartnerInvoiceLedger
+          invoices={partnerInvoices}
+          payments={billing.payments}
+          partnerCredits={billing.partnerCredits || {}}
+          workspace="Partner"
+          liveMode={liveMode}
+        />
         <section id="partner-invoice-payment-options" style={panel}>
           <h3>Invoices</h3>
           <p style={{ fontSize: 13, color: '#64748b', marginTop: 0 }}>Only delivered packages are invoiced.</p>
@@ -8139,7 +8147,15 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             </section>
           )}
         {!adminUser&&liveMode&&<form onSubmit={signInAdmin} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,alignItems:"end",marginBottom:12}}><label>Admin email<input type="email" autoComplete="username" required value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)}/></label><label>Admin password<input type="password" autoComplete="current-password" required value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)}/></label><button style={buttonStyle} type="submit" disabled={liveBusy}>{liveBusy?"Working…":"Sign in as admin"}</button></form>}{liveError&&<p role="alert" style={{color:"#8a2d2d"}}>{liveError}</p>}{liveMessage&&<p role="status">{liveMessage}</p>}</>}
-        {invoiceList(false)}
+        <PartnerInvoiceLedger
+          invoices={billing.invoices}
+          payments={billing.payments}
+          partnerCredits={billing.partnerCredits || {}}
+          workspace="Admin"
+          liveMode={liveMode}
+          canManageDueDates={isSuperadmin}
+          onDueDateChanged={() => refreshDatabaseFinance(true)}
+        />
         {workspace === 'Admin' && (
           <section id="invoice-extra-charges" style={{ ...panel, marginTop: 14 }}>
             <h3>Add extra invoice charge</h3>

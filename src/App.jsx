@@ -7380,6 +7380,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           invoices={partnerInvoices}
           payments={billing.payments}
           partnerCredits={billing.partnerCredits || {}}
+          accountName={billing.transferAccountName || ''}
+          accountNumber={billing.transferAccountNumber || ''}
           workspace="Partner"
           liveMode={liveMode}
         />
@@ -8151,6 +8153,8 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
           invoices={billing.invoices}
           payments={billing.payments}
           partnerCredits={billing.partnerCredits || {}}
+          accountName={billing.transferAccountName || ''}
+          accountNumber={billing.transferAccountNumber || ''}
           workspace="Admin"
           liveMode={liveMode}
           canManageDueDates={isSuperadmin}

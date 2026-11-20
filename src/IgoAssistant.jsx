@@ -31,6 +31,30 @@ export default function IgoAssistant() {
   const bottomRef = useRef(null);
   const submitted = useRef(false);
 
+  // A shared browser must not expose one account's previous chat after logout/login.
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let accountId = null;
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) accountId = data?.session?.user?.id || null;
+    }).catch(() => {});
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== 'SIGNED_IN' && event !== 'SIGNED_OUT') return;
+      const nextId = session?.user?.id || null;
+      if (accountId !== nextId) {
+        setMessages(emptyMessages);
+        setPendingPackages([]);
+        setLastCreated([]);
+        setError('');
+        setDraft('');
+        setWorkspace('Public');
+      }
+      accountId = nextId;
+    });
+    return () => { active = false; subscription.unsubscribe(); };
+  }, []);
+
   useEffect(() => {
     function sync() { setWorkspace(currentWorkspace()); }
     sync();

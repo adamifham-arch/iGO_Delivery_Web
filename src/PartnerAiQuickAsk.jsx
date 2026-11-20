@@ -61,35 +61,23 @@ export default function PartnerAiQuickAsk() {
   if (!enabled) return null;
 
   return (
-    <section className="partner-ai-quick-ask" aria-label="Ask iGO AI about your deliveries">
-      <div className="partner-ai-quick-ask-heading">
-        <div className="partner-ai-quick-ask-icon" aria-hidden="true">✦</div>
-        <div>
-          <h2>How can iGO AI help?</h2>
-          <p>Ask about a delivery, your invoices or registering a package.</p>
-        </div>
-      </div>
+    <section className="partner-ai-quick-ask" aria-label="Ask iGO AI">
       <form onSubmit={ask} className="partner-ai-quick-ask-form">
-        <label className="partner-ai-quick-ask-label" htmlFor="partner-ai-question">
-          Ask iGO AI
-        </label>
-        <div className="partner-ai-quick-ask-controls">
-          <input
-            id="partner-ai-question"
-            type="text"
-            autoComplete="off"
-            aria-label="What would you like to ask iGO AI?"
-            placeholder="What would you like help with?"
-            maxLength={1200}
-            value={question}
-            onChange={event => setQuestion(event.target.value)}
-          />
-          <button type="submit" disabled={checking || !question.trim()}>
-            {checking ? 'Opening…' : 'Ask iGO'}
-          </button>
-        </div>
+        <span className="partner-ai-quick-ask-icon" aria-hidden="true">✦</span>
+        <input
+          id="partner-ai-question"
+          type="text"
+          autoComplete="off"
+          aria-label="Ask iGO AI"
+          placeholder="Ask iGO anything…"
+          maxLength={1200}
+          value={question}
+          onChange={event => setQuestion(event.target.value)}
+        />
+        <button type="submit" disabled={checking || !question.trim()}>
+          {checking ? 'Opening…' : 'Ask iGO'}
+        </button>
       </form>
-      <p className="partner-ai-quick-ask-footnote">Your request will open in the iGO AI assistant for you to review and continue.</p>
     </section>
   );
 }

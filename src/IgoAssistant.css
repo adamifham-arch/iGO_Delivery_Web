@@ -28,3 +28,21 @@
 .igo-ai-success{margin:0;color:#14562b;background:#e7f8eb;border-radius:9px;padding:9px;font-size:12px}
 @media(max-width:480px){.igo-ai-container{right:12px;bottom:12px}.igo-ai-panel{bottom:62px;width:calc(100vw - 24px);height:min(640px,calc(100dvh - 92px))}}
 @media print{.igo-ai-container{display:none!important}}
+
+
+/* Place Back to Top above the chatbot launcher, with a touch-friendly gap.
+   When chat is open, prevent the page control from appearing under its panel.
+   When the bot is hidden by superadmin, the original bottom position returns. */
+body.igo-ai-visible .igo-back-to-top {
+  bottom: 94px !important;
+  right: 20px !important;
+}
+body.igo-ai-open .igo-back-to-top {
+  display: none !important;
+}
+@media (max-width: 480px) {
+  body.igo-ai-visible .igo-back-to-top {
+    bottom: 84px !important;
+    right: 12px !important;
+  }
+}

@@ -2965,6 +2965,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           )}
           {page === 'Overview' && (
             <>
+              {workspace === 'Partner' && <PartnerAiQuickAsk />}
 
               <div className="welcome-card">
                 <div>
@@ -2980,8 +2981,6 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   </button>
                 </div>
               </div>
-
-              {workspace === 'Partner' && <PartnerAiQuickAsk />}
 
               <div
                 className="stats-grid overview-summary"

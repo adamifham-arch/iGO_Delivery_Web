@@ -715,6 +715,8 @@ export default function App() {
   const [authNotice, setAuthNotice] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [invitePasswordSetupRequired, setInvitePasswordSetupRequired] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -1452,7 +1454,15 @@ export default function App() {
 
   const saveRecoveredPassword = async (event) => {
     event.preventDefault();
-    if (!supabase) return;
+    if (!supabase || loginBusy) return;
+    if (newPassword.length < 8) {
+      setDatabaseError('Use at least 8 characters for your new password.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setDatabaseError('The passwords do not match. Please enter the same password in both fields.');
+      return;
+    }
     setLoginBusy(true);
     setDatabaseError('');
     setAuthNotice('');
@@ -1460,6 +1470,9 @@ export default function App() {
     if (error) setDatabaseError(error.message);
     else {
       setNewPassword('');
+      setConfirmNewPassword('');
+      setShowNewPassword(false);
+      setShowConfirmNewPassword(false);
       setAuthNotice('Your password has been updated.');
       setAuthMode('signin');
     }
@@ -2515,7 +2528,64 @@ export default function App() {
   const viewedProfileType = activeLinkedProfile ? workspace.toLowerCase() : databaseProfile?.role || workspace + ' preview';
 
   if (supabaseConfigured && authMode === 'reset-password') {
-    return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Choose a new password</h1><p>Use at least 8 characters for your new password.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}{authNotice && <p className="notice" role="status">{authNotice}</p>}<form onSubmit={saveRecoveredPassword}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Saving…' : 'Save new password'}</button></form></section></main>;
+    return (
+      <main className="public-auth-page">
+        <section className="public-auth-card">
+          <p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p>
+          <h1>Choose a new password</h1>
+          <p>Use at least 8 characters for your new password.</p>
+          {databaseError && <p className="notice" role="alert">{databaseError}</p>}
+          {authNotice && <p className="notice" role="status">{authNotice}</p>}
+          <form onSubmit={saveRecoveredPassword}>
+            <div className="public-password-field">
+              <label htmlFor="recovery-new-password">New password</label>
+              <div className="public-password-control">
+                <input
+                  id="recovery-new-password"
+                  type={showNewPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  value={newPassword}
+                  onChange={event => setNewPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="public-password-toggle"
+                  aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                  aria-pressed={showNewPassword}
+                  onClick={() => setShowNewPassword(visible => !visible)}
+                >{showNewPassword ? 'Hide' : 'Show'}</button>
+              </div>
+            </div>
+            <div className="public-password-field">
+              <label htmlFor="recovery-confirm-password">Confirm new password</label>
+              <div className="public-password-control">
+                <input
+                  id="recovery-confirm-password"
+                  type={showConfirmNewPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  value={confirmNewPassword}
+                  onChange={event => setConfirmNewPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="public-password-toggle"
+                  aria-label={showConfirmNewPassword ? 'Hide confirmation password' : 'Show confirmation password'}
+                  aria-pressed={showConfirmNewPassword}
+                  onClick={() => setShowConfirmNewPassword(visible => !visible)}
+                >{showConfirmNewPassword ? 'Hide' : 'Show'}</button>
+              </div>
+            </div>
+            <button className="primary-btn" type="submit" disabled={loginBusy}>
+              {loginBusy ? 'Saving…' : 'Save new password'}
+            </button>
+          </form>
+        </section>
+      </main>
+    );
   }
 
   if (supabaseConfigured && (databaseLoading || !databaseProfile)) {
@@ -2569,7 +2639,49 @@ export default function App() {
       );
     }
 
-if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { return <main className="public-auth-page"><section className="public-auth-card"><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Set up your password</h1><p>Your account is ready. Choose a password to enter your workspace.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}<form onSubmit={completeInvitedPasswordSetup}><label>New password<input type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>Confirm password<input type="password" autoComplete="new-password" minLength={8} required value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Setting up…' : 'Set password and continue'}</button></form></section></main>; }
+    if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) {
+      return (
+        <main className="public-auth-page">
+          <section className="public-auth-card">
+            <p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p>
+            <h1>Set up your password</h1>
+            <p>Your account is ready. Choose a password to enter your workspace.</p>
+            {databaseError && <p className="notice" role="alert">{databaseError}</p>}
+            <form onSubmit={completeInvitedPasswordSetup}>
+              <div className="public-password-field">
+                <label htmlFor="invite-new-password">New password</label>
+                <div className="public-password-control">
+                  <input id="invite-new-password" type={showNewPassword ? 'text' : 'password'}
+                    autoComplete="new-password" minLength={8} required value={newPassword}
+                    onChange={event => setNewPassword(event.target.value)} />
+                  <button type="button" className="public-password-toggle"
+                    aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                    aria-pressed={showNewPassword}
+                    onClick={() => setShowNewPassword(visible => !visible)}
+                  >{showNewPassword ? 'Hide' : 'Show'}</button>
+                </div>
+              </div>
+              <div className="public-password-field">
+                <label htmlFor="invite-confirm-password">Confirm password</label>
+                <div className="public-password-control">
+                  <input id="invite-confirm-password" type={showConfirmNewPassword ? 'text' : 'password'}
+                    autoComplete="new-password" minLength={8} required value={confirmNewPassword}
+                    onChange={event => setConfirmNewPassword(event.target.value)} />
+                  <button type="button" className="public-password-toggle"
+                    aria-label={showConfirmNewPassword ? 'Hide confirmation password' : 'Show confirmation password'}
+                    aria-pressed={showConfirmNewPassword}
+                    onClick={() => setShowConfirmNewPassword(visible => !visible)}
+                  >{showConfirmNewPassword ? 'Hide' : 'Show'}</button>
+                </div>
+              </div>
+              <button className="primary-btn" type="submit" disabled={loginBusy}>
+                {loginBusy ? 'Setting up…' : 'Set password and continue'}
+              </button>
+            </form>
+          </section>
+        </main>
+      );
+    }
 
   if (authMode === 'forgot-password') {
       return <main className="public-auth-page"><section className="public-auth-card"><button className="public-back-link" type="button" onClick={() => { setDatabaseError(''); setAuthNotice(''); navigateAuthMode('signin'); }}>← Back to sign in</button><p className="approval-kicker">iGO DELIVERY · ACCOUNT ACCESS</p><h1>Reset your password</h1><p>Enter the email address on your iGO account and we’ll send a reset link.</p>{databaseError && <p className="notice" role="alert">{databaseError}</p>}{authNotice && <p className="notice" role="status">{authNotice}</p>}<form onSubmit={requestPasswordReset}><label>Email<input type="email" autoComplete="email" required value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} /></label><button className="primary-btn" type="submit" disabled={loginBusy}>{loginBusy ? 'Sending link…' : 'Send reset link'}</button></form></section></main>;

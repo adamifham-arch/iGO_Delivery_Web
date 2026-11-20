@@ -3887,6 +3887,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           aria-label="Go to top"
+          className="igo-back-to-top"
           title="Go to top"
           style={{
             position: 'fixed',

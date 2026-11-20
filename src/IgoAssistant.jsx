@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from './supabase';
-import { createPackages, getCurrentPartnerId } from './igoDatabase';
+import { createPackages, getCurrentPartnerId, loadAiAssistantVisibility } from './igoDatabase';
 import './IgoAssistant.css';
 
 const areas = ['Malé', 'Hulhumalé Phase 1', 'Hulhumalé Phase 2', 'Boat'];
@@ -19,6 +19,7 @@ function currentWorkspace() {
 }
 
 export default function IgoAssistant() {
+  const [visible, setVisible] = useState(false);
   const [open, setOpen] = useState(false);
   const [workspace, setWorkspace] = useState('Public');
   const [messages, setMessages] = useState(emptyMessages);
@@ -30,6 +31,51 @@ export default function IgoAssistant() {
   const [lastCreated, setLastCreated] = useState([]);
   const bottomRef = useRef(null);
   const submitted = useRef(false);
+
+  // Load the superadmin setting before showing the launcher, and refresh it so
+  // a change takes effect across other active workspaces/tabs without a reload.
+  useEffect(() => {
+    let active = true;
+    const hideAssistant = () => {
+      setVisible(false);
+      setOpen(false);
+      setPendingPackages([]);
+      setLastCreated([]);
+      setDraft('');
+    };
+    async function refreshVisibility() {
+      try {
+        const enabled = await loadAiAssistantVisibility();
+        if (!active) return;
+        if (enabled) setVisible(true);
+        else hideAssistant();
+      } catch {
+        // If the setting cannot be verified, don't expose the assistant.
+        if (active) hideAssistant();
+      }
+    }
+    void refreshVisibility();
+    const timer = window.setInterval(refreshVisibility, 30000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void refreshVisibility();
+    };
+    const onStorage = event => {
+      if (event.key === 'igo-ai-visibility-refresh') void refreshVisibility();
+    };
+    const onSettingChanged = () => { void refreshVisibility(); };
+    window.addEventListener('focus', refreshVisibility);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('igo-ai-visibility-changed', onSettingChanged);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshVisibility);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('igo-ai-visibility-changed', onSettingChanged);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
 
   // A shared browser must not expose one account's previous chat after logout/login.
   useEffect(() => {
@@ -146,6 +192,13 @@ export default function IgoAssistant() {
     });
     setSaving(true);
     try {
+      // A draft left open before a superadmin hides AI must not be submitted.
+      if (!(await loadAiAssistantVisibility())) {
+        setVisible(false);
+        setOpen(false);
+        setPendingPackages([]);
+        throw new Error('The AI assistant has been disabled by iGO.');
+      }
       const partnerId = await getCurrentPartnerId();
       if (!partnerId) throw new Error('Sign in to an approved partner account.');
       const saved = await createPackages(entries, partnerId);
@@ -164,6 +217,8 @@ export default function IgoAssistant() {
     try { void confirmPackages().catch(e => setError(e.message || 'Invalid package details.')); }
     catch (e) { setError(e.message || 'Invalid package details.'); }
   }
+
+  if (!visible) return null;
 
   return (
     <div className="igo-ai-container">

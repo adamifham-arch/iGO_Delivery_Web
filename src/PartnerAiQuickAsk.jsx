@@ -2,10 +2,36 @@ import { useEffect, useState } from 'react';
 import { loadAiAssistantVisibility } from './igoDatabase';
 import './PartnerAiQuickAsk.css';
 
+// Short examples rotate only while the input is empty and not focused.
+// These are suggestions, never automatic requests to the AI service.
+const suggestedQuestions = [
+  'How do I register a package?',
+  'Where can I track my packages?',
+  'How do I check my invoices?',
+  'How can I submit a payment?',
+  'What are the delivery rates?',
+  'Which areas does iGO cover?',
+];
+const randomSuggestion = () => Math.floor(Math.random() * suggestedQuestions.length);
+
 export default function PartnerAiQuickAsk() {
   const [enabled, setEnabled] = useState(false);
   const [question, setQuestion] = useState('');
   const [checking, setChecking] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState(randomSuggestion);
+
+  // Change the example approximately every seven seconds without interrupting typing.
+  useEffect(() => {
+    if (focused || question.trim()) return undefined;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      setSuggestionIndex(previous =>
+        (previous + 1 + Math.floor(Math.random() * (suggestedQuestions.length - 1))) % suggestedQuestions.length
+      );
+    }, 7000);
+    return () => window.clearInterval(timer);
+  }, [focused, question]);
 
   // Use the same site-wide superadmin switch as the floating assistant.
   useEffect(() => {
@@ -69,7 +95,9 @@ export default function PartnerAiQuickAsk() {
           type="text"
           autoComplete="off"
           aria-label="Ask iGO AI"
-          placeholder="What would you like help with?"
+          placeholder={suggestedQuestions[suggestionIndex]}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           maxLength={1200}
           value={question}
           onChange={event => setQuestion(event.target.value)}

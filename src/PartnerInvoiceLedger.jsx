@@ -35,80 +35,120 @@ const amountApplied = (p, invoice) => {
   return items.length ? items.reduce((s, a) => s + numeric(a.amount), 0) : null;
 };
 
-function PrintableContent({ kind, partnerName, invoices, payments, credit }) {
+function PrintableContent({ kind, partnerName, invoices, payments, credit, accountName, accountNumber }) {
   const unpaid = invoices.filter(i => !isVoid(i) && balance(i) > 0);
   const shown = kind === 'invoice' ? invoices : unpaid;
-  const totalInvoiced = shown.reduce((a, x) => a + numeric(x.amount), 0);
-  const totalPaid = shown.reduce((a, x) => a + numeric(x.paidAmount), 0);
-  const totalBalance = shown.reduce((a, x) => a + balance(x), 0);
-  const printDate = dateLabel(nowMaldivesDate());
+  const sum = (field) => shown.reduce((total, item) => total + numeric(field(item)), 0);
+  const totalInvoice = sum(i => i.amount);
+  const totalPaid = sum(i => i.paidAmount);
+  const totalDue = sum(i => balance(i));
   const single = kind === 'invoice' ? shown[0] : null;
   return (
     <article className="igo-ledger-print-sheet">
       <header className="igo-ledger-paper-header">
-        <div className="igo-ledger-paper-brand"><strong>i<span>GO</span></strong><small>YOU ORDER. I GO.</small></div>
-        <div><strong>{kind === 'invoice' ? 'DELIVERY INVOICE' : 'OUTSTANDING STATEMENT'}</strong><small>{single?.id || 'Partner account statement'}</small></div>
+        <div className="igo-ledger-paper-brand">
+          <img src="/igo-logo.jpg" alt="iGO - You order. I go." />
+        </div>
+        <div className="igo-ledger-paper-company">
+          <strong>{kind === 'invoice' ? 'INVOICE' : 'STATEMENT'}</strong>
+          <small><b>iGO MV</b> Nikagas Magu<br />Malé · Maldives</small>
+          <small><b>iGO MV</b><br />7654999<br />admin@igomv.com<br />www.igomv.com</small>
+        </div>
       </header>
       <section className="igo-ledger-paper-meta">
-        <div><small>ISSUED TO</small><strong>{partnerName || 'iGO partner'}</strong></div>
-        <div><small>{kind === 'invoice' ? 'INVOICE DATE' : 'STATEMENT DATE'}</small><strong>{dateLabel(single?.createdAt || nowMaldivesDate())}</strong></div>
-        <div><small>PAYMENT DUE</small><strong>{kind === 'invoice' ? dateLabel(single?.dueDate) : 'As per individual invoices'}</strong></div>
+        <div className="igo-ledger-paper-bill">
+          <small>BILL TO</small>
+          <strong>{partnerName || 'iGO partner'}</strong>
+        </div>
+        <div className="igo-ledger-paper-invoice-meta">
+          <div><span>{kind === 'invoice' ? 'Invoice No.:' : 'Statement:'}</span><strong>{single?.id || 'Outstanding balances'}</strong></div>
+          <div><span>{kind === 'invoice' ? 'Issue date:' : 'Statement date:'}</span><strong>{dateLabel(single?.createdAt || nowMaldivesDate())}</strong></div>
+          <div><span>Due date:</span><strong>{kind === 'invoice' ? dateLabel(single?.dueDate) : 'See each invoice'}</strong></div>
+          <div className="igo-ledger-method"><span>Payment method:</span><strong>Transfer</strong></div>
+        </div>
       </section>
-      <h3>{kind === 'invoice' ? 'Delivery details' : 'Unpaid invoice breakdown'}</h3>
-      {shown.length === 0 && <p>No unpaid invoices are recorded for this partner.</p>}
-      {shown.map(i => (
-        <section className="igo-ledger-paper-invoice" key={i.id}>
-          <div className="igo-ledger-paper-invoice-head">
-            <strong>{i.id}</strong>
-            <span>{dateLabel(i.createdAt)} · {balanceStatus(i)} · Due: {dateLabel(i.dueDate)}</span>
-          </div>
-          <table>
-            <thead><tr><th>Delivery / item</th><th>Recipient</th><th>Description</th><th className="igo-numeric">Amount (MVR)</th></tr></thead>
+      {kind === 'invoice' && single ? (
+        <>
+          <table className="igo-ledger-paper-billing">
+            <thead><tr><th>DESCRIPTION</th><th>QUANTITY</th><th>UNIT PRICE (MVR)</th><th>DISCOUNT %</th><th>AMOUNT (MVR)</th></tr></thead>
             <tbody>
-              {(i.lines || []).map((l, k) => (
+              {(single.lines || []).map((l, k) => (
                 <tr key={l.id || l.packageId || k}>
-                  <td>{l.kind === 'charge' ? 'Extra charge' : (l.packageId || 'Delivery')}</td>
-                  <td>{l.customer || '—'}</td>
-                  <td>{l.description || l.area || 'Delivery service'}</td>
-                  <td className="igo-numeric">{money(l.amount).replace('MVR ', '')}</td>
+                  <td>
+                    <strong>{l.kind === 'charge' ? 'Additional service charge' : 'Delivery service'}</strong>
+                    <small>{[l.packageId, l.customer, l.area, l.description].filter(Boolean).join(' · ')}</small>
+                  </td>
+                  <td>1 {l.kind === 'charge' ? 'job' : 'pkg'}</td>
+                  <td>{money(l.amount).replace('MVR ', '')}</td>
+                  <td>0.00</td>
+                  <td>{money(l.amount).replace('MVR ', '')}</td>
                 </tr>
               ))}
-              {(!i.lines || i.lines.length === 0) && <tr><td colSpan="4">Invoice line items are not available.</td></tr>}
+              {!single.lines?.length && <tr><td colSpan="5">No itemized deliveries recorded.</td></tr>}
             </tbody>
           </table>
-          <div className="igo-ledger-paper-figures">
-            <span>Invoiced: <strong>{money(i.amount)}</strong></span>
-            <span>Paid: <strong>{money(i.paidAmount)}</strong></span>
-            <span>Outstanding: <strong>{money(balance(i))}</strong></span>
+          <div className="igo-ledger-paper-total">
+            <div><span>TOTAL (MVR):</span><strong>{money(totalInvoice).replace('MVR ', '')}</strong></div>
+            <div className="igo-ledger-paper-bold-total"><span>INVOICE TOTAL (MVR)</span><strong>{money(totalInvoice).replace('MVR ', '')}</strong></div>
+            {totalPaid > 0 && <div><span>CONFIRMED PAID (MVR)</span><strong>{money(totalPaid).replace('MVR ', '')}</strong></div>}
+            <div><span>BALANCE DUE (MVR)</span><strong>{money(totalDue).replace('MVR ', '')}</strong></div>
           </div>
-        </section>
-      ))}
-      <section className="igo-ledger-paper-total">
-        <div><span>Total invoiced</span><strong>{money(totalInvoiced)}</strong></div>
-        <div><span>Already settled</span><strong>{money(totalPaid)}</strong></div>
-        <div className="igo-ledger-total-emphasis"><span>{kind === 'invoice' ? 'Balance due' : 'Total outstanding'}</span><strong>{money(totalBalance)}</strong></div>
-        {kind === 'statement' && credit > 0 && <div><span>Available partner credit (separate)</span><strong>{money(credit)}</strong></div>}
-      </section>
-      {kind === 'statement' && (
+        </>
+      ) : (
         <>
-          <h3>Confirmed payment history</h3>
-          <table>
-            <thead><tr><th>Verified date</th><th>Reference</th><th className="igo-numeric">Received (MVR)</th></tr></thead>
+          <table className="igo-ledger-paper-billing igo-ledger-statement-table">
+            <thead><tr><th>INVOICE</th><th>ISSUE DATE</th><th>TOTAL (MVR)</th><th>PAID (MVR)</th><th>UNPAID (MVR)</th></tr></thead>
+            <tbody>
+              {unpaid.map(i => (
+                <tr key={i.id}>
+                  <td><strong>{i.id}</strong><small>Due: {dateLabel(i.dueDate)} · {balanceStatus(i)}</small></td>
+                  <td>{dateLabel(i.createdAt)}</td>
+                  <td>{money(i.amount).replace('MVR ', '')}</td>
+                  <td>{money(i.paidAmount).replace('MVR ', '')}</td>
+                  <td><strong>{money(balance(i)).replace('MVR ', '')}</strong></td>
+                </tr>
+              ))}
+              {!unpaid.length && <tr><td colSpan="5">No outstanding invoices recorded.</td></tr>}
+            </tbody>
+          </table>
+          <div className="igo-ledger-paper-total">
+            <div><span>INVOICED (MVR)</span><strong>{money(totalInvoice).replace('MVR ', '')}</strong></div>
+            <div><span>ALREADY PAID (MVR)</span><strong>{money(totalPaid).replace('MVR ', '')}</strong></div>
+            <div className="igo-ledger-paper-bold-total"><span>TOTAL OUTSTANDING (MVR)</span><strong>{money(totalDue).replace('MVR ', '')}</strong></div>
+            {credit > 0 && <div><span>UNAPPLIED CREDIT (MVR)</span><strong>{money(credit).replace('MVR ', '')}</strong></div>}
+          </div>
+          {unpaid.map(i => (
+            <section className="igo-ledger-paper-breakdown" key={i.id}>
+              <h3>{i.id} · {balanceStatus(i)} · Due {dateLabel(i.dueDate)}</h3>
+              <table><thead><tr><th>PACKAGE / CHARGE</th><th>RECIPIENT</th><th>DETAILS</th><th className="igo-numeric">MVR</th></tr></thead>
+                <tbody>{(i.lines || []).map((l, k) => <tr key={l.id || l.packageId || k}>
+                  <td>{l.kind === 'charge' ? 'Extra charge' : (l.packageId || 'Delivery')}</td><td>{l.customer || '—'}</td><td>{l.description || l.area || '—'}</td><td className="igo-numeric">{money(l.amount).replace('MVR ', '')}</td>
+                </tr>)}
+                {!i.lines?.length && <tr><td colSpan="4">No line details recorded.</td></tr>}
+                </tbody>
+              </table>
+            </section>
+          ))}
+          <h3 className="igo-ledger-payment-heading">CONFIRMED PAYMENT HISTORY</h3>
+          <table className="igo-ledger-payment-history">
+            <thead><tr><th>VERIFIED</th><th>TRANSFER REFERENCE</th><th className="igo-numeric">AMOUNT (MVR)</th></tr></thead>
             <tbody>
               {payments.filter(p => p.status === 'confirmed').map(p => (
-                <tr key={p.id}>
-                  <td>{dateLabel(paymentDate(p))}</td><td>{p.reference || '—'}</td><td className="igo-numeric">{money(p.verifiedAmount || p.amount).replace('MVR ', '')}</td>
-                </tr>
+                <tr key={p.id}><td>{dateLabel(paymentDate(p))}</td><td>{p.reference || '—'}</td><td className="igo-numeric">{money(p.verifiedAmount || p.amount).replace('MVR ', '')}</td></tr>
               ))}
               {!payments.some(p => p.status === 'confirmed') && <tr><td colSpan="3">No confirmed payments recorded.</td></tr>}
             </tbody>
           </table>
         </>
       )}
-      <footer className="igo-ledger-paper-footer">
-        <strong>iGO DELIVERY</strong>
-        <span>This statement reflects recorded invoices and confirmed payments only. Transfers awaiting verification do not reduce amounts due.</span>
-      </footer>
+      <section className="igo-ledger-paper-bank">
+        <h3>BANK TRANSFER DETAILS</h3>
+        {accountName && accountNumber
+          ? <><p>Account name:　<strong>{accountName}</strong></p><p>Account no.:　<strong>{accountNumber}</strong></p></>
+          : <p>Contact iGO Delivery for bank transfer details.</p>}
+      </section>
+      <p className="igo-ledger-paper-note">Payments are credited only after confirmation. Any amount awaiting verification remains outstanding.</p>
+      <footer className="igo-ledger-paper-footer">Thank you for choosing iGO MV. You order. I go.</footer>
     </article>
   );
 }
@@ -181,7 +221,7 @@ function InvoiceDetail({ invoice, payments, isAdmin, canManageDueDates, liveMode
   );
 }
 
-export default function PartnerInvoiceLedger({ invoices = [], payments = [], partnerCredits = {}, workspace = 'Admin', liveMode = false, canManageDueDates = false, onDueDateChanged }) {
+export default function PartnerInvoiceLedger({ invoices = [], payments = [], partnerCredits = {}, accountName = '', accountNumber = '', workspace = 'Admin', liveMode = false, canManageDueDates = false, onDueDateChanged }) {
   const isAdmin = workspace === 'Admin';
   const [partners, setPartners] = useState([]);
   const [selectedPartner, setSelectedPartner] = useState('all');
@@ -255,9 +295,9 @@ export default function PartnerInvoiceLedger({ invoices = [], payments = [], par
   const exportStatement = () => {
     if (isAdmin && selectedPartner === 'all') { setLoadError('Choose a partner to download their statement.'); return; }
     setLoadError('');
-    setPrintDoc({ kind: 'statement', partnerName, invoices: filteredInvoices, payments: visiblePayments, credit });
+    setPrintDoc({ kind: 'statement', partnerName, invoices: filteredInvoices, payments: visiblePayments, credit, accountName, accountNumber });
   };
-  const exportInvoice = (invoice) => setPrintDoc({ kind: 'invoice', partnerName: invoice.partner || partnerName, invoices: [invoice], payments: visiblePayments, credit: 0 });
+  const exportInvoice = (invoice) => setPrintDoc({ kind: 'invoice', partnerName: invoice.partner || partnerName, invoices: [invoice], payments: visiblePayments, credit: 0, accountName, accountNumber });
 
   return (
     <section className="igo-ledger" aria-label={isAdmin ? 'Partner invoice balances and collections' : 'Your invoice balances and statement'}>

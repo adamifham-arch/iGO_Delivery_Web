@@ -789,6 +789,39 @@ export async function saveRiderCardVisibility(visible) {
   if (error) throw error;
 }
 
+/**
+ * Global superadmin-controlled AI visibility. Missing setting means enabled, preserving
+ * the current preview behavior. Read failures are surfaced so callers can fail closed.
+ */
+export async function loadAiAssistantVisibility() {
+  const { data, error } = await requireClient()
+    .from('public_site_settings')
+    .select('value')
+    .eq('key', 'show_ai_assistant')
+    .maybeSingle();
+  if (error) throw error;
+  return data ? data.value === true : true;
+}
+
+export async function saveAiAssistantVisibility(visible) {
+  const client = requireClient();
+  const { data: allowed, error: roleError } = await client.rpc('is_igo_superadmin');
+  if (roleError) throw roleError;
+  if (allowed !== true) throw new Error('Only the superadmin can change AI assistant visibility.');
+  const { data: userData, error: userError } = await client.auth.getUser();
+  if (userError || !userData.user) throw userError || new Error('Sign in first.');
+  const { error } = await client.from('public_site_settings').upsert({
+    key: 'show_ai_assistant',
+    value: Boolean(visible),
+    updated_at: new Date().toISOString(),
+    updated_by: userData.user.id,
+  }, { onConflict: 'key' });
+  if (error) throw error;
+  // Tell the assistant immediately in this tab; trigger refresh in other tabs.
+  window.dispatchEvent(new CustomEvent('igo-ai-visibility-changed', { detail: { visible: Boolean(visible) } }));
+  try { localStorage.setItem('igo-ai-visibility-refresh', String(Date.now())); } catch {}
+}
+
 const landingSlideBucket = 'landing-page-slides';
 const landingSlideFields = 'id,image_path,alt_text,caption,display_order,is_visible,created_at,updated_at';
 

@@ -32,6 +32,18 @@ async function rpc(name, token) {
   return supabaseRequest('/rest/v1/rpc/' + name, token, { method: 'POST', body: {} });
 }
 
+async function isAiAssistantEnabled() {
+  // Read the same public setting used by the website, using only the Supabase
+  // publishable key. Unset means visible to preserve existing behavior.
+  const publicKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!publicKey) throw new Error('Missing Supabase publishable key.');
+  const settings = await supabaseRequest(
+    '/rest/v1/public_site_settings?select=value&key=eq.show_ai_assistant&limit=1',
+    publicKey
+  );
+  return !settings?.length || settings[0].value === true;
+}
+
 async function getContext(authorization, requestedWorkspace) {
   const token = /^Bearer (.+)$/i.exec(String(authorization || ''))?.[1];
   if (!token) return { role: 'public', workspace: 'Public', token: null, filter: '' };
@@ -131,6 +143,10 @@ export default async function handler(req, res) {
   }
   try {
     if (Number(req.headers['content-length'] || 0) > 25000) return json(res, 413, { error: 'Message too long.' });
+    // Always enforce the setting on the server, even if a browser has an old tab open.
+    if (!(await isAiAssistantEnabled())) {
+      return json(res, 403, { error: 'The iGO AI assistant is currently switched off.' });
+    }
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
     const message = typeof body.message === 'string' ? body.message.trim() : '';
     if (!message || message.length > MAX_MESSAGE) return json(res, 400, { error: 'Enter a message up to 1,200 characters.' });

@@ -98,7 +98,7 @@
 }
 @media print{
   @page{size:A4;margin:13mm}
-  body>*:not(#igo-statement-print-root){display:none!important}
+  body:has(#igo-statement-print-root)>*:not(#igo-statement-print-root){display:none!important}
   body{margin:0!important;background:#fff!important;overflow:visible!important}
   #igo-statement-print-root{position:static!important;display:block!important;overflow:visible!important;padding:0!important;background:#fff!important;inset:auto!important;width:100%!important;box-shadow:none!important}
   #igo-statement-print-root .igo-ledger-print-actions{display:none!important}

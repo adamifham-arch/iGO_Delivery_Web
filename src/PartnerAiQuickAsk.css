@@ -1,0 +1,43 @@
+.partner-ai-quick-ask{
+  margin:16px 0 22px;
+  padding:18px;
+  background:#fffef3;
+  border:1px solid #efe5a5;
+  border-radius:16px;
+  box-shadow:0 3px 10px rgba(26,31,26,.035);
+}
+.partner-ai-quick-ask-heading{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.partner-ai-quick-ask-icon{
+  flex:none;display:grid;place-items:center;
+  background:#facc15;color:#131911;font-weight:800;
+  border-radius:13px;width:42px;height:42px;font-size:22px;
+}
+.partner-ai-quick-ask-heading h2{margin:0 0 4px;font-size:17px;line-height:1.3;color:#19251b}
+.partner-ai-quick-ask-heading p{margin:0;color:#637069;font-size:13px;line-height:1.45}
+.partner-ai-quick-ask-form{display:grid;gap:7px;margin:0}
+.partner-ai-quick-ask-label{font-size:12px;color:#35453a;font-weight:750}
+.partner-ai-quick-ask-controls{display:flex;align-items:stretch;gap:9px}
+.partner-ai-quick-ask-controls input{
+  flex:1;min-width:0;min-height:47px;box-sizing:border-box;
+  background:#fff;border:1px solid #d6dcd4;border-radius:10px;
+  padding:12px 14px;color:#19251b;font-size:14px;
+}
+.partner-ai-quick-ask-controls input:focus-visible{outline:2px solid #987d06;outline-offset:1px}
+.partner-ai-quick-ask-controls button{
+  flex:none;min-height:47px;border:0;border-radius:10px;
+  background:#facc15;color:#161b15;padding:0 19px;
+  font-size:13px;font-weight:800;cursor:pointer;
+}
+.partner-ai-quick-ask-controls button:disabled{opacity:.55;cursor:not-allowed}
+.partner-ai-quick-ask-footnote{margin:10px 0 0;color:#798175;font-size:11px;line-height:1.5}
+@media(max-width:480px){
+  .partner-ai-quick-ask{padding:14px}
+  .partner-ai-quick-ask-controls{gap:7px}
+  .partner-ai-quick-ask-controls button{padding:0 12px}
+}
+.app[data-theme="night"] .partner-ai-quick-ask{background:#24271a;border-color:#54502d}
+.app[data-theme="night"] .partner-ai-quick-ask-heading h2,
+.app[data-theme="night"] .partner-ai-quick-ask-label{color:#f1f4e9}
+.app[data-theme="night"] .partner-ai-quick-ask-heading p,
+.app[data-theme="night"] .partner-ai-quick-ask-footnote{color:#bfc5b7}
+.app[data-theme="night"] .partner-ai-quick-ask-controls input{background:#1a241c;color:#f1f4e9;border-color:#596555}

@@ -49,6 +49,8 @@ import {
   updatePackage,
   loadRiderCardVisibility,
   saveRiderCardVisibility,
+  loadAiAssistantVisibility,
+  saveAiAssistantVisibility,
   loadLandingSlideshowVisibility,
   loadLandingHeroCopy,
   saveLandingHeroCopy,
@@ -674,6 +676,7 @@ export default function App() {
   const [databaseError, setDatabaseError] = useState('');
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [showRiderCard, setShowRiderCard] = useState(false);
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [showSlideshowCard, setShowSlideshowCard] = useState(false);
   const [heroTitle, setHeroTitle] = useState('Focus on your business. We’ll handle the deliveries.');
   const [heroSubtitle, setHeroSubtitle] = useState('Best rates. Fast delivery.');
@@ -682,6 +685,8 @@ export default function App() {
   const [slideshowTransition, setSlideshowTransition] = useState('fade');
   const [riderCardSaving, setRiderCardSaving] = useState(Boolean(supabaseConfigured));
   const [riderCardFeedback, setRiderCardFeedback] = useState('');
+  const [aiAssistantSaving, setAiAssistantSaving] = useState(Boolean(supabaseConfigured));
+  const [aiAssistantFeedback, setAiAssistantFeedback] = useState('');
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
   const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
   const getCurrentDeliveryFee = (destination, packageSize = '') => getPartnerDeliveryFee(destination, partnerDeliveryPricing, packageSize);
@@ -722,6 +727,20 @@ export default function App() {
       .then((visible) => { if (active) setShowRiderCard(visible); })
       .catch((error) => { if (active) setRiderCardFeedback(`Rider card setting unavailable: ${error.message}`); })
       .finally(() => { if (active) setRiderCardSaving(false); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    if (!supabaseConfigured) {
+      setAiAssistantSaving(false);
+      return () => { active = false; };
+    }
+    loadAiAssistantVisibility()
+      .then(visible => { if (active) setShowAiAssistant(visible); })
+      .catch(error => {
+        if (active) setAiAssistantFeedback('AI assistant setting unavailable: ' + error.message);
+      })
+      .finally(() => { if (active) setAiAssistantSaving(false); });
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -3089,6 +3108,37 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
                   Show rider card
                 </label>
                 {riderCardFeedback && <p role="status" style={{ margin: 0 }}>{riderCardFeedback}</p>}
+              </section>
+              <section className="card" style={{ padding: 20, display: 'grid', gap: 12 }}>
+                <div>
+                  <p className="eyebrow">AI ASSISTANT</p>
+                  <h2 style={{ margin: '4px 0 6px' }}>AI bot visibility</h2>
+                  <p style={{ margin: 0, color: '#748094' }}>
+                    Show or hide the Ask iGO assistant for everyone, including public visitors,
+                    partners, drivers and admins. When hidden, chat requests are also disabled.
+                    Your existing delivery features continue working normally.
+                  </p>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
+                  <input type="checkbox" checked={showAiAssistant} disabled={aiAssistantSaving} onChange={async event => {
+                    const visible = event.target.checked;
+                    setAiAssistantSaving(true);
+                    setAiAssistantFeedback('');
+                    try {
+                      await saveAiAssistantVisibility(visible);
+                      setShowAiAssistant(visible);
+                      setAiAssistantFeedback(visible
+                        ? 'AI assistant is visible on the website and workspaces.'
+                        : 'AI assistant is hidden and new AI requests are disabled.');
+                    } catch (error) {
+                      setAiAssistantFeedback(error.message || 'Could not update AI assistant visibility.');
+                    } finally {
+                      setAiAssistantSaving(false);
+                    }
+                  }} />
+                  Show AI assistant on iGO
+                </label>
+                {aiAssistantFeedback && <p role="status" style={{ margin: 0 }}>{aiAssistantFeedback}</p>}
               </section>
             </div>
           )}

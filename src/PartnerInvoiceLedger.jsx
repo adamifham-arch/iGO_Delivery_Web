@@ -130,7 +130,7 @@ function PrintModal({ doc, close }) {
   );
 }
 
-function InvoiceDetail({ invoice, payments, isAdmin, liveMode, onDueDateChanged, openPrint }) {
+function InvoiceDetail({ invoice, payments, isAdmin, canManageDueDates, liveMode, onDueDateChanged, openPrint }) {
   const [date, setDate] = useState(invoice.dueDate || '');
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
@@ -170,7 +170,7 @@ function InvoiceDetail({ invoice, payments, isAdmin, liveMode, onDueDateChanged,
           {associated.map(p => <tr key={p.id}><td>{dateLabel(paymentDate(p))}</td><td>{p.reference || '—'}</td><td>{amountApplied(p, invoice) == null ? 'Allocation not listed' : money(amountApplied(p, invoice))}</td></tr>)}
           {!associated.length && <tr><td colSpan="3">No confirmed payment linked to this invoice.</td></tr>}
         </tbody></table></div>
-        {isAdmin && liveMode && <div className="igo-ledger-due-edit">
+        {isAdmin && canManageDueDates && liveMode && <div className="igo-ledger-due-edit">
           <label>Payment due date <input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
           <button type="button" disabled={saving || date === (invoice.dueDate || '')} onClick={saveDate}>{saving ? 'Saving…' : 'Save due date'}</button>
           {notice && <small role="status">{notice}</small>}
@@ -181,7 +181,7 @@ function InvoiceDetail({ invoice, payments, isAdmin, liveMode, onDueDateChanged,
   );
 }
 
-export default function PartnerInvoiceLedger({ invoices = [], payments = [], partnerCredits = {}, workspace = 'Admin', liveMode = false, onDueDateChanged }) {
+export default function PartnerInvoiceLedger({ invoices = [], payments = [], partnerCredits = {}, workspace = 'Admin', liveMode = false, canManageDueDates = false, onDueDateChanged }) {
   const isAdmin = workspace === 'Admin';
   const [partners, setPartners] = useState([]);
   const [selectedPartner, setSelectedPartner] = useState('all');
@@ -247,7 +247,8 @@ export default function PartnerInvoiceLedger({ invoices = [], payments = [], par
     if (filter === 'partial' && !(numeric(i.paidAmount) > 0 && balance(i) > 0)) return false;
     if (filter === 'unpaid' && !(numeric(i.paidAmount) === 0 && balance(i) > 0)) return false;
     const term = search.trim().toLowerCase();
-    return !term || [i.id, i.partner, ...i.lines.map(line => line.packageId || ''), ...i.lines.map(line => line.customer || '')].join(' ').toLowerCase().includes(term);
+    const lines = i.lines || [];
+    return !term || [i.id, i.partner, ...lines.map(line => line.packageId || ''), ...lines.map(line => line.customer || '')].join(' ').toLowerCase().includes(term);
   });
 
   const credit = partnerId ? numeric(partnerCredits[partnerId]) : 0;
@@ -291,7 +292,7 @@ export default function PartnerInvoiceLedger({ invoices = [], payments = [], par
         <input type="search" aria-label="Search invoices, packages and recipients" placeholder="Search invoice / package" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
       <div className="igo-ledger-invoices">
-        {listedInvoices.map(invoice => <InvoiceDetail key={invoice.id} invoice={invoice} payments={visiblePayments} isAdmin={isAdmin} liveMode={liveMode} onDueDateChanged={onDueDateChanged} openPrint={exportInvoice} />)}
+        {listedInvoices.map(invoice => <InvoiceDetail key={invoice.id} invoice={invoice} payments={visiblePayments} isAdmin={isAdmin} canManageDueDates={canManageDueDates} liveMode={liveMode} onDueDateChanged={onDueDateChanged} openPrint={exportInvoice} />)}
         {!listedInvoices.length && <p className="igo-ledger-empty">No invoices match this selection.</p>}
       </div>
       <p className="igo-ledger-footnote">Payment submissions awaiting admin verification remain outstanding until confirmed. PDF statements open a print preview; choose “Save as PDF” in your device’s print options.</p>

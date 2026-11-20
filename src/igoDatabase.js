@@ -265,6 +265,7 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
       period: row.period_start ? new Date(row.period_start).toLocaleDateString('en-MV', { month: 'short', year: 'numeric' }) : '',
       createdAt: row.generated_at || row.created_at,
       periodStart: row.period_start,
+      dueDate: row.due_date || null,
       amount: Number(row.subtotal || 0),
       paidAmount: Number(row.paid_amount || 0),
       status: row.status,
@@ -340,6 +341,14 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
     invoiceCutoff: savedCutoffs.length === 1 ? savedCutoffs[0] || null : null,
     invoiceCutoffMixed: savedCutoffs.length > 1,
   };
+}
+
+export async function saveInvoiceDueDate(invoiceId, dueDate = null) {
+  const { error } = await requireClient().rpc('set_igo_invoice_due_date', {
+    p_invoice_id: invoiceId,
+    p_due_date: dueDate || null,
+  });
+  if (error) throw error;
 }
 
 export async function addInvoiceCharge(invoiceId, description, amount) {

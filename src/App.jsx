@@ -3,6 +3,7 @@ import './index.css';
 import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
 import PartnerInvoiceLedger from './PartnerInvoiceLedger';
 import CodSettlementManagement from './CodSettlementManagement';
+import AdminDailyOverview from './AdminDailyOverview';
 import PartnerBillingFrequency from './PartnerBillingFrequency';
 import PartnerAiQuickAsk from './PartnerAiQuickAsk';
 import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
@@ -3185,7 +3186,8 @@ export default function App() {
           )}
 
           {page === 'Admin Operations' && workspace === 'Admin' && (
-            <><CodCollectionsDashboard packages={newestPackages} workspace="Admin" compact onOpen={() => setPage('COD Collections')} />
+            <>{databaseProfile?.role === 'admin' && <AdminDailyOverview key={databaseUser?.id} onNavigate={setPage} />}
+            <CodCollectionsDashboard packages={newestPackages} workspace="Admin" compact onOpen={() => setPage('COD Collections')} />
             <AdminOperations
               packages={newestPackages}
               liveMode={Boolean(databaseProfile)}

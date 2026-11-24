@@ -3113,6 +3113,7 @@ export default function App() {
               <DriverWorkflowDashboard
                 packages={newestPackages}
                 driverName={viewedProfileName}
+                actorId={databaseUser?.id || ''}
                 liveMode={Boolean(databaseProfile)}
                 onUpdate={updatePackageRecord}
               />
@@ -3998,12 +3999,47 @@ export default function App() {
 }
 
 
+function RiderCashHandover({actorId,packages}) {
+  const [rows,setRows]=useState([]);
+  const [load,setLoad]=useState('loading');
+  useEffect(()=>{
+    if(!supabase||!actorId)return undefined;
+    let active=true;
+    const refresh=async()=>{
+      const {data,error}=await supabase.from('packages').select('id,package_number,cod_collected_amount,cod_collected_at,cod_received_by_igo_at').eq('cod_collected_by',actorId).eq('status','delivered').not('cod_collected_at','is',null).order('cod_collected_at',{ascending:false});
+      if(active){setLoad(error?'error':'ready');if(!error)setRows(data||[]);}
+    };
+    void refresh();
+    const interval=window.setInterval(refresh,30000);
+    window.addEventListener('focus',refresh);
+    window.addEventListener('igo-live-finance-updated',refresh);
+    return()=>{active=false;window.clearInterval(interval);window.removeEventListener('focus',refresh);window.removeEventListener('igo-live-finance-updated',refresh);};
+  },[actorId,packages]);
+  const money=n=>'MVR '+Number(n||0).toFixed(2);
+  const pending=rows.filter(r=>!r.cod_received_by_igo_at);
+  const received=rows.filter(r=>r.cod_received_by_igo_at);
+  const sum=list=>list.reduce((n,r)=>n+Number(r.cod_collected_amount||0),0);
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Indian/Maldives',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const isToday=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Indian/Maldives',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(t))===today;
+  return <section className="card" aria-label="My COD cash handover" style={{padding:14,display:'grid',gap:8,marginBottom:12}}>
+    <strong>My COD cash handover</strong>
+    {load==='loading'?<small className="muted">Loading cash records…</small>:load==='error'?<small role="alert">Could not refresh cash records. Check with iGO before handing over cash.</small>:<>
+    <span className="muted">Cash still to hand over (all dates)</span><strong style={{fontSize:23}}>{money(sum(pending))}</strong>
+    <small>Collected today: {money(sum(rows.filter(r=>isToday(r.cod_collected_at))))} · Confirmed received today: {money(sum(received.filter(r=>isToday(r.cod_received_by_igo_at))))}</small>
+    <small className="muted">Separate from your delivery earnings. iGO confirms receipt after physical handover.</small>
+    {pending.length>0&&<details><summary>{pending.length} packages awaiting handover</summary>{pending.map(r=><div key={r.id} style={{display:'flex',justifyContent:'space-between',padding:'7px 0'}}><span>IGO-{r.package_number}</span><strong>{money(r.cod_collected_amount)}</strong></div>)}</details>}
+    </>}
+  </section>;
+}
+
 function CodCollectionsDashboard({ packages = [], workspace = 'Admin', compact = false, onOpen }) {
   const moneyCod = (value) => 'MVR ' + Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const orders = packages.filter((p) => p.codAmount != null && Number(p.codAmount) > 0);
   const collected = orders.filter((p) => p.codCollectedAt && p.codCollectedAmount != null);
   const waiting = orders.filter((p) => !p.codCollectedAt && !['Cancelled', 'Delivered', 'Failed Delivery', 'Returned to Godown'].includes(p.status));
   const collectedTotal = collected.reduce((total, p) => total + Number(p.codCollectedAmount || 0), 0);
+  const receivedTotal = collected.filter(p=>p.codReceivedByIgoAt).reduce((n,p)=>n+Number(p.codCollectedAmount||0),0);
+  const awaitingHandover = collectedTotal-receivedTotal;
   const pendingTotal = waiting.reduce((total, p) => total + Number(p.codAmount || 0), 0);
   // Dashboard previews must stay small enough that normal package actions remain above the fold.
   // Full totals, collection evidence and partner/driver breakdowns live on COD Collections.
@@ -4020,7 +4056,9 @@ function CodCollectionsDashboard({ packages = [], workspace = 'Admin', compact =
           {onOpen && <button className="secondary-btn" type="button" onClick={onOpen} style={{ padding: '8px 12px', fontSize: 13 }}>Details</button>}
         </div>
         <div className="muted" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
-          <span>Awaiting: <strong>{moneyCod(pendingTotal)}</strong></span>
+          <span>To collect: <strong>{moneyCod(pendingTotal)}</strong></span>
+          <span>Awaiting cash handover: <strong>{moneyCod(awaitingHandover)}</strong></span>
+          <span>Received by iGO: <strong>{moneyCod(receivedTotal)}</strong></span>
           <span>{orders.length} COD {orders.length === 1 ? 'order' : 'orders'}</span>
         </div>
       </section>
@@ -4058,6 +4096,8 @@ function CodCollectionsDashboard({ packages = [], workspace = 'Admin', compact =
         <div className="stat-card"><span className="stat-label">Total cash collected</span><strong>{moneyCod(collectedTotal)}</strong><small>{collected.length} confirmed COD deliveries</small></div>
         <div className="stat-card"><span className="stat-label">Awaiting collection</span><strong>{moneyCod(pendingTotal)}</strong><small>{waiting.length} active COD deliveries</small></div>
         <div className="stat-card"><span className="stat-label">COD orders registered</span><strong>{orders.length}</strong><small>Only orders marked COD are counted</small></div>
+        <div className="stat-card"><span className="stat-label">Awaiting physical cash handover</span><strong>{moneyCod(awaitingHandover)}</strong></div>
+        <div className="stat-card"><span className="stat-label">Cash received by iGO</span><strong>{moneyCod(receivedTotal)}</strong></div>
       </div>
       <small className="muted">Cash is recorded when the driver confirms collection and delivery. These figures do not establish that cash has been remitted to iGO or paid to partners.</small>
       {!compact && (
@@ -5343,6 +5383,7 @@ function DriverWorkflowDashboard({
   packages,
   onUpdate,
   driverName = 'Ahmed Rasheed',
+  actorId = '',
   liveMode = false,
 }) {
   const [online, setOnline] = useState(() => {
@@ -5539,7 +5580,8 @@ function DriverWorkflowDashboard({
   };
   return (
     <div className="driver-dashboard">
-      {assigned.some((p) => p.codAmount != null && Number(p.codAmount) > 0) && <CodCollectionsDashboard packages={assigned} workspace="Driver" compact />}
+      {liveMode && actorId && <RiderCashHandover actorId={actorId} packages={packages} />}
+      {!liveMode && assigned.some((p) => p.codAmount != null && Number(p.codAmount) > 0) && <CodCollectionsDashboard packages={assigned} workspace="Driver" compact />}
       <div className="driver-banner">
         <div>
           <p className="driver-kicker">DRIVER WORKSPACE</p>

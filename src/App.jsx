@@ -1619,7 +1619,7 @@ export default function App() {
       item.related_section,
       item.target_section,
     ].find((value) => typeof value === 'string' && value.trim());
-    const pages = ['Admin Operations', 'Add Package', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Website controls', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
+    const pages = ['Admin Operations', 'Add Package', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'COD Collections', 'Overview', 'Website controls', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
     let destination = pages.find((page) => page.toLowerCase() === String(explicitPage || '').trim().toLowerCase());
     const notificationText = [item.type, item.category, item.entity_type, item.related_type, item.title, item.message]
       .filter(Boolean).join(' ');
@@ -1634,7 +1634,13 @@ export default function App() {
 
     let targetId = explicitTarget;
     let targetWorkspace = '';
-    if (/new user awaiting approval/.test(title)) {
+    // COD settlement notifications are financial review tasks, not new-partner
+    // approval requests. Handle them before the generic "partner request" rule.
+    if (/\bcod\b.*\b(?:settlement|invoice offset)\b|\b(?:settlement|invoice offset)\b.*\bcod\b/.test(title)) {
+      destination = 'COD Collections';
+      targetId = 'cod-settlement-requests';
+      targetWorkspace = /requested/.test(title) ? 'Admin' : 'Partner';
+    } else if (/new user awaiting approval/.test(title)) {
       destination = destination || 'Approvals';
       targetId = targetId || 'pending-account-approvals';
       targetWorkspace = 'Admin';
@@ -2864,7 +2870,7 @@ export default function App() {
           <span className="breadcrumb">
             {workspace} / {page}
           </span>
-          <button className="workspace-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const app = event.currentTarget.closest('.app'); const night = app.dataset.theme !== 'night'; app.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button>{databaseProfile && <NotificationCenter onNavigate={handleNotificationNavigate} />}
+          <button className="workspace-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const app = event.currentTarget.closest('.app'); const night = app.dataset.theme !== 'night'; app.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button>{databaseProfile && <NotificationCenter onNavigate={handleNotificationNavigate} currentPage={page} />}
 <div className="profile-menu-container">
             <button
               type="button"
@@ -6568,9 +6574,11 @@ function ProfileChangeRequests({ profile, user, workspace, setNotice }) {
   </section>;
 }
 
-function NotificationCenter({ onNavigate }) {
+function NotificationCenter({ onNavigate, currentPage }) {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
+  // Also dismiss the panel if navigation changes through history or another control.
+  useEffect(() => { setOpen(false); }, [currentPage]);
   const [error, setError] = useState('');
   const [telegramConnection, setTelegramConnection] = useState(undefined);
   const [telegramLink, setTelegramLink] = useState('');

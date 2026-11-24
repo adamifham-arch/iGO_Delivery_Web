@@ -4507,7 +4507,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [partnerId, setPartnerId] = useState('');
-  const [form, setForm] = useState({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '' });
+  const [form, setForm] = useState({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '', codRequested: false, codAmount: '' });
 
   useEffect(() => {
     let active = true;
@@ -4516,7 +4516,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
       setError('');
       try {
         const { data, error: loadError } = await supabase.from('partners')
-          .select('id,name,approval_status,delivery_pricing_mode,agreed_delivery_fee,package_size_rates')
+          .select('id,name,approval_status,delivery_pricing_mode,agreed_delivery_fee,package_size_rates,cod_enabled')
           .eq('approval_status', 'approved').order('name', { ascending: true });
         if (loadError) throw loadError;
         if (active) {
@@ -4525,6 +4525,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
             pricingMode: row.delivery_pricing_mode || 'route',
             agreedDeliveryFee: row.agreed_delivery_fee == null ? null : Number(row.agreed_delivery_fee),
             packageSizeRates: row.package_size_rates || {},
+            codEnabled: row.cod_enabled === true,
           }));
           setPartners(rows);
           setPartnerId((current) => current || rows[0]?.id || '');
@@ -4559,6 +4560,9 @@ function AdminCustomerPackageCreator({ onCreated }) {
       setError('Choose a package size with a saved rate for this partner.'); return;
     }
     if (!(Number(fee) > 0)) { setError('A delivery rate is not set for this package.'); return; }
+    if (form.codRequested && (!partner.codEnabled || !validCodAmount(form.codAmount))) {
+      setError('Enter a valid COD amount between MVR 0.01 and 999,999.00.'); return;
+    }
     setSaving(true);
     try {
       const [created] = await createPackages([{
@@ -4567,11 +4571,11 @@ function AdminCustomerPackageCreator({ onCreated }) {
         boatLocation: form.area === 'Boat' ? form.boatLocation.trim() : '',
         departureTime: form.area === 'Boat' ? form.departureTime : '',
         landmark: form.area === 'Boat' ? '' : form.landmark.trim(),
-        packageSize: form.packageSize, fee: Number(fee), item: form.item.trim(), notes: form.notes.trim(), status: 'Pending',
+        packageSize: form.packageSize, fee: Number(fee), codAmount: partner.codEnabled && form.codRequested ? Number(form.codAmount) : null, item: form.item.trim(), notes: form.notes.trim(), status: 'Pending',
       }], partner.id);
       onCreated?.(created);
       setMessage((created?.id || 'Package') + ' added for ' + partner.name + '.');
-      setForm({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '' });
+      setForm({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '', codRequested: false, codAmount: '' });
     } catch (saveError) { setError(saveError.message || 'Could not add the package.'); }
     finally { setSaving(false); }
   };
@@ -4583,7 +4587,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
         <form className="package-form" onSubmit={submit}>
           <div className="form-grid">
             <label className="full-width">Partner
-              <select value={partnerId} onChange={(event) => { setPartnerId(event.target.value); setForm((current) => ({ ...current, packageSize: '' })); setError(''); setMessage(''); }} required>
+              <select value={partnerId} onChange={(event) => { setPartnerId(event.target.value); setForm((current) => ({ ...current, packageSize: '', codRequested: false, codAmount: '' })); setError(''); setMessage(''); }} required>
                 {partners.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
               </select>
             </label>
@@ -4608,6 +4612,11 @@ function AdminCustomerPackageCreator({ onCreated }) {
             </>}
             <label>Package description (optional)<input name="item" value={form.item} onChange={update} placeholder="Item or order details" /></label>
             <label>Delivery fee<input value={fee ? 'MVR ' + fee : partner?.pricingMode === 'package_size' ? 'Choose a package size' : 'Rate unavailable'} readOnly /></label>
+            {partner?.codEnabled && <div className="full-width cod-request-fields">
+              <label className="cod-toggle"><input type="checkbox" checked={Boolean(form.codRequested)} onChange={event => setForm(current => ({ ...current, codRequested: event.target.checked, codAmount: event.target.checked ? current.codAmount : '' }))} />Collect cash on delivery for this package</label>
+              {form.codRequested && <label>Customer pays on delivery (MVR) *<input name="codAmount" type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" required value={form.codAmount} onChange={update} placeholder="e.g. 250.00" /></label>}
+              <small>Customer cash amount is separate from iGO's delivery fee.</small>
+            </div> 
             <label className="full-width">Delivery instructions (optional)<textarea name="notes" value={form.notes} onChange={update} rows="2" placeholder="Instructions for the driver" /></label>
           </div>
           <div className="form-actions"><button className="primary-btn" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add package for customer'}</button></div>
@@ -4872,12 +4881,18 @@ function AdminOperations({ packages, onUpdate, onCreated, liveMode = false, staf
                     <dt>Delivery fee</dt>
                     <dd>MVR {p.fee}</dd>
                   </div>
+                  {p.codAmount != null && <div className="cod-request-summary"><dt>Cash on delivery</dt><dd>MVR {Number(p.codAmount).toFixed(2)} · {p.codCollectedAt ? 'Cash collected' : 'Awaiting collection'}</dd></div>}
                 </dl>
                 <form
                   className="ops-assignment"
                   onSubmit={(e) => {
                     e.preventDefault();
+                    if (p.codAmount != null && draft.status === 'Delivered' && p.status !== 'Delivered' && !draft.codConfirmed) {
+                      setFeedback('Confirm customer cash was actually received before marking this COD package delivered.');
+                      return;
+                    }
                     onUpdate(p.id, {
+                      ...(p.codAmount != null && draft.status === 'Delivered' && p.status !== 'Delivered' ? { codCollectedAmount: Number(p.codAmount) } : {}),
                       driver: draft.driver.trim(),
                       status: draft.status,
                       failureReason:
@@ -4912,6 +4927,10 @@ function AdminOperations({ packages, onUpdate, onCreated, liveMode = false, staf
                       ))}
                     </select>
                   </label>
+                  {p.codAmount != null && draft.status === 'Delivered' && p.status !== 'Delivered' && (staffMode
+                    ? <p className="cod-notice">COD amount MVR {Number(p.codAmount).toFixed(2)}: only an assigned driver or admin can confirm the cash collection.</p>
+                    : <label className="cod-toggle"><input type="checkbox" required checked={Boolean(draft.codConfirmed)} onChange={event => change(p, 'codConfirmed', event.target.checked)} />I verified that MVR {Number(p.codAmount).toFixed(2)} was collected from the customer</label>
+                  )}
                   {p.area === 'Boat' && draft.status === 'Delivered' && (
                     <label className="ops-photo-upload">
                       Boat handover photo *
@@ -5030,6 +5049,7 @@ function PackageTable({ packages }) {
             <th>Phone</th>
             <th>Area</th>
             <th>Fee</th>
+            <th>COD customer cash</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -5045,6 +5065,7 @@ function PackageTable({ packages }) {
               <td>{p.phone}</td>
               <td>{p.area}</td>
               <td>MVR {p.fee}</td>
+              <td>{p.codAmount != null ? <span className="cod-status">MVR {Number(p.codAmount).toFixed(2)} · {p.codCollectedAt ? 'Collected' : 'Pending'}</span> : '—'}</td>
               <td>
                 <span className={`status status-${statusClass(p.status)}`}>
                   {p.status}
@@ -5073,8 +5094,9 @@ function PackageTable({ packages }) {
               </div>
               <div className="package-mobile-details">
                 <strong>{p.customer}</strong>
-                <span>MVR {p.fee}</span>
+                <span>Delivery fee MVR {p.fee}</span>
               </div>
+              {p.codAmount != null && <div className="package-mobile-contact"><span className="cod-status">COD MVR {Number(p.codAmount).toFixed(2)} · {p.codCollectedAt ? 'Cash collected' : 'To collect'}</span></div>}
               <div className="package-mobile-contact">
                 <span>Partner · {p.partnerName || p.partner || 'Partner not linked'}</span>
               </div>

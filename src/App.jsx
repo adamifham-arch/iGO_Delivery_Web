@@ -5809,7 +5809,7 @@ function DriverWorkflowDashboard({
                     {p.status}
                   </span>
                 </div>}
-                {p.status === 'Pending' ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#fff7d6', color: '#664f00', fontWeight: 700 }}><strong>Next step:</strong> Go to {p.partnerName || p.partner || 'the partner'} to collect this package.</p> : ['Picked Up', 'Out for Delivery'].includes(p.status) ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#eaf6ef', color: '#155b43', fontWeight: 700 }}><strong>Next step:</strong> Deliver to {p.area === 'Boat' ? p.boatName || p.address || 'the boat' : p.address || p.area || 'the customer address'}.</p> : null}
+                {p.status === 'Pending' ? <p className="driver-next-step" style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#fff7d6', color: '#664f00', fontWeight: 700 }}><strong>Next step:</strong> Go to {p.partnerName || p.partner || 'the partner'} to collect this package.</p> : ['Picked Up', 'Out for Delivery'].includes(p.status) ? <p className="driver-next-step" style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#eaf6ef', color: '#155b43', fontWeight: 700 }}><strong>Next step:</strong> Deliver to {p.area === 'Boat' ? p.boatName || p.address || 'the boat' : p.address || p.area || 'the customer address'}.</p> : null}
                 {!useCompactRouteList && typeof p.notes === 'string' && p.notes.trim() && (
                   <section
                     className="driver-partner-instructions"

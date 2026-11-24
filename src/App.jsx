@@ -3,6 +3,7 @@ import './index.css';
 import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
 import PartnerInvoiceLedger from './PartnerInvoiceLedger';
 import CodSettlementManagement from './CodSettlementManagement';
+import PartnerBillingFrequency from './PartnerBillingFrequency';
 import PartnerAiQuickAsk from './PartnerAiQuickAsk';
 import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
 import { supabase, supabaseConfigured, setAuthRememberMe } from './supabase';
@@ -7407,6 +7408,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         setLiveError(`Could not identify ${partnerName}'s partner account. Refresh the page and try again.`);
         return;
       }
+      if (!window.confirm(partnerId ? 'Generate an invoice now for this partner, regardless of their automatic billing schedule?' : 'Generate invoices now for all partners, regardless of their automatic billing schedules?')) return;
       await generateLiveInvoices(partnerId || null);
       return;
     }
@@ -8467,7 +8469,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <h3>Invoices</h3>{mode === 'management' && <>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 10, marginBottom: 14 }}>
             <div className="invoice-cutoff-controls">
-              <label>Daily cutoff (Maldives time)
+              <label>Invoice cutoff (Maldives time)
                 <input type="time" step="60" value={billing.cutoff} onChange={(event) => { setCutoffFeedback(''); setCutoffFeedbackError(false); setBilling((current) => ({ ...current, cutoff: event.target.value })); }} aria-label="Daily invoice cutoff time in Maldives time" />
               </label>
               <div className="invoice-cutoff-actions">
@@ -8493,10 +8495,11 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             {cutoffFeedback || (cutoffSaving ? 'Saving daily cutoff…' : invoiceCutoffMixed
               ? 'Partner cutoff settings differ. Saving or removing here will apply the setting to all partners.'
               : savedInvoiceCutoff
-                ? `Daily invoice cutoff is saved for all partners at ${savedInvoiceCutoff} Maldives time.`
-                : 'No daily invoice cutoff is set. Automatic invoice generation is off.')}
+                ? `Invoice cutoff is saved for all partners at ${savedInvoiceCutoff} Maldives time. Automatic generation follows each partner's billing frequency.`
+                : 'No invoice cutoff is set. Automatic invoice generation is off.')}
             {!cutoffSaving && !cutoffFeedback && cutoffHasUnsavedChanges && <strong> Unsaved change — save to apply.</strong>}
           </p>
+          {workspace === 'Admin' && liveMode && <PartnerBillingFrequency adminUser={adminUser} cutoffVersion={savedInvoiceCutoff + String(invoiceCutoffMixed)} />}
           {readyPartners.length > 0 && (
             <section className="ready-partners" aria-labelledby="ready-partners-heading">
               <div className="ready-partners-heading">

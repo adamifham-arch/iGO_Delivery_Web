@@ -20,6 +20,7 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
+  const [handoverSelected, setHandoverSelected] = useState([]);
   const [loading, setLoading] = useState(Boolean(supabase));
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -39,7 +40,7 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
       return;
     }
     setPartnerId(id || '');
-    let p = supabase.from('packages').select('id,package_number,partner_id,customer_name,status,cod_amount,cod_collected_amount,cod_collected_at,cod_received_by_igo_at,partners(name),drivers(name)').not('cod_amount', 'is', null).order('created_at', { ascending: false });
+    let p = supabase.from('packages').select('id,package_number,partner_id,customer_name,status,cod_amount,cod_collected_amount,cod_collected_at,cod_collected_by,cod_received_by_igo_at,cod_received_by_igo_by,partners(name),drivers(name,user_id)').not('cod_amount', 'is', null).order('created_at', { ascending: false });
     let i = supabase.from('invoices').select('id,partner_id,invoice_number,subtotal,paid_amount,status,created_at').order('created_at', { ascending: false });
     let r = supabase.from('cod_invoice_settlement_requests').select('*,partners(name)').order('requested_at', { ascending: false });
     let c = supabase.from('cod_invoice_settlement_cash_allocations').select('settlement_id,package_id,amount,packages(partner_id)');
@@ -95,6 +96,15 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
   const collected = packages.filter(p => p.cod_collected_at && p.status === 'delivered' && p.cod_collected_amount != null);
   const totalCollected = collected.reduce((n,p) => n+parseMoney(p.cod_collected_amount),0);
   const totalVerified = collected.filter(p=>p.cod_received_by_igo_at).reduce((n,p)=>n+parseMoney(p.cod_collected_amount),0);
+  const cashGroups = [...collected.reduce((map,p)=>{
+    const key=p.cod_collected_by || 'unknown';
+    const group=map.get(key)||{id:key,label:p.drivers?.user_id===p.cod_collected_by && p.drivers?.name?p.drivers.name:'Other / admin collector',rows:[]};
+    group.rows.push(p);map.set(key,group);return map;
+  },new Map()).values()];
+  const selectedCash=collected.filter(p=>!p.cod_received_by_igo_at && handoverSelected.includes(p.id));
+  const selectedCashTotal=selectedCash.reduce((n,p)=>n+parseMoney(p.cod_collected_amount),0);
+  const selectedCollector=selectedCash[0]?.cod_collected_by;
+  const formatTime=(value)=>value?new Date(value).toLocaleString('en-GB',{timeZone:'Indian/Maldives'}):'—';
   const used = collected.reduce((n,p)=>n+parseMoney(usedByPackage.get(p.id)),0);
   const ownRequests = isAdmin ? [] : requests.filter(r => r.partner_id === partnerId);
   const pendingAmount = ownRequests.filter(r=>r.status==='pending').reduce((n,r)=>n+parseMoney(r.requested_amount),0);
@@ -196,6 +206,12 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
       action === 'paid' ? 'Confirm only if the actual bank transfer of ' + mvr(r.amount) + ' has been completed to the requested account.' : 'Confirm no money was transferred. Rejecting will release the reserved balance.');
   };
 
+  const verifyHandover = async () => {
+    if(!selectedCash.length || selectedCash.length>100 || !selectedCollector || selectedCash.some(p=>p.cod_collected_by!==selectedCollector)) return;
+    const result=await perform('COD cash handover',()=>supabase.rpc('verify_cod_cash_handover',{p_package_ids:selectedCash.map(p=>p.id),p_expected_amount:Number(selectedCashTotal.toFixed(2))}),
+      'Confirm physical receipt of '+mvr(selectedCashTotal)+' for '+selectedCash.length+' packages from this collector? Verify the cash before proceeding.');
+    if(result!=null) setHandoverSelected([]);
+  };
   const verifyCash = (p) => perform('COD cash receipt verification',
     () => supabase.rpc('verify_cod_cash_received_by_igo', { p_package_id: p.id }),
     'Confirm that iGO has physically received ' + mvr(p.cod_collected_amount) + ' from the driver for package IGO-' + p.package_number + '? This is a financial verification.');
@@ -289,6 +305,7 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
         <div className="stat-card"><span>Pending bank payouts</span><strong>{mvr(payoutPending)}</strong></div>
         <div className="stat-card"><span>Transferred to bank</span><strong>{mvr(payoutPaid)}</strong></div>
         <div className="stat-card"><span>Available COD balance</span><strong>{mvr(verifiedAvailable)}</strong><small>Sum of each partner's uncommitted verified cash</small></div>
+        <div className="stat-card"><span>Verified cash not yet settled or paid out</span><strong>{mvr(totalVerified-used-payoutPaid)}</strong><small>Includes cash reserved for pending requests; not delivery revenue</small></div>
       </div>
       <div>
         <h3>COD balances by partner</h3>
@@ -299,15 +316,30 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
           <small>Bank payouts pending: {mvr(row.payoutPending)} · Transferred: {mvr(row.payoutPaid)}</small>
         </article>) : <p className="muted">No partner COD balances recorded yet.</p>}
       </div>
-      <div>
-        <h3>Confirm physical cash received by iGO</h3>
-        <p className="muted">Only confirm when the driver has handed the cash to iGO. Driver collection alone is not sufficient.</p>
-        {collected.filter(p=>!p.cod_received_by_igo_at).length
-          ? collected.filter(p=>!p.cod_received_by_igo_at).map(p=><article key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #dce3e9', padding: '10px 0' }}>
-              <span><strong>IGO-{p.package_number}</strong> · {p.partners?.name || 'Partner'} · {p.drivers?.name || 'Driver'}<small style={{ display: 'block' }}>Collected from customer: {mvr(p.cod_collected_amount)}</small></span>
-              <button type="button" className="secondary-btn" disabled={Boolean(busy)} onClick={()=>verifyCash(p)}>Confirm iGO received {mvr(p.cod_collected_amount)}</button>
-            </article>)
-          : <p className="muted">No collected COD cash awaiting iGO receipt verification.</p>}
+      <div id="cod-cash-handover" style={{scrollMarginTop:92}}>
+        <h3>Rider cash handovers</h3>
+        <p className="muted">Select collected packages from one cash collector. Confirm only after physically receiving the full selected amount. Previous receipts cannot be counted twice.</p>
+        {cashGroups.length?cashGroups.map(group=>{
+          const pending=group.rows.filter(p=>!p.cod_received_by_igo_at);
+          const received=group.rows.filter(p=>p.cod_received_by_igo_at);
+          const pendingTotal=pending.reduce((n,p)=>n+parseMoney(p.cod_collected_amount),0);
+          const receivedTotal=received.reduce((n,p)=>n+parseMoney(p.cod_collected_amount),0);
+          return <article key={group.id} style={{border:'1px solid var(--border,#d8dee8)',borderRadius:10,padding:12,margin:'10px 0',display:'grid',gap:8}}>
+            <strong>{group.label}</strong>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}><span>Awaiting handover</span><strong style={{color:pendingTotal>0?'#b45309':'inherit'}}>{mvr(pendingTotal)}</strong></div>
+            <small>Already received: {mvr(receivedTotal)} · {received.length} packages</small>
+            {pending.length>0 && <details open={pending.some(p=>handoverSelected.includes(p.id))}>
+              <summary>{pending.length} packages awaiting receipt</summary>
+              {group.id!=='unknown' && <button type="button" className="secondary-btn" disabled={Boolean(busy)} onClick={()=>setHandoverSelected(pending.slice(0,100).map(p=>p.id))}>Select first {Math.min(100,pending.length)} packages</button>}
+              {pending.map(p=><div key={p.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 0',borderBottom:'1px solid #dce3e9'}}>
+                {group.id!=='unknown'?<input type="checkbox" aria-label={'Select package IGO-'+p.package_number} style={{width:18,height:18,minHeight:0,flex:'0 0 auto'}} checked={handoverSelected.includes(p.id)} disabled={Boolean(busy)} onChange={e=>setHandoverSelected(old=>e.target.checked?[...old.filter(id=>pending.some(x=>x.id===id)),p.id]:old.filter(id=>id!==p.id))}/>:<button type="button" className="secondary-btn" disabled={Boolean(busy)} onClick={()=>verifyCash(p)}>Verify receipt</button>}
+                <div style={{flex:1,minWidth:0}}><strong>IGO-{p.package_number}</strong> · {p.partners?.name||'Partner'}<small style={{display:'block'}}>{formatTime(p.cod_collected_at)}</small></div><strong>{mvr(p.cod_collected_amount)}</strong>
+              </div>)}
+            </details>}
+            {received.length>0 && <details><summary>Receipt history ({received.length})</summary>{received.map(p=><div key={p.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'8px 0'}}><span>IGO-{p.package_number}<small style={{display:'block'}}>Received {formatTime(p.cod_received_by_igo_at)}</small></span><strong>{mvr(p.cod_collected_amount)}</strong></div>)}</details>}
+          </article>
+        }):<p className="muted">No collected COD cash recorded yet.</p>}
+        {selectedCash.length>0&&<div style={{display:'grid',gap:8,padding:12,border:'1px solid var(--border,#d8dee8)',borderRadius:8}}><strong>{selectedCash.length} selected · {mvr(selectedCashTotal)}</strong><button type="button" className="primary-btn" disabled={Boolean(busy)||selectedCash.length>100} onClick={verifyHandover}>Confirm physical cash handover</button><button type="button" className="secondary-btn" disabled={Boolean(busy)} onClick={()=>setHandoverSelected([])}>Clear selection</button></div>}
       </div>
     </>}
     {!loading && <div id="cod-payout-requests" style={{ scrollMarginTop: 92 }}>

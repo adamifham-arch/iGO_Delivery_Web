@@ -8756,3 +8756,34 @@ article.driver-delivery-card .driver-failed-attempt > summary { padding: 4px 0; 
   #driver-earnings .driver-withdrawal-request > div { flex-basis: 140px; }
   #driver-earnings .driver-withdrawal-request .driver-action { min-height: 32px; padding: 6px 8px; font-size: 10px; }
 }
+
+
+/* Selective partner Cash on Delivery (COD). Customer cash is never a delivery fee. */
+.cod-request-fields{
+  display:grid;gap:12px;margin:8px 0;
+  padding:14px;border:1px solid #efd587;border-radius:12px;
+  background:#fffbee;
+}
+.cod-request-fields>label:not(.cod-toggle){display:grid;gap:7px}
+.cod-request-fields small{color:#716444;line-height:1.5}
+.cod-toggle{
+  display:flex;align-items:center;gap:10px;
+  font-size:14px;font-weight:650;line-height:1.45;
+}
+.cod-toggle input[type="checkbox"]{
+  flex:0 0 19px;width:19px;height:19px;min-height:19px;
+  margin:0;accent-color:#13724c;cursor:pointer;
+}
+.cod-request-summary,.cod-status{color:#a66d00;font-weight:750}
+.cod-driver-alert{
+  display:grid;gap:4px;margin:12px 0 0;
+  padding:12px 14px;background:#fff2c9;border:1px solid #dfb85a;
+  border-radius:10px;color:#614200;
+}
+.cod-driver-alert small{font-size:12px;color:#765817}
+.cod-driver-confirm{padding:10px;background:#fff5d8;border-radius:9px}
+.cod-notice{color:#8e5b00;font-size:13px}
+.app[data-theme="night"] .cod-request-fields{background:#312b18;border-color:#68522d}
+.app[data-theme="night"] .cod-driver-alert{background:#382d18;color:#f8dc92;border-color:#745c2b}
+.app[data-theme="night"] .cod-driver-alert small,.app[data-theme="night"] .cod-request-fields small{color:#dccda5}
+.app[data-theme="night"] .cod-status,.app[data-theme="night"] .cod-request-summary{color:#f3c45e}

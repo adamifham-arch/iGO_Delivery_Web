@@ -11,6 +11,9 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
   const [packages, setPackages] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [payouts, setPayouts] = useState([]);
+  const [actorId, setActorId] = useState('');
+  const [payoutForm, setPayoutForm] = useState({ amount: '', bank: '', name: '', account: '', note: '' });
   const [cashAllocations, setCashAllocations] = useState([]);
   const [invoiceAllocations, setInvoiceAllocations] = useState([]);
   const [selected, setSelected] = useState([]);
@@ -29,6 +32,7 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
       setPackages([]);
       setInvoices([]);
       setRequests([]);
+      setPayouts([]);
       setCashAllocations([]);
       setInvoiceAllocations([]);
       setError('No approved partner is linked to this workspace.');
@@ -40,12 +44,16 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
     let r = supabase.from('cod_invoice_settlement_requests').select('*,partners(name)').order('requested_at', { ascending: false });
     let c = supabase.from('cod_invoice_settlement_cash_allocations').select('settlement_id,package_id,amount,packages(partner_id)');
     let a = supabase.from('cod_invoice_settlement_invoice_allocations').select('settlement_id,invoice_id,amount,invoices(invoice_number)');
+    let w = supabase.from('cod_payout_requests').select('*,partners(name)').order('requested_at', { ascending: false });
     if (id) {
       p = p.eq('partner_id',id);
       i = i.eq('partner_id',id);
       r = r.eq('partner_id',id);
+      w = w.eq('partner_id',id);
     }
-    const out = await Promise.all([p,i,r,c,a]);
+    const out = await Promise.all([p,i,r,c,a,w]);
+    const { data: authData } = await supabase.auth.getUser();
+    setActorId(authData?.user?.id || '');
     const failure = out.find(x => x.error);
     if (failure) throw failure.error;
     setPackages(out[0].data || []);
@@ -53,6 +61,7 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
     setRequests(out[2].data || []);
     setCashAllocations(out[3].data || []);
     setInvoiceAllocations(out[4].data || []);
+    setPayouts(out[5].data || []);
   };
 
   useEffect(() => {
@@ -89,11 +98,15 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
   const used = collected.reduce((n,p)=>n+parseMoney(usedByPackage.get(p.id)),0);
   const ownRequests = isAdmin ? [] : requests.filter(r => r.partner_id === partnerId);
   const pendingAmount = ownRequests.filter(r=>r.status==='pending').reduce((n,r)=>n+parseMoney(r.requested_amount),0);
-  const requestable = Math.max(0, totalCollected-used-pendingAmount);
+  const ownPayouts = payouts.filter(r => isAdmin || r.partner_id === partnerId);
+  const payoutPending = ownPayouts.filter(r => ['pending','processing'].includes(r.status)).reduce((n,r) => n+parseMoney(r.amount),0);
+  const payoutPaid = ownPayouts.filter(r => r.status==='paid').reduce((n,r) => n+parseMoney(r.amount),0);
+  const payoutReserved = payoutPending + payoutPaid;
+  const requestable = Math.max(0, Math.round((totalCollected-used-pendingAmount-payoutReserved)*100)/100);
   const partnerBalances = useMemo(() => {
     const map = new Map();
     const ensure = (id, name) => {
-      if (!map.has(id)) map.set(id, { id, name: name || 'Partner', collected: 0, verified: 0, used: 0, pending: 0 });
+      if (!map.has(id)) map.set(id, { id, name: name || 'Partner', collected: 0, verified: 0, used: 0, pending: 0, payoutPending: 0, payoutPaid: 0 });
       const row = map.get(id);
       if (name) row.name = name;
       return row;
@@ -107,14 +120,19 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
     requests.filter(r => r.status === 'pending').forEach(r => {
       ensure(r.partner_id, r.partners?.name).pending += parseMoney(r.requested_amount);
     });
+    payouts.filter(r => ['pending','processing','paid'].includes(r.status)).forEach(r => {
+      const row = ensure(r.partner_id, r.partners?.name);
+      if (r.status === 'paid') row.payoutPaid += parseMoney(r.amount);
+      else row.payoutPending += parseMoney(r.amount);
+    });
     return [...map.values()].map(row => ({
       ...row,
-      available: Math.max(0, Math.round((row.verified - row.used - row.pending) * 100) / 100),
+      available: Math.max(0, Math.round((row.verified - row.used - row.pending - row.payoutPending - row.payoutPaid) * 100) / 100),
     })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [collected, requests, usedByPackage]);
+  }, [collected, requests, usedByPackage, payouts]);
   const verifiedAvailable = isAdmin
     ? partnerBalances.reduce((n, row) => n + row.available, 0)
-    : Math.max(0, Math.round((totalVerified - used - pendingAmount) * 100) / 100);
+    : Math.max(0, Math.round((totalVerified - used - pendingAmount - payoutReserved) * 100) / 100);
   const allPendingAmount = requests.filter(r => r.status === 'pending').reduce((n,r) => n + parseMoney(r.requested_amount), 0);
   const unpaid = invoices.filter(i => ['unpaid','partially_paid'].includes(i.status) && parseMoney(i.subtotal)>parseMoney(i.paid_amount));
   const selectedInvoices = unpaid.filter(i=>selected.includes(i.id));
@@ -151,6 +169,31 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
     const result = await perform('COD settlement request',
       () => supabase.rpc('request_cod_invoice_settlement', { p_invoice_ids: selected, p_amount: readyAmount, p_note: note }));
     if (result) { setSelected([]); setAmount(''); setNote(''); }
+  };
+
+  const updatePayout = (key, value) => setPayoutForm(old => ({ ...old, [key]: value }));
+  const submitPayout = async event => {
+    event.preventDefault();
+    const value = Number(payoutForm.amount);
+    if (!/^\d+(?:\.\d{1,2})?$/.test(payoutForm.amount.trim()) || !Number.isFinite(value) || value <= 0 || value > verifiedAvailable + 0.0001) {
+      setError('Enter an amount within your available verified COD balance.'); return;
+    }
+    const result = await perform('COD bank payout request', () => supabase.rpc('request_cod_payout', {
+      p_amount: value, p_bank_name: payoutForm.bank, p_account_name: payoutForm.name, p_account_number: payoutForm.account, p_note: payoutForm.note
+    }), 'Request a bank transfer of ' + mvr(value) + '? Confirm your bank account details. The amount will be reserved.');
+    if (result) setPayoutForm({ amount: '', bank: '', name: '', account: '', note: '' });
+  };
+  const reviewPayout = (r, action) => {
+    if (action === 'claim') {
+      void perform('COD payout processing', () => supabase.rpc('review_cod_payout', { p_request_id: r.id, p_action: action }), 'Claim this payout before making the transfer. Other admins cannot process it.');
+      return;
+    }
+    const detail = window.prompt(action === 'paid' ? 'Enter the completed bank transfer reference:' : 'Enter a rejection reason:');
+    if (detail == null) return;
+    if (detail.trim().length < 3) { setError('Enter at least three characters.'); return; }
+    void perform(action === 'paid' ? 'COD payout transfer confirmation' : 'COD payout rejection',
+      () => supabase.rpc('review_cod_payout', { p_request_id: r.id, p_action: action, p_detail: detail.trim() }),
+      action === 'paid' ? 'Confirm only if the actual bank transfer of ' + mvr(r.amount) + ' has been completed to the requested account.' : 'Confirm no money was transferred. Rejecting will release the reserved balance.');
   };
 
   const verifyCash = (p) => perform('COD cash receipt verification',
@@ -191,7 +234,7 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
     {!loading && !isAdmin && partnerId && <>
       <div className="stat-card" style={{ borderColor: '#155d43' }}>
         <span>Available COD balance</span><strong style={{ color: '#155d43' }}>{mvr(verifiedAvailable)}</strong>
-        <small>Verified cash remaining after approved invoice offsets and pending requests</small>
+        <small>Verified cash remaining after invoice offsets, completed transfers and pending requests</small>
       </div>
       <div className="stats-grid">
         <div className="stat-card"><span>COD collected by drivers</span><strong>{mvr(totalCollected)}</strong></div>
@@ -199,8 +242,21 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
         <div className="stat-card"><span>Awaiting cash verification</span><strong>{mvr(Math.max(0,totalCollected-totalVerified))}</strong></div>
         <div className="stat-card"><span>Applied to invoices</span><strong>{mvr(used)}</strong></div>
         <div className="stat-card"><span>Pending settlement requests</span><strong>{mvr(pendingAmount)}</strong><small>Reserved until reviewed</small></div>
+        <div className="stat-card"><span>Pending bank payouts</span><strong>{mvr(payoutPending)}</strong></div>
+        <div className="stat-card"><span>Transferred to bank</span><strong>{mvr(payoutPaid)}</strong></div>
         <div className="stat-card"><span>COD eligible to request</span><strong>{mvr(requestable)}</strong><small>Includes collected cash not yet verified; approval requires verified cash</small></div>
       </div>
+      <form onSubmit={submitPayout} style={{ display: 'grid', gap: 12 }}>
+        <h3 style={{ margin: 0 }}>Request transfer to bank account</h3>
+        <p className="muted" style={{ margin: 0 }}>Request any amount up to your available verified COD balance. iGO will transfer it manually after review.</p>
+        <label>Transfer amount (MVR)<input type="number" min="0.01" max={verifiedAvailable} step="0.01" required value={payoutForm.amount} onChange={e=>updatePayout('amount',e.target.value)} /></label>
+        <button type="button" className="secondary-btn" disabled={verifiedAvailable<=0} onClick={()=>updatePayout('amount',verifiedAvailable.toFixed(2))}>Use full available balance</button>
+        <label>Bank name<input required minLength={2} maxLength={100} value={payoutForm.bank} onChange={e=>updatePayout('bank',e.target.value)} /></label>
+        <label>Account holder name<input required minLength={2} maxLength={150} value={payoutForm.name} onChange={e=>updatePayout('name',e.target.value)} /></label>
+        <label>Account number<input required minLength={4} maxLength={80} value={payoutForm.account} onChange={e=>updatePayout('account',e.target.value)} /></label>
+        <label>Note (optional)<textarea rows={2} maxLength={500} value={payoutForm.note} onChange={e=>updatePayout('note',e.target.value)} /></label>
+        <button className="primary-btn" type="submit" disabled={Boolean(busy)||verifiedAvailable<=0}>{busy==='COD bank payout request'?'Submitting…':'Request bank transfer'}</button>
+      </form>
       <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
         <h3 style={{ margin: 0 }}>Request payment of outstanding invoices</h3>
         {unpaid.length ? <>
@@ -230,6 +286,8 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
         <div className="stat-card"><span>Applied to invoices</span><strong>{mvr(used)}</strong><small>Cash cannot be applied twice</small></div>
         <div className="stat-card"><span>Awaiting review</span><strong>{requests.filter(r=>r.status==='pending').length}</strong><small>{mvr(allPendingAmount)} reserved</small></div>
         <div className="stat-card"><span>Awaiting cash verification</span><strong>{mvr(Math.max(0,totalCollected-totalVerified))}</strong></div>
+        <div className="stat-card"><span>Pending bank payouts</span><strong>{mvr(payoutPending)}</strong></div>
+        <div className="stat-card"><span>Transferred to bank</span><strong>{mvr(payoutPaid)}</strong></div>
         <div className="stat-card"><span>Available COD balance</span><strong>{mvr(verifiedAvailable)}</strong><small>Sum of each partner's uncommitted verified cash</small></div>
       </div>
       <div>
@@ -237,7 +295,8 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
         {partnerBalances.length ? partnerBalances.map(row => <article key={row.id} style={{ borderBottom: '1px solid #dce3e9', padding: '12px 0', display: 'grid', gap: 5 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><strong>{row.name}</strong><strong style={{ color: '#155d43' }}>{mvr(row.available)} available</strong></div>
           <small>Collected: {mvr(row.collected)} · Verified: {mvr(row.verified)}</small>
-          <small>Applied: {mvr(row.used)} · Pending: {mvr(row.pending)} · Awaiting verification: {mvr(Math.max(0,row.collected-row.verified))}</small>
+          <small>Applied: {mvr(row.used)} · Pending invoices: {mvr(row.pending)} · Awaiting verification: {mvr(Math.max(0,row.collected-row.verified))}</small>
+          <small>Bank payouts pending: {mvr(row.payoutPending)} · Transferred: {mvr(row.payoutPaid)}</small>
         </article>) : <p className="muted">No partner COD balances recorded yet.</p>}
       </div>
       <div>
@@ -251,6 +310,19 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
           : <p className="muted">No collected COD cash awaiting iGO receipt verification.</p>}
       </div>
     </>}
+    {!loading && <div id="cod-payout-requests" style={{ scrollMarginTop: 92 }}>
+      <h3>{isAdmin ? 'Partner bank payout requests' : 'Your bank payout requests'}</h3>
+      {ownPayouts.length ? ownPayouts.map(r => <article key={r.id} style={{ borderBottom: '1px solid #dce3e9', padding: '12px 0', display: 'grid', gap: 6 }}>
+        <strong>{mvr(r.amount)} · {r.status === 'paid' ? 'TRANSFERRED' : r.status.toUpperCase()}{isAdmin ? ' · ' + (r.partners?.name || 'Partner') : ''}</strong>
+        <small>Requested {new Date(r.requested_at).toLocaleString()}</small>
+        <small>{r.bank_name} · {r.account_name} · {isAdmin && ['pending','processing'].includes(r.status) ? r.account_number : '•••• ' + r.account_number.slice(-4)}</small>
+        {r.note && <small>Note: {r.note}</small>}
+        {r.status === 'paid' && <small>Transfer reference: {r.transfer_reference} · {new Date(r.reviewed_at).toLocaleString()}</small>}
+        {r.status === 'rejected' && <small>Rejected: {r.rejection_reason}</small>}
+        {isAdmin && r.status==='pending' && <div style={{display:'flex', gap:8, flexWrap:'wrap'}}><button className="primary-btn" disabled={Boolean(busy)} onClick={()=>reviewPayout(r,'claim')}>Start processing</button><button className="secondary-btn" disabled={Boolean(busy)} onClick={()=>reviewPayout(r,'reject')}>Reject</button></div>}
+        {isAdmin && r.status==='processing' && (r.processing_by===actorId ? <div style={{display:'flex', gap:8, flexWrap:'wrap'}}><button className="primary-btn" disabled={Boolean(busy)} onClick={()=>reviewPayout(r,'paid')}>Confirm bank transfer</button><button className="secondary-btn" disabled={Boolean(busy)} onClick={()=>reviewPayout(r,'reject')}>Reject (no transfer made)</button></div> : <small>Being processed by another admin.</small>)}
+      </article>) : <p className="muted">No bank payout requests yet.</p>}
+    </div>}
     <div id="cod-settlement-requests" style={{ scrollMarginTop: 92 }}>
     {!loading && <div>
       <h3>{isAdmin?'Partner settlement requests':'Your COD settlement requests'}</h3>

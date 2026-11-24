@@ -650,6 +650,7 @@ async function preparePartnerProfileImage(file, maxBytes = 256 * 1024) {
 
 export default function App() {
   const customerNameInputRef = useRef(null);
+  const customerPhoneInputRef = useRef(null);
   const customerMessageInputRef = useRef(null);
   const [navigation, setNavigation] = useState(() => {
     const route = readSavedIgoNavigation();
@@ -995,6 +996,8 @@ export default function App() {
   const [partnerTrackingNext, setPartnerTrackingNext] = useState('1');
   const [partnerTrackingNotice, setPartnerTrackingNotice] = useState('');
   const [partnerTrackingSaving, setPartnerTrackingSaving] = useState(false);
+  const [customerLookup, setCustomerLookup] = useState({key:'',status:'idle',rows:[]});
+  const [dismissedCustomerLookup, setDismissedCustomerLookup] = useState('');
   const [form, setForm] = useState({
     customer: '',
     phone: '',
@@ -1013,6 +1016,56 @@ export default function App() {
     codRequested: false,
     codAmount: '',
   });
+
+  // Search only the signed-in partner's own previous deliveries, never a global customer directory.
+  const lookupPhone = normalizeCustomerPhone(form.phone);
+  const lookupKey = [databaseUser?.id || '',linkedPartnerProfile?.id || '',workspace,lookupPhone].join('|');
+  useEffect(() => {
+    if (!supabase || !databaseUser || workspace !== 'Partner' || page !== 'Register Package' || !showForm ||
+      !isValidCustomerPhone(lookupPhone) || !(databaseProfile?.role === 'partner' && accountApprovalStatus === 'approved' ||
+      databaseProfile?.role === 'admin' && linkedPartnerProfile?.approval_status === 'approved')) return undefined;
+    let active = true;
+    setCustomerLookup({key:lookupKey,status:'loading',rows:[]});
+    const timer = window.setTimeout(async () => {
+      try {
+        const partnerId = databaseProfile.role === 'admin' ? linkedPartnerProfile.id : await getCurrentPartnerId();
+        if (!partnerId) return;
+        const {data,error} = await supabase.from('packages')
+          .select('customer_name,customer_phone,address,area,created_at')
+          .eq('partner_id',partnerId).eq('customer_phone',lookupPhone).neq('area','Boat')
+          .order('created_at',{ascending:false}).limit(30);
+        if (error) throw error;
+        const seen = new Set();
+        const rows = (data || []).filter(row=>{
+          const key=[row.customer_name,row.address,row.area].map(v=>String(v||'').trim().toLowerCase()).join('|');
+          if(!row.address?.trim() || !row.customer_name?.trim() || seen.has(key)) return false;
+          seen.add(key);return true;
+        }).slice(0,4);
+        if(active) setCustomerLookup({key:lookupKey,status:'ready',rows});
+      }catch{
+        if(active) setCustomerLookup({key:lookupKey,status:'unavailable',rows:[]});
+      }
+    },250);
+    return ()=>{active=false;window.clearTimeout(timer);};
+  },[databaseUser?.id,databaseProfile?.role,accountApprovalStatus,linkedPartnerProfile?.id,linkedPartnerProfile?.approval_status,workspace,page,showForm,lookupPhone,lookupKey]);
+  const applyPreviousCustomer = (row) => {
+    if(customerLookup.key!==lookupKey || workspaceRef.current!=='Partner' || customerLookup.status!=='ready') return;
+    setForm(current=>{
+      if(normalizeCustomerPhone(current.phone)!==lookupPhone || current.area==='Boat') return current;
+      const next={...current,customer:current.customer.trim() || row.customer_name};
+      if(!current.address.trim()){
+        next.address=row.address;
+        const allowed=partnerDeliveryPricing.pricingMode==='package_size'?['Malé','Hulhumalé']:['Malé','Hulhumalé Phase 1','Hulhumalé Phase 2'];
+        const historyArea=partnerDeliveryPricing.pricingMode==='package_size' && String(row.area).startsWith('Hulhumalé')?'Hulhumalé':row.area;
+        const detected=detectSinglePackageArea(row.address,partnerDeliveryPricing.pricingMode);
+        next.area=detected && allowed.includes(historyArea) && detected!==historyArea?'':detected || (allowed.includes(historyArea)?historyArea:'');
+        next.areaManual=false;
+        next.fee=next.area?String(getCurrentDeliveryFee(next.area,next.packageSize)??''):'';
+      }
+      return next;
+    });
+    setDismissedCustomerLookup(lookupKey);
+  };
 
   useEffect(() => {
     if (!supabase || !databaseUser || workspace !== 'Partner') return undefined;
@@ -1955,7 +2008,8 @@ export default function App() {
       setNotice('');
       setShowForm(true);
       setPage('Register Package');
-      window.requestAnimationFrame(() => customerNameInputRef.current?.focus());
+      setDismissedCustomerLookup('');
+      window.requestAnimationFrame(() => customerPhoneInputRef.current?.focus());
     } else {
       setShowForm(false);
       setPage('Packages');
@@ -3553,11 +3607,19 @@ export default function App() {
                 >
                   {' '}
                   <div className="form-grid" style={{gap:12}}>
+                    <label className="full-width">Customer contact number *
+                      <input ref={customerPhoneInputRef} type="tel" inputMode="tel" pattern="[79][0-9]{6}" title="Enter 7 digits starting with 7 or 9." name="phone" value={form.phone} onChange={event=>{setDismissedCustomerLookup('');updateForm(event);}} required placeholder="Phone number" />
+                    </label>
+                    {workspace==='Partner' && form.area!=='Boat' && isValidCustomerPhone(lookupPhone) && customerLookup.key===lookupKey && dismissedCustomerLookup!==lookupKey && (!form.customer.trim() || !form.address.trim()) && <>
+                      {customerLookup.status==='loading' && <small className="full-width muted" role="status">Checking previous deliveries…</small>}
+                      {customerLookup.status==='ready' && customerLookup.rows.length>0 && <div className="full-width" style={{border:'1px solid var(--border,#d8dee8)',borderRadius:8,padding:10,display:'grid',gap:8}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><strong style={{fontSize:13}}>Previous customer details</strong><button type="button" className="secondary-btn" style={{fontSize:12,padding:'4px 8px'}} onClick={()=>setDismissedCustomerLookup(lookupKey)}>Dismiss</button></div>
+                        {customerLookup.rows.map((row,index)=><button key={index} type="button" className="secondary-btn" style={{textAlign:'left',display:'grid',gap:3,padding:8,whiteSpace:'normal'}} onClick={()=>applyPreviousCustomer(row)}><strong>{row.customer_name}</strong><small>{row.address} · {row.area}</small><small>Use previous details</small></button>)}
+                        <small className="muted">Only empty fields will be filled. Confirm the delivery address.</small>
+                      </div>}
+                    </>}
                     <label className="full-width">Customer name *
                       <input ref={customerNameInputRef} name="customer" value={form.customer} onChange={updateForm} required placeholder="Full name" />
-                    </label>
-                    <label className="full-width">Customer contact number *
-                      <input type="tel" inputMode="tel" pattern="[79][0-9]{6}" title="Enter 7 digits starting with 7 or 9." name="phone" value={form.phone} onChange={updateForm} required placeholder="Phone number" />
                     </label>
                     {form.area === 'Boat' ? (
                       <label className="full-width">Boat name *

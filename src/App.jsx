@@ -213,6 +213,21 @@ const isVesselLine = (line) => {
   return /\b(?:boat|dhoni|dhoani|ferry|launch|speed[ -]?boat|speed[ -]?launch)\b/.test(normalized)
     || knownVesselAliases.some((name) => normalized.includes(name));
 };
+const detectSinglePackageArea = (address, pricingMode) => {
+  const text = normalizeMessageText(address);
+  const hulhumale = /\b(?:hulhu?male(?:e)?|hml|h\s*mle|h\s*male)\b/.test(text);
+  const phase2 = /\b(?:phase\s*(?:2|ii|two)|p2|hiyaa?|hyyaa?|vinares?|vinare)\b/.test(text);
+  const phase1 = /\b(?:phase\s*(?:1|i|one)|p1)\b/.test(text);
+  const male = /\b(?:male|mle|maafannu|henveiru|galolhu|machchangolhi)\b/.test(text);
+  if (phase1 && phase2) return '';
+  if (hulhumale || phase1 || phase2) {
+    if (male && !hulhumale) return '';
+    if (pricingMode === 'package_size') return 'Hulhumalé';
+    return phase2 ? 'Hulhumalé Phase 2' : phase1 ? 'Hulhumalé Phase 1' : '';
+  }
+  return male ? 'Malé' : '';
+};
+
 const cleanImportedMessageLine = (line) =>
   String(line || '')
     .replace(/^\s*\[\d{1,2}[/-]\d{1,2}[^\]]*\]\s*/i, '')
@@ -988,10 +1003,11 @@ export default function App() {
     boatLocation: '',
     departureTime: '',
     landmark: '',
-    area: 'Malé',
+    area: '',
+    areaManual: false,
     packageSize: '',
     item: '',
-    fee: String(getCurrentDeliveryFee('Malé') ?? ''),
+    fee: '',
     notes: '',
     trackingReference: '',
     codRequested: false,
@@ -1791,11 +1807,16 @@ export default function App() {
 
   const updateForm = (e) => {
     const { name, value } = e.target;
-    setForm((current) => ({
-      ...current,
-      [name]: name === 'phone' ? normalizeCustomerPhone(value) : name === 'area' && partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : value,
-      ...(name === 'area' || name === 'packageSize' ? { fee: String(getCurrentDeliveryFee(name === 'area' ? value : current.area, name === 'packageSize' ? value : current.packageSize) ?? '') } : {}),
-    }));
+    setForm((current) => {
+      const next = { ...current, [name]: name === 'phone' ? normalizeCustomerPhone(value) : value };
+      if (name === 'area') {
+        next.areaManual = Boolean(value);
+        if (partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase')) next.area = 'Hulhumalé';
+      }
+      if (name === 'address' && !current.areaManual) next.area = detectSinglePackageArea(value, partnerDeliveryPricing.pricingMode);
+      if (['area','address','packageSize'].includes(name)) next.fee = next.area ? String(getCurrentDeliveryFee(next.area, next.packageSize) ?? '') : '';
+      return next;
+    });
   };
 
   async function savePartnerTrackingSettings(event) {
@@ -1842,6 +1863,14 @@ export default function App() {
       return;
     }
 
+    if (!form.customer.trim() || !isValidCustomerPhone(form.phone)) {
+      setNotice('Enter the customer name and a valid 7-digit contact number.');
+      return;
+    }
+    if (!form.area) {
+      setNotice('Confirm the delivery area before adding the package.');
+      return;
+    }
     const contactError = packageContactError(form);
     if (contactError) {
       setNotice(contactError);
@@ -1910,10 +1939,12 @@ export default function App() {
         boatLocation: '',
         departureTime: '',
         landmark: '',
-        area: 'Malé',
+        area: '',
+        areaManual: false,
         packageSize: '',
         item: '',
-        fee: String(getCurrentDeliveryFee('Malé') ?? ''),
+        fee: '',
+        trackingReference: '',
         notes: '',
         codRequested: false,
         codAmount: '',
@@ -3591,160 +3622,61 @@ export default function App() {
                         'input:not([readonly]):not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button[type="submit"]'
                       )
                     );
-                    const index = fields.indexOf(e.target);
-                    if (index >= 0) fields[index + 1]?.focus();
+                    const visibleFields = fields.filter(field => field.getClientRects().length > 0);
+                    const index = visibleFields.indexOf(e.target);
+                    if (index >= 0) visibleFields[index + 1]?.focus();
                   }}
                 >
                   {' '}
-                  <h3>Customer and delivery details</h3>
-                  <div className="form-grid">
-                    <label>
-                      Customer name {form.area === 'Boat' ? '*' : '(optional)'}
-                      <input
-                        ref={customerNameInputRef}
-                        name="customer"
-                        value={form.customer}
-                        onChange={updateForm}
-                        required={form.area === 'Boat'}
-                        placeholder="Full name"
-                      />
+                  <div className="form-grid" style={{gap:12}}>
+                    <label className="full-width">Customer name *
+                      <input ref={customerNameInputRef} name="customer" value={form.customer} onChange={updateForm} required placeholder="Full name" />
                     </label>
-                    <label>
-                      Customer phone {form.area === 'Boat' ? '*' : '(optional)'}
-                      <input
-                        type="tel"
-                        inputMode="tel"
-                        pattern="[79][0-9]{6}"
-                        title="Enter 7 digits starting with 7 or 9."
-                        name="phone"
-                        value={form.phone}
-                        onChange={updateForm}
-                        required={form.area === 'Boat'}
-                        placeholder="Phone number"
-                      />
+                    <label className="full-width">Customer contact number *
+                      <input type="tel" inputMode="tel" pattern="[79][0-9]{6}" title="Enter 7 digits starting with 7 or 9." name="phone" value={form.phone} onChange={updateForm} required placeholder="Phone number" />
                     </label>
-                    <label className="full-width">
-                      Island / area *
-                      <select
-                        name="area"
-                        value={form.area}
-                        onChange={updateForm}
-                        required
-                      >
-                        <option>Malé</option>
+                    {form.area === 'Boat' ? (
+                      <label className="full-width">Boat name *
+                        <input name="boatName" value={form.boatName} onChange={updateForm} required placeholder="Name of the boat" />
+                      </label>
+                    ) : (
+                      <label className="full-width">Customer address *
+                        <input name="address" value={form.address} onChange={updateForm} required placeholder="House, street, building and area" />
+                      </label>
+                    )}
+                    {(form.address.trim() || form.area) ? <div className="full-width" style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                      <small className="muted">{form.area && !form.areaManual ? 'Detected location' : 'Delivery location'}</small>
+                      <select name="area" aria-label="Delivery location" value={form.area} onChange={updateForm} required style={{width:'auto',maxWidth:'100%',minHeight:34,padding:'5px 10px',fontSize:13}}>
+                        <option value="">Confirm area</option><option>Malé</option>
                         {partnerDeliveryPricing.pricingMode === 'package_size' ? <option>Hulhumalé</option> : <><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
                         <option>Boat</option>
                       </select>
+                    </div> : <div className="full-width" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                      <small className="muted">Location is detected from the address.</small>
+                      <button type="button" className="secondary-btn" style={{padding:'5px 10px',fontSize:12}} onClick={()=>updateForm({target:{name:'area',value:'Boat'}})}>Boat delivery</button>
+                    </div>}
+                    <label className="full-width">Delivery instructions
+                      <textarea name="notes" value={form.notes} onChange={updateForm} placeholder="Optional instructions for the driver" rows="2" />
                     </label>
-                    {partnerDeliveryPricing.pricingMode === 'package_size' && (
-                      <div className="package-size-chips" role="group" aria-label="Package size">
-                        {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
-                          <button key={size} type="button" className={form.packageSize === size ? 'selected' : ''} aria-label={label + ' package size, MVR ' + partnerDeliveryPricing.packageSizeRates[size]} aria-pressed={form.packageSize === size} onClick={() => updateForm({ target: { name: 'packageSize', value: size } })}>
-                            <span className="package-size-initial">{size}</span><span className="package-size-label">{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
-                          </button>
-                        ))}
-                        {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}
+                    {partnerDeliveryPricing.pricingMode === 'package_size' && <label className="full-width">Package size *
+                      <select name="packageSize" value={form.packageSize} onChange={updateForm} required>
+                        <option value="">Select package size</option>
+                        {Object.entries(packageSizeLabels).filter(([size])=>Number(partnerDeliveryPricing.packageSizeRates?.[size])>0).map(([size,label])=><option key={size} value={size}>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</option>)}
+                      </select>
+                    </label>}
+                    {partnerDeliveryPricing.codEnabled && <div className="full-width">
+                      <label style={{display:'flex',alignItems:'center',gap:8,flexDirection:'row',justifyContent:'flex-start'}}><input style={{width:18,height:18,minHeight:0,margin:0,flex:'0 0 auto'}} type="checkbox" checked={Boolean(form.codRequested)} onChange={event=>setForm(current=>({...current,codRequested:event.target.checked,codAmount:event.target.checked?current.codAmount:''}))}/>Cash on delivery</label>
+                      {form.codRequested&&<label>COD amount (MVR) *<input name="codAmount" type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" required value={form.codAmount} onChange={updateForm} placeholder="Customer pays"/></label>}
+                    </div>}
+                    <details className="full-width" style={{borderTop:'1px solid #e5e7eb',paddingTop:8}}>
+                      <summary style={{cursor:'pointer',fontSize:13}}>Additional details (optional)</summary>
+                      <div style={{display:'grid',gap:10,marginTop:10}}>
+                        {form.area==='Boat' ? <><label>Boat location<input name="boatLocation" value={form.boatLocation} onChange={updateForm} placeholder="Harbour or jetty"/></label><label>Departure time<input type="time" name="departureTime" value={form.departureTime} onChange={updateForm}/></label></> : <label>Nearby landmark<input name="landmark" value={form.landmark} onChange={updateForm} placeholder="Nearby landmark"/></label>}
+                        <label>Partner tracking reference<input name="trackingReference" value={form.trackingReference} onChange={updateForm} placeholder="Auto-generated if configured"/></label>
+                        <label>Package description<input name="item" value={form.item} onChange={updateForm} placeholder="e.g. Clothing order"/></label>
                       </div>
-                    )}
-                    {form.area === 'Boat' ? (
-                      <>
-                        <label className="full-width">
-                          Boat name *
-                          <input
-                            name="boatName"
-                            value={form.boatName}
-                            onChange={updateForm}
-                            required
-                            placeholder="Name of the boat"
-                          />
-                        </label>
-                        <label>
-                          Boat location (optional)
-                          <input
-                            name="boatLocation"
-                            value={form.boatLocation}
-                            onChange={updateForm}
-                            placeholder="Harbour, jetty or pickup point"
-                          />
-                        </label>
-                        <label>
-                          Departure time (optional)
-                          <input
-                            type="time"
-                            name="departureTime"
-                            value={form.departureTime}
-                            onChange={updateForm}
-                          />
-                        </label>
-                      </>
-                    ) : (
-                      <>
-                        <label className="full-width">
-                          Delivery address *
-                          <input
-                            name="address"
-                            value={form.address}
-                            onChange={updateForm}
-                            required
-                            placeholder="House, street or building"
-                          />
-                        </label>
-                        <label className="full-width">
-                          Nearby landmark (optional)
-                          <input
-                            name="landmark"
-                            value={form.landmark}
-                            onChange={updateForm}
-                            placeholder="A nearby shop, mosque or other landmark"
-                          />
-                        </label>
-                      </>
-                    )}
-                    {partnerDeliveryPricing.codEnabled && (
-                      <div className="full-width cod-request-fields">
-                        <label className="cod-toggle"><input type="checkbox" checked={Boolean(form.codRequested)} onChange={event => setForm(current => ({ ...current, codRequested: event.target.checked, codAmount: event.target.checked ? current.codAmount : '' }))} />Collect cash on delivery for this package</label>
-                        {form.codRequested && <label>Customer pays on delivery (MVR) *<input name="codAmount" type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" required value={form.codAmount} onChange={updateForm} placeholder="e.g. 250.00" /></label>}
-                        <small>Optional per package. This cash amount is separate from iGO's delivery fee.</small>
-                      </div>
-                    )}
-                    <label className="full-width">
-                      Delivery instructions
-                      <textarea
-                        name="notes"
-                        value={form.notes}
-                        onChange={updateForm}
-                        placeholder="Optional notes for the driver"
-                        rows="3"
-                      />
-                    </label>
-                    <label>
-                      Partner tracking reference (optional)
-                      <input
-                        name="trackingReference"
-                        value={form.trackingReference}
-                        onChange={updateForm}
-                        placeholder="e.g. BBD/0036"
-                      />
-                    </label>
-                    <label>
-                      Package description (optional)
-                      <input
-                        name="item"
-                        value={form.item}
-                        onChange={updateForm}
-                        placeholder="e.g. Clothing order"
-                      />
-                    </label>
-                    <label>
-                      Delivery fee (MVR) *
-                      <input
-                        type="text"
-                        value={form.fee}
-                        readOnly
-                        aria-label="Calculated delivery fee in MVR"
-                      />
-                      <small>{partnerDeliveryPricing.pricingMode === 'agreed_flat' ? 'This customer’s agreed rate applies to every delivery area.' : 'Calculated from the delivery route.'}</small>
-                    </label>
+                    </details>
+                    <div className="full-width" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'8px 0'}}><span>Delivery fee</span><strong>{form.area && form.fee ? 'MVR '+Number(form.fee).toFixed(2) : 'Calculated automatically'}</strong></div>
                   </div>
                   <div className="form-actions">
                     <button

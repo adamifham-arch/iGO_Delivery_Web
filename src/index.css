@@ -8928,3 +8928,47 @@ article.driver-delivery-card .driver-failed-attempt > summary { padding: 4px 0; 
   border-left-color: #eab308;
 }
 .app[data-theme="night"] .main .driver-collected-expanded { border-color: #475569; }
+
+/* Rider collected-list typography adjustment: keep the dense list unchanged,
+   reduce only oversized text shown after expanding a collected package. */
+.driver-collected-expanded .driver-next-step {
+  font-size: 14px !important;
+  line-height: 1.35 !important;
+  font-weight: 600 !important;
+  padding: 9px 11px !important;
+  margin: 0 0 10px !important;
+  border-radius: 9px !important;
+}
+.driver-collected-expanded .driver-next-step strong { font-weight: 700; }
+.driver-collected-expanded .cod-driver-alert {
+  font-size: 13px;
+  line-height: 1.35;
+  gap: 4px;
+  padding: 10px 12px;
+  margin: 8px 0 10px;
+}
+.driver-collected-expanded .cod-driver-alert > strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+.driver-collected-expanded .cod-driver-alert small { font-size: 12px; line-height: 1.35; }
+.driver-collected-expanded .cod-driver-confirm {
+  font-size: 13px;
+  line-height: 1.35;
+  padding: 9px 10px;
+}
+.driver-collected-expanded .driver-failed-attempt > summary {
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 600;
+  padding: 5px 0;
+}
+.driver-collected-expanded .driver-delivery-footer .driver-action {
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 650;
+  min-height: 39px;
+  padding: 9px 13px;
+}

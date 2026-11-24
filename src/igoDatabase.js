@@ -55,6 +55,10 @@ export function packageFromDb(row) {
     landmark: row.landmark || '',
     item: row.item_description,
     fee: Number(row.delivery_fee || 0),
+    codAmount: row.cod_amount == null ? null : Number(row.cod_amount),
+    codCollectedAmount: row.cod_collected_amount == null ? null : Number(row.cod_collected_amount),
+    codCollectedAt: row.cod_collected_at || null,
+    codCollectedBy: row.cod_collected_by || null,
     packageSize: row.package_size || '',
     notes: row.notes || '',
     status: statusFromDb(row.status),
@@ -86,6 +90,8 @@ export function packageToDb(entry) {
     landmark: 'landmark',
     item: 'item_description',
     fee: 'delivery_fee',
+    codAmount: 'cod_amount',
+    codCollectedAmount: 'cod_collected_amount',
     packageSize: 'package_size',
     notes: 'notes',
     status: 'status',
@@ -595,10 +601,10 @@ export async function savePaymentAccount({ id, bankName = '', accountName, accou
 }
 
 export async function loadPartnerDeliveryPricing(partnerId) {
-  if (!partnerId) return { pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} };
+  if (!partnerId) return { pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {}, codEnabled: false };
   const { data, error } = await requireClient()
     .from('partners')
-    .select('delivery_pricing_mode,agreed_delivery_fee,package_size_rates')
+    .select('delivery_pricing_mode,agreed_delivery_fee,package_size_rates,cod_enabled')
     .eq('id', partnerId)
     .maybeSingle();
   if (error) {
@@ -615,13 +621,14 @@ export async function loadPartnerDeliveryPricing(partnerId) {
     pricingMode: data?.delivery_pricing_mode || 'route',
     agreedDeliveryFee: data?.agreed_delivery_fee == null ? null : Number(data.agreed_delivery_fee),
     packageSizeRates: data?.package_size_rates || {},
+    codEnabled: data?.cod_enabled === true,
   };
 }
 
 export async function loadPartnerDeliveryPricingSettings() {
   const { data, error } = await requireClient()
     .from('partners')
-    .select('id,name,delivery_pricing_mode,agreed_delivery_fee,package_size_rates')
+    .select('id,name,delivery_pricing_mode,agreed_delivery_fee,package_size_rates,cod_enabled')
     .order('name', { ascending: true });
   if (error) throw error;
   return (data || []).map((row) => ({
@@ -630,6 +637,7 @@ export async function loadPartnerDeliveryPricingSettings() {
     pricingMode: row.delivery_pricing_mode || 'route',
     agreedDeliveryFee: row.agreed_delivery_fee == null ? null : Number(row.agreed_delivery_fee),
     packageSizeRates: row.package_size_rates || {},
+    codEnabled: row.cod_enabled === true,
   }));
 }
 
@@ -650,6 +658,15 @@ export async function savePartnerPackageSizeRates({ partnerId, packageSizeRates 
   });
   if (error) throw error;
   if (data !== true) throw new Error('The package size rates were not saved.');
+}
+
+export async function savePartnerCodSetting({ partnerId, enabled }) {
+  const { data, error } = await requireClient().rpc('save_igo_partner_cod_setting', {
+    p_partner_id: partnerId,
+    p_enabled: Boolean(enabled),
+  });
+  if (error) throw error;
+  if (data !== true) throw new Error('COD permission was not saved.');
 }
 
 export async function saveInvoiceCutoff(time) {

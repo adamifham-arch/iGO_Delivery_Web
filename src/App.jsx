@@ -5492,6 +5492,8 @@ function DriverWorkflowDashboard({
     (p) => !['Delivered', 'Cancelled'].includes(p.status)
   );
   const delivered = assigned.filter((p) => p.status === 'Delivered'); const pendingPickups = active.filter((p) => p.status === 'Pending' && !deferredPickupIds.includes(p.id)); const inDelivery = active.filter((p) => p.status !== 'Pending'); const deferredPending = active.filter((p) => p.status === 'Pending' && deferredPickupIds.includes(p.id)); useEffect(() => { if (routeTab === 'pickup' && pendingPickups.length === 0 && inDelivery.length > 0) setRouteTab('delivery'); }, [routeTab, pendingPickups.length, inDelivery.length]); const routePackages = routeTab === 'delivered' ? delivered : routeTab === 'delivery' ? inDelivery : pendingPickups;
+  const useCompactRouteList = routeTab === 'delivery' || routeTab === 'delivered';
+  const RoutePackageRow = useCompactRouteList ? 'details' : 'article';
   const earned = delivered.reduce(
     (total, p) => total + ((Number(p.fee) || 0) * rate) / 100,
     0
@@ -5775,11 +5777,30 @@ function DriverWorkflowDashboard({
           </div>
           <span className="driver-count">{active.length} active</span>
         </div>
-        <div role="tablist" aria-label="Package trip stages" style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}><button type="button" role="tab" aria-selected={routeTab === 'pickup'} className="secondary-btn" onClick={() => setRouteTab('pickup')}>Pickups ({pendingPickups.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivery'} className="secondary-btn" onClick={() => setRouteTab('delivery')}>Deliveries ({inDelivery.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivered'} className="secondary-btn" onClick={() => setRouteTab('delivered')}>Delivered ({delivered.length})</button></div>{routeTab === 'delivery' && pendingPickups.length > 0 && <button type="button" className="secondary-btn" onClick={() => setRouteTab('pickup')}>Return to pickups ({pendingPickups.length})</button>}{routeTab === 'pickup' && inDelivery.length > 0 && <button type="button" className="driver-action" onClick={() => setRouteTab('delivery')}>Start delivery run ({inDelivery.length})</button>}{deferredPending.length > 0 && <button type="button" className="secondary-btn" onClick={() => setDeferredPickupIds([])}>Restore {deferredPending.length} skipped package(s)</button>}{routePackages.length ? (
-          <div className="driver-delivery-list">
+        <div role="tablist" aria-label="Package trip stages" style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}><button type="button" role="tab" aria-selected={routeTab === 'pickup'} className="secondary-btn" onClick={() => setRouteTab('pickup')}>Pickups ({pendingPickups.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivery'} className="secondary-btn" onClick={() => setRouteTab('delivery')}>Deliveries ({inDelivery.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivered'} className="secondary-btn" onClick={() => setRouteTab('delivered')}>Delivered ({delivered.length})</button></div>{routeTab === 'delivery' && pendingPickups.length > 0 && <button type="button" className="secondary-btn" onClick={() => setRouteTab('pickup')}>Return to pickups ({pendingPickups.length})</button>}{routeTab === 'pickup' && inDelivery.length > 0 && <button type="button" className="driver-action" onClick={() => setRouteTab('delivery')}>Start delivery run ({inDelivery.length})</button>}{deferredPending.length > 0 && <button type="button" className="secondary-btn" onClick={() => setDeferredPickupIds([])}>Restore {deferredPending.length} skipped package(s)</button>}{routeTab === 'delivery' && inDelivery.length > 0 && <p className="driver-collected-list-caption">Collected packages · tap a row to view delivery details and actions</p>}{routePackages.length ? (
+          <div className={useCompactRouteList ? 'driver-collected-list' : 'driver-delivery-list'}>
             {routePackages.map((p) => (
-              <article className="driver-delivery-card" key={p.id}>
-                <div className="driver-delivery-top">
+              <RoutePackageRow className={useCompactRouteList ? 'driver-collected-row' : 'driver-delivery-card'} key={p.id}>
+                {useCompactRouteList && (
+                  <summary className="driver-collected-summary">
+                    <span className="driver-collected-identity">
+                      <span className="driver-collected-id">{p.id}</span>
+                      <strong>{p.customer || 'Customer'}</strong>
+                    </span>
+                    <span className="driver-collected-destination">
+                      {p.area === 'Boat' ? p.boatName || p.address || 'Boat destination' : p.address || p.area || 'Destination not recorded'}
+                    </span>
+                    <span className="driver-collected-meta">
+                      <span>{p.partnerName || p.partner || 'Partner'}</span>
+                      <span className={'driver-collected-status status-' + statusClass(p.status)}>{p.status}</span>
+                      {p.codAmount != null && <strong className="driver-collected-cod">{p.codCollectedAt ? 'COD collected' : 'Collect COD'} · MVR {Number(p.codAmount).toFixed(2)}</strong>}
+                    </span>
+                    {typeof p.notes === 'string' && p.notes.trim() && <span className="driver-collected-note"><strong>Instructions:</strong> {p.notes.trim()}</span>}
+                    <span className="driver-collected-chevron" aria-hidden="true">⌄</span>
+                  </summary>
+                )}
+                <div className={useCompactRouteList ? 'driver-collected-expanded' : undefined}>
+                {!useCompactRouteList && <div className="driver-delivery-top">
                   <div>
                     <span className="driver-package-id">{p.id}</span>
                     <h4>{p.customer}</h4>
@@ -5787,9 +5808,9 @@ function DriverWorkflowDashboard({
                   <span className={'status status-' + statusClass(p.status)}>
                     {p.status}
                   </span>
-                </div>
+                </div>}
                 {p.status === 'Pending' ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#fff7d6', color: '#664f00', fontWeight: 700 }}><strong>Next step:</strong> Go to {p.partnerName || p.partner || 'the partner'} to collect this package.</p> : ['Picked Up', 'Out for Delivery'].includes(p.status) ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#eaf6ef', color: '#155b43', fontWeight: 700 }}><strong>Next step:</strong> Deliver to {p.area === 'Boat' ? p.boatName || p.address || 'the boat' : p.address || p.area || 'the customer address'}.</p> : null}
-                {typeof p.notes === 'string' && p.notes.trim() && (
+                {!useCompactRouteList && typeof p.notes === 'string' && p.notes.trim() && (
                   <section
                     className="driver-partner-instructions"
                     aria-label="Partner delivery instructions"
@@ -5976,7 +5997,8 @@ function DriverWorkflowDashboard({
                     </button>
                   </details>
                 )}
-              </article>
+                </div>
+              </RoutePackageRow>
             ))}
           </div>
         ) : (

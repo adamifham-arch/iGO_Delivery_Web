@@ -5292,6 +5292,7 @@ function DriverWorkflowDashboard({
     }
   });
   const [selected, setSelected] = useState([]);
+  const [codConfirmed, setCodConfirmed] = useState({});
   const [activePartner, setActivePartner] = useState(''); const [routeTab, setRouteTab] = useState('pickup'); const [deferredPickupIds, setDeferredPickupIds] = useState([]);
   const [proofs, setProofs] = useState({});
   const [reasons, setReasons] = useState({});
@@ -5464,8 +5465,12 @@ function DriverWorkflowDashboard({
     });
   };
   const confirmBoatDelivery = (p) => {
-    if (!proofs[p.id]) return;
-    onUpdate(p.id, { status: 'Delivered', proofPhoto: proofs[p.id] });
+    if (!proofs[p.id] || (p.codAmount != null && !codConfirmed[p.id])) return;
+    onUpdate(p.id, {
+      status: 'Delivered',
+      proofPhoto: proofs[p.id],
+      ...(p.codAmount != null ? { codCollectedAmount: Number(p.codAmount) } : {}),
+    });
   };
   return (
     <div className="driver-dashboard">
@@ -5604,7 +5609,8 @@ function DriverWorkflowDashboard({
                       {p.id} · {p.customer}
                     </strong>
                     <br />
-                    {p.area || 'Destination not recorded'} · MVR {p.fee}
+                    {p.area || 'Destination not recorded'} · Delivery fee MVR {p.fee}
+                    {p.codAmount != null && <><br /><strong className="cod-status">COD · collect MVR {Number(p.codAmount).toFixed(2)}</strong></>}
                   </span>
                 </label>
               ))}
@@ -5684,6 +5690,11 @@ function DriverWorkflowDashboard({
                     </div>
                   </section>
                 </div></details>
+                {p.codAmount != null && <div className="cod-driver-alert" role="note">
+                  <strong>{p.codCollectedAt ? 'COD collected' : 'CASH TO COLLECT'} · MVR {Number(p.codAmount).toFixed(2)}</strong>
+                  <small>Customer payment for the partner. Separate from delivery fee MVR {p.fee}.</small>
+                  {p.codCollectedAt && <small>Recorded {new Date(p.codCollectedAt).toLocaleString()}</small>}
+                </div>}
                 <div className="driver-delivery-footer">
                   <span>
                     Driver pay{' '}
@@ -5705,6 +5716,12 @@ function DriverWorkflowDashboard({
                     >
                       Start delivery
                     </button>
+                  )}
+                  {p.status === 'Out for Delivery' && p.codAmount != null && (
+                    <label className="cod-toggle cod-driver-confirm">
+                      <input type="checkbox" checked={Boolean(codConfirmed[p.id])} onChange={event => setCodConfirmed(current => ({ ...current, [p.id]: event.target.checked }))} />
+                      I collected MVR {Number(p.codAmount).toFixed(2)} cash from the customer
+                    </label>
                   )}
                   {p.status === 'Out for Delivery' &&
                     (p.area === 'Boat' ? (
@@ -5731,8 +5748,8 @@ function DriverWorkflowDashboard({
                         <button
                           type="button"
                           className="driver-action"
-                          disabled={!proofs[p.id]}
-                          onClick={() => confirmBoatDelivery(p)}
+                          disabled={!proofs[p.id] || (p.codAmount != null && !codConfirmed[p.id])}
+                          onClick={() => confirmBoatDelivery(p)
                         >
                           Deliver with proof
                         </button>
@@ -5741,10 +5758,12 @@ function DriverWorkflowDashboard({
                       <button
                         type="button"
                         className="driver-action"
+                        disabled={p.codAmount != null && !codConfirmed[p.id]}
                         onClick={() =>
                           onUpdate(p.id, {
                             status: 'Delivered',
                             deliveredAt: new Date().toISOString(),
+                            ...(p.codAmount != null ? { codCollectedAmount: Number(p.codAmount) } : {}),
                           })
                         }
                       >

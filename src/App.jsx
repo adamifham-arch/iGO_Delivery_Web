@@ -3,6 +3,7 @@ import './index.css';
 import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
 import PartnerInvoiceLedger from './PartnerInvoiceLedger';
 import CodSettlementManagement from './CodSettlementManagement';
+import {notificationVisible} from './notificationWorkspaces';
 import AdminDailyOverview from './AdminDailyOverview';
 import PartnerBillingFrequency from './PartnerBillingFrequency';
 import PartnerAiQuickAsk from './PartnerAiQuickAsk';
@@ -1681,6 +1682,7 @@ export default function App() {
   };
 
   function handleNotificationNavigate(item) {
+    if (!notificationVisible(item, workspace)) return;
     const explicitPage = [item.target_page, item.related_page, item.page, item.destination]
       .find((value) => typeof value === 'string' && value.trim());
     const explicitTarget = [
@@ -1707,7 +1709,11 @@ export default function App() {
     let targetWorkspace = '';
     // COD settlement notifications are financial review tasks, not new-partner
     // approval requests. Handle them before the generic "partner request" rule.
-    if (/\bcod\b.*\b(?:settlement|invoice offset)\b|\b(?:settlement|invoice offset)\b.*\bcod\b/.test(title)) {
+    if (/^cod payout (requested|transferred|rejected)$/.test(title)) {
+      destination = 'COD Collections';
+      targetId = 'cod-payout-requests';
+      targetWorkspace = title === 'cod payout requested' ? 'Admin' : 'Partner';
+    } else if (/\bcod\b.*\b(?:settlement|invoice offset)\b|\b(?:settlement|invoice offset)\b.*\bcod\b/.test(title)) {
       destination = 'COD Collections';
       targetId = 'cod-settlement-requests';
       targetWorkspace = /requested/.test(title) ? 'Admin' : 'Partner';
@@ -1726,10 +1732,14 @@ export default function App() {
     } else if (/driver withdrawal request/.test(title)) {
       destination = destination || 'Finance Management';
       targetId = targetId || 'admin-withdrawal-requests';
-      targetWorkspace = 'Admin';
+      targetWorkspace = workspace === 'Staff' ? 'Staff' : 'Admin';
+      if (workspace === 'Staff') { destination = 'Staff Operations'; targetId = 'staff-payment-status'; }
     } else if (/partner payment submitted/.test(title)) {
       destination = destination || 'Finance Management';
       targetId = targetId || 'admin-payment-review';
+      targetWorkspace = 'Admin';
+    } else if (title === 'payment approved' && !notificationVisible(item, 'Partner')) {
+      destination = 'Finance Management';
       targetWorkspace = 'Admin';
     } else if (/invoice available|payment approved|payment needs attention/.test(title)) {
       destination = destination || 'Invoices & Payments';
@@ -2960,7 +2970,7 @@ export default function App() {
           <span className="breadcrumb">
             {workspace} / {page}
           </span>
-          <button className="workspace-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const app = event.currentTarget.closest('.app'); const night = app.dataset.theme !== 'night'; app.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button>{databaseProfile && <NotificationCenter onNavigate={handleNotificationNavigate} currentPage={page} />}
+          <button className="workspace-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const app = event.currentTarget.closest('.app'); const night = app.dataset.theme !== 'night'; app.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button>{databaseProfile && <NotificationCenter key={(databaseUser?.id || '') + ':' + workspace} workspace={workspace} onNavigate={handleNotificationNavigate} currentPage={page} />}
 <div className="profile-menu-container">
             <button
               type="button"
@@ -6538,7 +6548,7 @@ function ProfileChangeRequests({ profile, user, workspace, setNotice }) {
   </section>;
 }
 
-function NotificationCenter({ onNavigate, currentPage }) {
+function NotificationCenter({ onNavigate, currentPage, workspace }) {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
   // Also dismiss the panel if navigation changes through history or another control.
@@ -6572,7 +6582,7 @@ function NotificationCenter({ onNavigate, currentPage }) {
       if (!active || refreshing || document.visibilityState !== 'visible') return;
       refreshing = true;
       try {
-        const rows = await loadNotifications();
+        const rows = await loadNotifications(workspace);
         if (active) { setNotifications(rows); setError(''); }
       } catch (loadError) {
         if (active) setError(loadError.message || 'Could not load notifications.');

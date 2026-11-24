@@ -61,7 +61,10 @@ import {
   loadPartnerDeliveryPricingSettings,
   savePartnerDeliveryPricing,
   savePartnerPackageSizeRates,
+  savePartnerCodSetting,
 } from './igoDatabase';
+
+const validCodAmount = (value) => /^\d{1,6}(?:\.\d{1,2})?$/.test(String(value).trim()) && Number(value) > 0 && Number(value) <= 999999;
 
 const partnerOperatingLocation = 'Malé'; // Admin-configured partner operating location
 const deliveryRates = {
@@ -690,7 +693,7 @@ export default function App() {
   const [aiAssistantSaving, setAiAssistantSaving] = useState(Boolean(supabaseConfigured));
   const [aiAssistantFeedback, setAiAssistantFeedback] = useState('');
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
-  const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
+  const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {}, codEnabled: false });
   const getCurrentDeliveryFee = (destination, packageSize = '') => getPartnerDeliveryFee(destination, partnerDeliveryPricing, packageSize);
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
   const [partnerSetupOpen, setPartnerSetupOpen] = useState(false);
@@ -989,6 +992,8 @@ export default function App() {
     fee: String(getCurrentDeliveryFee('Malé') ?? ''),
     notes: '',
     trackingReference: '',
+    codRequested: false,
+    codAmount: '',
   });
 
   useEffect(() => {
@@ -1029,7 +1034,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
-        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {}, codEnabled: false });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseLoading(false);
@@ -1105,7 +1110,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
-        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {}, codEnabled: false });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseError(error.message || 'Could not load this iGO account.');
@@ -1824,6 +1829,10 @@ export default function App() {
 
   async function registerPackage(e) {
     e.preventDefault();
+    if (form.codRequested && (!partnerDeliveryPricing.codEnabled || !validCodAmount(form.codAmount))) {
+      setNotice('Enter a valid cash-on-delivery amount between MVR 0.01 and 999,999.00.');
+      return;
+    }
 
     const contactError = packageContactError(form);
     if (contactError) {
@@ -1855,6 +1864,7 @@ export default function App() {
       phone: normalizeCustomerPhone(form.phone),
       id: `IGO-${1001 + packages.length}`,
       fee: Number(form.fee),
+      codAmount: partnerDeliveryPricing.codEnabled && form.codRequested ? Number(form.codAmount) : null,
       packageSize: form.packageSize || '',
       status: 'Pending',
     };
@@ -1897,6 +1907,8 @@ export default function App() {
         item: '',
         fee: String(getCurrentDeliveryFee('Malé') ?? ''),
         notes: '',
+        codRequested: false,
+        codAmount: '',
       });
 
       setMessageDraft('');
@@ -2344,6 +2356,7 @@ export default function App() {
           ? {
               ...entry,
               [field]: field === 'phone' ? normalizeCustomerPhone(value) : field === 'area' && partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : value,
+              ...(field === 'codRequested' ? { codAmount: value ? entry.codAmount || '' : '' } : {}),
               ...(field === 'area' || field === 'packageSize'
                 ? { fee: String(getCurrentDeliveryFee(field === 'area' ? value : entry.area, field === 'packageSize' ? value : entry.packageSize) ?? '') }
                 : {}),
@@ -2357,6 +2370,7 @@ export default function App() {
     const incomplete = messageQueue.filter(
       (entry) =>
         packageContactError(entry) ||
+        (entry.codRequested && (!partnerDeliveryPricing.codEnabled || !validCodAmount(entry.codAmount))) ||
         (partnerDeliveryPricing.pricingMode === 'package_size' && (!entry.packageSize || !getCurrentDeliveryFee(entry.area, entry.packageSize))) ||
         !(entry.area === 'Boat' ? entry.boatName : entry.address)?.trim() ||
         !validDepartureTime(
@@ -2367,7 +2381,7 @@ export default function App() {
     );
     if (incomplete.length) {
       setMessageNotice(
-        'Land deliveries need a customer name or phone. Boat deliveries need both, plus a boat name. Check the delivery address, package size, and departure time.'
+        'Check customer details, delivery address, package size, and any COD amount (MVR 0.01–999,999.00). Boat deliveries also need a customer and boat name.'
       );
       setConfirmBulkAdd(false);
       return;
@@ -2396,6 +2410,7 @@ export default function App() {
         phone: normalizeCustomerPhone(entry.phone),
         id: 'IGO-' + (1001 + packages.length + index),
         fee: getCurrentDeliveryFee(entry.area, entry.packageSize),
+        codAmount: partnerDeliveryPricing.codEnabled && entry.codRequested ? Number(entry.codAmount) : null,
         packageSize: entry.packageSize || '',
         status: 'Pending',
       }));
@@ -3459,6 +3474,12 @@ export default function App() {
                               />
                             </label>
                           ))}
+                          {partnerDeliveryPricing.codEnabled && (
+                            <div className="cod-request-fields">
+                              <label className="cod-toggle"><input type="checkbox" checked={Boolean(entry.codRequested)} onChange={(event) => updateQueuedPackage(entry.queueId, 'codRequested', event.target.checked)} />Collect cash on delivery for this package</label>
+                              {entry.codRequested && <label>Customer pays on delivery (MVR) *<input type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" value={entry.codAmount || ''} onChange={(event) => updateQueuedPackage(entry.queueId, 'codAmount', event.target.value)} /></label>}
+                            </div>
+                          )}
                           <label className="message-queue-instructions">
                             Delivery instructions (optional)
                             <textarea
@@ -3656,6 +3677,13 @@ export default function App() {
                           />
                         </label>
                       </>
+                    )}
+                    {partnerDeliveryPricing.codEnabled && (
+                      <div className="full-width cod-request-fields">
+                        <label className="cod-toggle"><input type="checkbox" checked={Boolean(form.codRequested)} onChange={event => setForm(current => ({ ...current, codRequested: event.target.checked, codAmount: event.target.checked ? current.codAmount : '' }))} />Collect cash on delivery for this package</label>
+                        {form.codRequested && <label>Customer pays on delivery (MVR) *<input name="codAmount" type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" required value={form.codAmount} onChange={updateForm} placeholder="e.g. 250.00" /></label>}
+                        <small>Optional per package. This cash amount is separate from iGO's delivery fee.</small>
+                      </div>
                     )}
                     <label className="full-width">
                       Delivery instructions
@@ -4046,6 +4074,7 @@ function PartnerDeliveryPricingManagement() {
       setDrafts(Object.fromEntries(rows.map((partner) => [partner.id, {
         pricingMode: partner.pricingMode || 'route',
         agreedDeliveryFee: partner.agreedDeliveryFee == null ? '' : String(partner.agreedDeliveryFee),
+        codEnabled: Boolean(partner.codEnabled),
         packageSizeRates: Object.fromEntries(['S', 'M', 'L', 'XL'].map((size) => [
           size,
           partner.packageSizeRates?.[size] == null ? '' : String(partner.packageSizeRates[size]),
@@ -4097,7 +4126,8 @@ function PartnerDeliveryPricingManagement() {
           agreedDeliveryFee: draft.pricingMode === 'agreed_flat' ? agreedDeliveryFee : null,
         });
       }
-      setMessage('Saved delivery pricing for ' + partner.name + '. It applies to new packages; existing packages keep their saved fee.');
+      await savePartnerCodSetting({ partnerId: partner.id, enabled: Boolean(draft.codEnabled) });
+      setMessage('Saved delivery rates and COD permission for ' + partner.name + '. Existing COD packages retain their original amounts.');
       await refresh();
     } catch (saveError) {
       setError(saveError.message || 'Could not save this customer rate.');
@@ -4112,7 +4142,7 @@ function PartnerDeliveryPricingManagement() {
     <section id="partner-delivery-pricing" className="card" style={{ padding: 20, display: 'grid', gap: 16 }}>
       <div>
         <p className="eyebrow">CUSTOMER BILLING</p>
-        <h2 style={{ margin: '4px 0 6px' }}>Partner delivery rates</h2>
+        <h2 style={{ margin: '4px 0 6px' }}>Partner delivery rates &amp; COD permissions</h2>
         <p style={{ margin: 0, color: '#748094' }}>
           Choose route pricing, one agreed rate, or separate prices by package size.
         </p>
@@ -4146,6 +4176,7 @@ function PartnerDeliveryPricingManagement() {
                 ))}
               </div>
             )}
+            <label className="cod-toggle" style={{ gridColumn: '1 / -1' }}><input type="checkbox" checked={Boolean(draft.codEnabled)} onChange={event => updateDraft(partner.id, { codEnabled: event.target.checked })} />Allow this partner to request cash on delivery (optional per package)</label>
             <button className="primary-btn" type="button" onClick={() => void save(partner)} disabled={savingId === partner.id || (draft.pricingMode === 'agreed_flat' && !(Number(draft.agreedDeliveryFee) > 0))}>{savingId === partner.id ? 'Saving…' : 'Save rate'}</button>
           </article>
         );

@@ -3511,7 +3511,6 @@ export default function App() {
                             {partnerDeliveryPricing.pricingMode === 'package_size' && entry.packageSize ? `${packageSizeLabels[entry.packageSize]} package · ` : ''}{entry.fee ? `Delivery fee: MVR ${entry.fee}` : partnerDeliveryPricing.pricingMode === 'package_size' ? 'Choose a priced package size' : 'Delivery fee not available'}
                           </p>
                           {entry.item && <p>Package: {entry.item}</p>}
-                          {entry.notes && <p>Instructions: {entry.notes}</p>}
                             </div>
                           </details>
                         </div>

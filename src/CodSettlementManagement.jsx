@@ -107,7 +107,7 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
   const submit = async (event) => {
     event.preventDefault();
     if (!selected.length) { setError('Choose one or more unpaid invoices.'); return; }
-    if (!Number.isFinite(readyAmount) || readyAmount <= 0 || !/^\\d+(?:\\.\\d{1,2})?$/.test(amount.trim()) || readyAmount > requestable + 0.0001 || readyAmount > selectedDue + 0.0001) {
+    if (!Number.isFinite(readyAmount) || readyAmount <= 0 || !/^\d+(?:\.\d{1,2})?$/.test(amount.trim()) || readyAmount > requestable + 0.0001 || readyAmount > selectedDue + 0.0001) {
       setError('Amount must be positive and cannot exceed unallocated COD collected or your selected invoice balances.');
       return;
     }

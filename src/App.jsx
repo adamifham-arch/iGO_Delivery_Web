@@ -4221,11 +4221,26 @@ function PartnerDeliveryPricingManagement() {
           agreedDeliveryFee: draft.pricingMode === 'agreed_flat' ? agreedDeliveryFee : null,
         });
       }
-      await savePartnerCodSetting({ partnerId: partner.id, enabled: Boolean(draft.codEnabled) });
-      setMessage('Saved delivery rates and COD permission for ' + partner.name + '. Existing COD packages retain their original amounts.');
+      setMessage('Saved delivery pricing for ' + partner.name + '. New packages use the updated rate.');
       await refresh();
     } catch (saveError) {
       setError(saveError.message || 'Could not save this customer rate.');
+    } finally {
+      setSavingId('');
+    }
+  };
+
+  const saveCodPermission = async (partner) => {
+    const enabled = Boolean(drafts[partner.id]?.codEnabled);
+    setSavingId('cod:' + partner.id);
+    setError('');
+    setMessage('');
+    try {
+      await savePartnerCodSetting({ partnerId: partner.id, enabled });
+      setMessage((enabled ? 'Enabled' : 'Disabled') + ' optional cash-on-delivery requests for ' + partner.name + '. Existing COD package records are unchanged.');
+      await refresh();
+    } catch (saveError) {
+      setError(saveError.message || 'Could not save the COD permission.');
     } finally {
       setSavingId('');
     }
@@ -4272,6 +4287,7 @@ function PartnerDeliveryPricingManagement() {
               </div>
             )}
             <label className="cod-toggle" style={{ gridColumn: '1 / -1' }}><input type="checkbox" checked={Boolean(draft.codEnabled)} onChange={event => updateDraft(partner.id, { codEnabled: event.target.checked })} />Allow this partner to request cash on delivery (optional per package)</label>
+            <button className="secondary-btn" type="button" disabled={Boolean(savingId)} onClick={() => void saveCodPermission(partner)}>{savingId === 'cod:' + partner.id ? 'Saving COD setting…' : 'Save COD permission'}</button>
             <button className="primary-btn" type="button" onClick={() => void save(partner)} disabled={savingId === partner.id || (draft.pricingMode === 'agreed_flat' && !(Number(draft.agreedDeliveryFee) > 0))}>{savingId === partner.id ? 'Saving…' : 'Save rate'}</button>
           </article>
         );

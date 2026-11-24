@@ -5749,7 +5749,7 @@ function DriverWorkflowDashboard({
                           type="button"
                           className="driver-action"
                           disabled={!proofs[p.id] || (p.codAmount != null && !codConfirmed[p.id])}
-                          onClick={() => confirmBoatDelivery(p)
+                          onClick={() => confirmBoatDelivery(p)}
                         >
                           Deliver with proof
                         </button>

@@ -62,7 +62,19 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
     void reload().catch(e => {
       if (active) setError(e.message || 'Could not load COD settlements.');
     }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      void reload().catch(e => { if (active) setError(e.message || 'Could not refresh COD balances.'); });
+    };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('igo-live-finance-updated', refresh);
+    const interval = window.setInterval(refresh, 30000);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('igo-live-finance-updated', refresh);
+      window.clearInterval(interval);
+    };
   }, [workspace]);
 
   const usedByPackage = useMemo(() => {
@@ -78,7 +90,32 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
   const ownRequests = isAdmin ? [] : requests.filter(r => r.partner_id === partnerId);
   const pendingAmount = ownRequests.filter(r=>r.status==='pending').reduce((n,r)=>n+parseMoney(r.requested_amount),0);
   const requestable = Math.max(0, totalCollected-used-pendingAmount);
-  const verifiedAvailable = Math.max(0, totalVerified-used);
+  const partnerBalances = useMemo(() => {
+    const map = new Map();
+    const ensure = (id, name) => {
+      if (!map.has(id)) map.set(id, { id, name: name || 'Partner', collected: 0, verified: 0, used: 0, pending: 0 });
+      const row = map.get(id);
+      if (name) row.name = name;
+      return row;
+    };
+    collected.forEach(p => {
+      const row = ensure(p.partner_id, p.partners?.name);
+      row.collected += parseMoney(p.cod_collected_amount);
+      if (p.cod_received_by_igo_at) row.verified += parseMoney(p.cod_collected_amount);
+      row.used += parseMoney(usedByPackage.get(p.id));
+    });
+    requests.filter(r => r.status === 'pending').forEach(r => {
+      ensure(r.partner_id, r.partners?.name).pending += parseMoney(r.requested_amount);
+    });
+    return [...map.values()].map(row => ({
+      ...row,
+      available: Math.max(0, Math.round((row.verified - row.used - row.pending) * 100) / 100),
+    })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [collected, requests, usedByPackage]);
+  const verifiedAvailable = isAdmin
+    ? partnerBalances.reduce((n, row) => n + row.available, 0)
+    : Math.max(0, Math.round((totalVerified - used - pendingAmount) * 100) / 100);
+  const allPendingAmount = requests.filter(r => r.status === 'pending').reduce((n,r) => n + parseMoney(r.requested_amount), 0);
   const unpaid = invoices.filter(i => ['unpaid','partially_paid'].includes(i.status) && parseMoney(i.subtotal)>parseMoney(i.paid_amount));
   const selectedInvoices = unpaid.filter(i=>selected.includes(i.id));
   const selectedDue = selectedInvoices.reduce((n,i)=>n+Math.max(0,parseMoney(i.subtotal)-parseMoney(i.paid_amount)),0);
@@ -152,11 +189,17 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
     {message && <p role="status" className="notice">{message}</p>}
     {error && <p role="alert" className="notice">{error}</p>}
     {!loading && !isAdmin && partnerId && <>
+      <div className="stat-card" style={{ borderColor: '#155d43' }}>
+        <span>Available COD balance</span><strong style={{ color: '#155d43' }}>{mvr(verifiedAvailable)}</strong>
+        <small>Verified cash remaining after approved invoice offsets and pending requests</small>
+      </div>
       <div className="stats-grid">
-        <div className="stat-card"><span>COD collected by drivers</span><strong>{mvr(totalCollected)}</strong><small>Customer payments recorded on delivered COD packages</small></div>
-        <div className="stat-card"><span>COD received by iGO</span><strong>{mvr(totalVerified)}</strong><small>Physical cash verified by admin, before offsets</small></div>
-        <div className="stat-card"><span>COD available to request</span><strong>{mvr(requestable)}</strong><small>Less approved offsets and pending requests</small></div>
-        <div className="stat-card"><span>COD available for approval</span><strong>{mvr(verifiedAvailable)}</strong><small>Verified cash less approved offsets; subject to pending requests</small></div>
+        <div className="stat-card"><span>COD collected by drivers</span><strong>{mvr(totalCollected)}</strong></div>
+        <div className="stat-card"><span>COD received by iGO</span><strong>{mvr(totalVerified)}</strong></div>
+        <div className="stat-card"><span>Awaiting cash verification</span><strong>{mvr(Math.max(0,totalCollected-totalVerified))}</strong></div>
+        <div className="stat-card"><span>Applied to invoices</span><strong>{mvr(used)}</strong></div>
+        <div className="stat-card"><span>Pending settlement requests</span><strong>{mvr(pendingAmount)}</strong><small>Reserved until reviewed</small></div>
+        <div className="stat-card"><span>COD eligible to request</span><strong>{mvr(requestable)}</strong><small>Includes collected cash not yet verified; approval requires verified cash</small></div>
       </div>
       <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
         <h3 style={{ margin: 0 }}>Request payment of outstanding invoices</h3>
@@ -185,7 +228,17 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
         <div className="stat-card"><span>COD collected (all partners)</span><strong>{mvr(totalCollected)}</strong></div>
         <div className="stat-card"><span>iGO-verified COD cash</span><strong>{mvr(totalVerified)}</strong></div>
         <div className="stat-card"><span>Applied to invoices</span><strong>{mvr(used)}</strong><small>Cash cannot be applied twice</small></div>
-        <div className="stat-card"><span>Awaiting review</span><strong>{requests.filter(r=>r.status==='pending').length}</strong><small>Partner-requested settlements</small></div>
+        <div className="stat-card"><span>Awaiting review</span><strong>{requests.filter(r=>r.status==='pending').length}</strong><small>{mvr(allPendingAmount)} reserved</small></div>
+        <div className="stat-card"><span>Awaiting cash verification</span><strong>{mvr(Math.max(0,totalCollected-totalVerified))}</strong></div>
+        <div className="stat-card"><span>Available COD balance</span><strong>{mvr(verifiedAvailable)}</strong><small>Sum of each partner's uncommitted verified cash</small></div>
+      </div>
+      <div>
+        <h3>COD balances by partner</h3>
+        {partnerBalances.length ? partnerBalances.map(row => <article key={row.id} style={{ borderBottom: '1px solid #dce3e9', padding: '12px 0', display: 'grid', gap: 5 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><strong>{row.name}</strong><strong style={{ color: '#155d43' }}>{mvr(row.available)} available</strong></div>
+          <small>Collected: {mvr(row.collected)} · Verified: {mvr(row.verified)}</small>
+          <small>Applied: {mvr(row.used)} · Pending: {mvr(row.pending)} · Awaiting verification: {mvr(Math.max(0,row.collected-row.verified))}</small>
+        </article>) : <p className="muted">No partner COD balances recorded yet.</p>}
       </div>
       <div>
         <h3>Confirm physical cash received by iGO</h3>

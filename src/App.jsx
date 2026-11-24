@@ -2503,6 +2503,7 @@ export default function App() {
           ['Add Package', '+'],
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
+          ['COD Collections', '▥'],
           ['Finance Management', '♙'],
           ['Approvals', '✓', 'Pending user approvals'],
           ['User Management', '♙'],
@@ -2514,6 +2515,7 @@ export default function App() {
           ['Register Package', '+'],
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
+          ['COD Collections', '▥'],
           ['Tracking Settings', '↗'],
         ];
 
@@ -3081,11 +3083,15 @@ export default function App() {
           )}
 
           {page === 'Admin Operations' && workspace === 'Admin' && (
+            <><CodCollectionsDashboard packages={newestPackages} workspace="Admin" compact />
             <AdminOperations
               packages={newestPackages}
               liveMode={Boolean(databaseProfile)}
               onUpdate={updatePackageRecord}
-            />
+            /></>
+          )}
+          {page === 'COD Collections' && ['Admin', 'Partner'].includes(workspace) && (
+            <CodCollectionsDashboard packages={newestPackages} workspace={workspace} />
           )}
           {page === 'Add Package' && workspace === 'Admin' && (
             <AdminCustomerPackageCreator onCreated={(created) => setPackages((current) => [created, ...current])} />
@@ -3093,6 +3099,7 @@ export default function App() {
           {page === 'Overview' && (
             <>
               {workspace === 'Partner' && <PartnerAiQuickAsk />}
+              {workspace === 'Partner' && <CodCollectionsDashboard packages={newestPackages} workspace="Partner" compact onOpen={() => setPage('COD Collections')} />}
 
               <div className="welcome-card">
                 <div>
@@ -4053,6 +4060,89 @@ export default function App() {
         </button>
       )}
     </div>
+  );
+}
+
+
+function CodCollectionsDashboard({ packages = [], workspace = 'Admin', compact = false, onOpen }) {
+  const moneyCod = (value) => 'MVR ' + Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const orders = packages.filter((p) => p.codAmount != null && Number(p.codAmount) > 0);
+  const collected = orders.filter((p) => p.codCollectedAt && p.codCollectedAmount != null);
+  const waiting = orders.filter((p) => !p.codCollectedAt && !['Cancelled', 'Delivered', 'Failed Delivery', 'Returned to Godown'].includes(p.status));
+  const collectedTotal = collected.reduce((total, p) => total + Number(p.codCollectedAmount || 0), 0);
+  const pendingTotal = waiting.reduce((total, p) => total + Number(p.codAmount || 0), 0);
+  const groupRows = (keyFn) => {
+    const groups = new Map();
+    for (const p of collected) {
+      const key = keyFn(p) || 'Unassigned';
+      const row = groups.get(key) || { label: key, amount: 0, count: 0 };
+      row.amount += Number(p.codCollectedAmount || 0);
+      row.count++;
+      groups.set(key, row);
+    }
+    return [...groups.values()].sort((a,b) => b.amount-a.amount || a.label.localeCompare(b.label));
+  };
+  const groupTitle = workspace === 'Admin' ? 'Collected by partner' : workspace === 'Partner' ? 'Collected by driver' : 'Collected for partner';
+  const groupValue = workspace === 'Admin' || workspace === 'Driver'
+    ? (p) => p.partnerName || 'Unknown partner'
+    : (p) => p.driver || 'Unassigned driver';
+  const groupByDriver = workspace === 'Admin' ? groupRows((p) => p.driver || 'Unassigned driver') : [];
+  return (
+    <section className="card cod-collections-dashboard" aria-label="COD cash collections" style={{ padding: 18, marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div>
+          <p className="eyebrow" style={{ marginBottom: 4 }}>CASH ON DELIVERY</p>
+          <h2 style={{ margin: '0 0 5px' }}>{compact ? 'COD cash collected' : 'COD Collections'}</h2>
+          <p className="muted" style={{ margin: 0 }}>Money collected from customers for partner orders. Not iGO delivery-fee revenue.</p>
+        </div>
+        {compact && onOpen && <button className="secondary-btn" type="button" onClick={onOpen}>View COD details</button>}
+        {compact && workspace === 'Admin' && <span className="muted">Open COD Collections for the full breakdown</span>}
+      </div>
+      <div className="stats-grid" style={{ marginBottom: 12 }}>
+        <div className="stat-card"><span className="stat-label">Total cash collected</span><strong>{moneyCod(collectedTotal)}</strong><small>{collected.length} confirmed COD deliveries</small></div>
+        <div className="stat-card"><span className="stat-label">Awaiting collection</span><strong>{moneyCod(pendingTotal)}</strong><small>{waiting.length} active COD deliveries</small></div>
+        <div className="stat-card"><span className="stat-label">COD orders registered</span><strong>{orders.length}</strong><small>Only orders marked COD are counted</small></div>
+      </div>
+      <small className="muted">Cash is recorded when the driver confirms collection and delivery. These figures do not establish that cash has been remitted to iGO or paid to partners.</small>
+      {!compact && (
+        <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+          <div className="card" style={{ padding: 14 }}>
+            <h3 style={{ margin: '0 0 10px' }}>{groupTitle}</h3>
+            {groupRows(groupValue).length
+              ? groupRows(groupValue).map((row) => (
+                <p key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, margin: '8px 0' }}>
+                  <span>{row.label} <small>({row.count})</small></span><strong>{moneyCod(row.amount)}</strong>
+                </p>
+              )) : <p className="muted">No COD cash collected yet.</p>}
+          </div>
+          {workspace === 'Admin' && <div className="card" style={{ padding: 14 }}>
+            <h3 style={{ margin: '0 0 10px' }}>Collected by driver</h3>
+            {groupByDriver.length ? groupByDriver.map((row) => (
+              <p key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, margin: '8px 0' }}>
+                <span>{row.label} <small>({row.count})</small></span><strong>{moneyCod(row.amount)}</strong>
+              </p>
+            )) : <p className="muted">No COD cash collected yet.</p>}
+          </div>}
+          <div className="card" style={{ padding: 14 }}>
+            <h3 style={{ margin: '0 0 10px' }}>Package collection records</h3>
+            {orders.length ? (
+              <div style={{ display: 'grid', gap: 9 }}>
+                {orders.map((p) => <article key={p.dbId || p.id} style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 9, display: 'flex', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+                  <div><strong>{p.id} · {p.customer || 'Customer'}</strong>
+                    <div className="muted">{workspace === 'Admin' ? (p.partnerName || 'Partner') + ' · ' : ''}{p.driver || 'Driver unassigned'} · {p.status}</div>
+                    {p.codCollectedAt && <small className="muted">Cash recorded {new Date(p.codCollectedAt).toLocaleString()}</small>}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <strong>{moneyCod(p.codCollectedAt ? p.codCollectedAmount : p.codAmount)}</strong>
+                    <div style={{ fontSize: 12 }}>{p.codCollectedAt ? 'Cash collected' : 'Not collected'}</div>
+                  </div>
+                </article>)}
+              </div>
+            ) : <p className="muted">No cash-on-delivery packages have been registered in this workspace.</p>}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -5474,6 +5564,7 @@ function DriverWorkflowDashboard({
   };
   return (
     <div className="driver-dashboard">
+      <CodCollectionsDashboard packages={assigned} workspace="Driver" compact />
       <div className="driver-banner">
         <div>
           <p className="driver-kicker">DRIVER WORKSPACE</p>

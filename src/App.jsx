@@ -2327,19 +2327,22 @@ export default function App() {
       && !/\bh\s*(?:mle|male)\b/.test(normalizeMessageText(explicitArea));
     const isBoatDelivery = Boolean(detectedBoat) || /\b(?:boat|dhoni|dhoani|ferry|launch|speed boat|speed launch)\b/.test(normalizedAreaText);
 
-    if (explicitHml || hasHulhumale || knownHulhumaleFlat) {
-      if (partnerDeliveryPricing.pricingMode === 'package_size') updates.area = 'Hulhumalé';
+    const detectedArea = detectSinglePackageArea([explicitArea, inferredAddress].join(' '), partnerDeliveryPricing.pricingMode);
+    if (isBoatDelivery) updates.area = 'Boat';
+    else if (detectedArea) updates.area = detectedArea;
+    else if (explicitHml || hasHulhumale || knownHulhumaleFlat) {
+      if (phase1 && phase2) updates.area = '';
+      else if (partnerDeliveryPricing.pricingMode === 'package_size') updates.area = 'Hulhumalé';
       else if (phase2) updates.area = 'Hulhumalé Phase 2';
-      else updates.area = 'Hulhumalé Phase 1';
-    } else if (isBoatDelivery) updates.area = 'Boat';
-    else if (explicitMale || /\b(?:maafannu|henveiru|galolhu|machchangolhi|villimale|villingili)\b/.test(normalizedAreaText)) updates.area = 'Malé';
+      else if (phase1) updates.area = 'Hulhumalé Phase 1';
+    } else if (explicitMale) updates.area = 'Malé';
 
     if (!Object.keys(updates).length) {
       setMessageNotice('No customer details recognized. Use labels such as Name:, Phone:, Address:, and Destination:.');
       return;
     }
 
-    const draftArea = updates.area || form.area || 'Malé';
+    const draftArea = updates.area || '';
     const boatName = draftArea === 'Boat'
       ? (detectedBoat || (inferredAddress && isVesselLine(inferredAddress) ? inferredAddress : ''))
       : '';
@@ -2360,7 +2363,8 @@ export default function App() {
       boatLocation: readMessageField(text, 'boat\\s*location|harbour|jetty'),
       departureTime: normalizeDepartureTime((labeledDepartureClock || boatTimingMatch?.[1] || '').replace(/^(\d{1,2})\.(\d{2})$/, '$1:$2')),
       landmark: landmark || readMessageField(customerText, 'nearby\\s*landmark|landmark'),
-      fee: String(getCurrentDeliveryFee(draftArea, '') ?? ''),
+      areaManual: false,
+      fee: draftArea ? String(getCurrentDeliveryFee(draftArea, '') ?? '') : '',
     };
     Object.assign(draft, deliveryDetails(draft));
     const duplicateKey = packageDuplicateKey(draft);
@@ -2389,25 +2393,26 @@ export default function App() {
   }
 
   function updateQueuedPackage(queueId, field, value) {
-    setMessageQueue((current) =>
-      current.map((entry) =>
-        entry.queueId === queueId
-          ? {
-              ...entry,
-              [field]: field === 'phone' ? normalizeCustomerPhone(value) : field === 'area' && partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : value,
-              ...(field === 'codRequested' ? { codAmount: value ? entry.codAmount || '' : '' } : {}),
-              ...(field === 'area' || field === 'packageSize'
-                ? { fee: String(getCurrentDeliveryFee(field === 'area' ? value : entry.area, field === 'packageSize' ? value : entry.packageSize) ?? '') }
-                : {}),
-            }
-          : entry
-      )
-    );
+    setMessageQueue(current => current.map(entry => {
+      if (entry.queueId !== queueId) return entry;
+      const next = {...entry, [field]: field === 'phone' ? normalizeCustomerPhone(value) : value};
+      if (field === 'area') {
+        next.areaManual = Boolean(value);
+        if (partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase')) next.area = 'Hulhumalé';
+        if (next.area === 'Boat' && !next.boatName && entry.address) next.boatName = entry.address;
+      }
+      if (field === 'address' && !entry.areaManual) next.area = detectSinglePackageArea(value, partnerDeliveryPricing.pricingMode);
+      if (field === 'codRequested') next.codAmount = value ? entry.codAmount || '' : '';
+      if (['area','address','packageSize'].includes(field)) next.fee = next.area ? String(getCurrentDeliveryFee(next.area,next.packageSize) ?? '') : '';
+      return next;
+    }));
+    setConfirmBulkAdd(false);
   }
 
   async function confirmAddQueuedPackages() {
     const incomplete = messageQueue.filter(
       (entry) =>
+        !String(entry.customer || '').trim() || !isValidCustomerPhone(entry.phone || '') || !entry.area ||
         packageContactError(entry) ||
         (entry.codRequested && (!partnerDeliveryPricing.codEnabled || !validCodAmount(entry.codAmount))) ||
         (partnerDeliveryPricing.pricingMode === 'package_size' && (!entry.packageSize || !getCurrentDeliveryFee(entry.area, entry.packageSize))) ||
@@ -2420,7 +2425,7 @@ export default function App() {
     );
     if (incomplete.length) {
       setMessageNotice(
-        'Check customer details, delivery address, package size, and any COD amount (MVR 0.01–999,999.00). Boat deliveries also need a customer and boat name.'
+        'Check the customer name, contact number, address and delivery area for each package. Confirm package size and COD amount where applicable.'
       );
       setConfirmBulkAdd(false);
       return;
@@ -3367,7 +3372,7 @@ export default function App() {
                         }
                         rows="4"
                         placeholder={
-                          'Name: ...\nPhone: ...\nDestination: ...\nAddress: ...\nLandmark: ...\nFor Boat use Boat name:, Boat location:, Departure time: instead of Address.\nPackage: ...\nInstructions: ...'
+                          'Name: ...\nContact: ...\nAddress: ...\nInstructions: ...'
                         }
                       />
                       <button
@@ -3431,124 +3436,45 @@ export default function App() {
                               </button>
                             )}
                           </div>
-                          {partnerDeliveryPricing.pricingMode === 'package_size' && (
-                            <div className="package-size-chips message-queue-size-chips" role="group" aria-label="Package size">
-                              {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
-                                <button key={size} type="button" className={entry.packageSize === size ? 'selected' : ''} aria-label={label + ' package size, MVR ' + partnerDeliveryPricing.packageSizeRates[size]} aria-pressed={entry.packageSize === size} onClick={() => updateQueuedPackage(entry.queueId, 'packageSize', size)}>
-                                  <span className="package-size-initial">{size}</span><span className="package-size-label">{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
-                                </button>
-                              ))}
-                              {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}
-                            </div>
-                          )}
-                          <details className="message-queue-edit">
-                            <summary>Edit package details</summary>
-                            <div className="message-queue-fields">
-                          <label>
-                            Name
-                            <input
-                              value={entry.customer}
-                              onChange={(event) =>
-                                updateQueuedPackage(
-                                  entry.queueId,
-                                  'customer',
-                                  event.target.value
-                                )
-                              }
-                            />
-                          </label>
-                          <label>
-                            Phone
-                            <input
-                              type="tel"
-                              inputMode="tel"
-                              pattern="[79][0-9]{6}"
-                              title="Enter 7 digits starting with 7 or 9."
-                              value={entry.phone}
-                              onChange={(event) =>
-                                updateQueuedPackage(
-                                  entry.queueId,
-                                  'phone',
-                                  event.target.value
-                                )
-                              }
-                            />
-                          </label>
-                          <label>
-                            Partner tracking reference (optional)
-                            <input value={entry.trackingReference || ''} placeholder="e.g. BBD/0036" onChange={(event) => updateQueuedPackage(entry.queueId, 'trackingReference', event.target.value)} />
-                          </label>
-                          <label>
-                            Island / area *
-                            <select
-                              value={entry.area}
-                              onChange={(event) =>
-                                updateQueuedPackage(
-                                  entry.queueId,
-                                  'area',
-                                  event.target.value
-                                )
-                              }
-                            >
-                              <option>Malé</option>
-                              {partnerDeliveryPricing.pricingMode === 'package_size' ? <option>Hulhumalé</option> : <><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
-                              <option>Boat</option>
+                          <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',fontSize:13}}>
+                            <span className="muted">{entry.area || 'Confirm delivery area'}</span>
+                            {entry.notes && <span className="muted">· Instructions: {entry.notes}</span>}
+                          </div>
+                          {(!entry.customer?.trim() || !isValidCustomerPhone(entry.phone || '') || !entry.area || !(entry.area==='Boat'?entry.boatName:entry.address)?.trim()) && <small role="status" style={{color:'#952d20'}}>Check missing customer details or delivery area below.</small>}
+                          {partnerDeliveryPricing.pricingMode === 'package_size' && <label style={{display:'grid',gap:4}}>Package size *
+                            <select value={entry.packageSize || ''} onChange={event=>updateQueuedPackage(entry.queueId,'packageSize',event.target.value)}>
+                              <option value="">Select package size</option>
+                              {Object.entries(packageSizeLabels).filter(([size])=>Number(partnerDeliveryPricing.packageSizeRates?.[size])>0).map(([size,label])=><option key={size} value={size}>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</option>)}
                             </select>
-                          </label>
-                          {(entry.area === 'Boat'
-                            ? [
-                                ['boatName', 'Boat name *'],
-                                ['boatLocation', 'Boat location (optional)'],
-                                ['departureTime', 'Departure time (optional)'],
-                              ]
-                            : [
-                                ['address', 'Delivery address *'],
-                                ['landmark', 'Nearby landmark (optional)'],
-                              ]
-                          ).map(([field, label]) => (
-                            <label key={field}>
-                              {label}
-                              <input
-                                value={entry[field] || ''}
-                                required={
-                                  field === 'address' || field === 'boatName'
-                                }
-                                placeholder={
-                                  field === 'departureTime'
-                                    ? 'HH:MM or 2:30 PM'
-                                    : undefined
-                                }
-                                onChange={(event) =>
-                                  updateQueuedPackage(
-                                    entry.queueId,
-                                    field,
-                                    event.target.value
-                                  )
-                                }
-                              />
-                            </label>
-                          ))}
-                          {partnerDeliveryPricing.codEnabled && (
-                            <div className="cod-request-fields">
-                              <label className="cod-toggle"><input type="checkbox" checked={Boolean(entry.codRequested)} onChange={(event) => updateQueuedPackage(entry.queueId, 'codRequested', event.target.checked)} />Collect cash on delivery for this package</label>
-                              {entry.codRequested && <label>Customer pays on delivery (MVR) *<input type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" value={entry.codAmount || ''} onChange={(event) => updateQueuedPackage(entry.queueId, 'codAmount', event.target.value)} /></label>}
-                            </div>
-                          )}
-                          <label className="message-queue-instructions">
-                            Delivery instructions (optional)
-                            <textarea
-                              rows={2}
-                              value={entry.notes || ''}
-                              placeholder="Call before delivery, fragile item, etc."
-                              onChange={(event) =>
-                                updateQueuedPackage(entry.queueId, 'notes', event.target.value)
-                              }
-                            />
-                          </label>
-                          <p className="message-queue-fee">
-                            {partnerDeliveryPricing.pricingMode === 'package_size' && entry.packageSize ? `${packageSizeLabels[entry.packageSize]} package · ` : ''}{entry.fee ? `Delivery fee: MVR ${entry.fee}` : partnerDeliveryPricing.pricingMode === 'package_size' ? 'Choose a priced package size' : 'Delivery fee not available'}
-                          </p>
-                          {entry.item && <p>Package: {entry.item}</p>}
+                          </label>}
+                          {partnerDeliveryPricing.codEnabled && <div style={{display:'grid',gap:6}}>
+                            <label style={{display:'flex',alignItems:'center',gap:8,flexDirection:'row',justifyContent:'flex-start'}}><input style={{width:18,height:18,minHeight:0,margin:0,flex:'0 0 auto'}} type="checkbox" checked={Boolean(entry.codRequested)} onChange={event=>updateQueuedPackage(entry.queueId,'codRequested',event.target.checked)}/>Cash on delivery</label>
+                            {entry.codRequested&&<label>COD amount (MVR) *<input type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" value={entry.codAmount || ''} onChange={event=>updateQueuedPackage(entry.queueId,'codAmount',event.target.value)} /></label>}
+                          </div>}
+                          <details className="message-queue-edit" open={!entry.customer?.trim() || !isValidCustomerPhone(entry.phone || '') || !entry.area || !(entry.area==='Boat'?entry.boatName:entry.address)?.trim()}>
+                            <summary>Edit package details</summary>
+                            <div className="message-queue-fields" style={{gap:12}}>
+                              <label>Customer name *<input value={entry.customer} onChange={event=>updateQueuedPackage(entry.queueId,'customer',event.target.value)} required /></label>
+                              <label>Customer contact number *<input type="tel" inputMode="tel" pattern="[79][0-9]{6}" title="Enter 7 digits starting with 7 or 9." value={entry.phone} onChange={event=>updateQueuedPackage(entry.queueId,'phone',event.target.value)} required /></label>
+                              <label>{entry.area==='Boat'?'Boat name *':'Customer address *'}<input value={(entry.area==='Boat'?entry.boatName:entry.address)||''} onChange={event=>updateQueuedPackage(entry.queueId,entry.area==='Boat'?'boatName':'address',event.target.value)} required /></label>
+                              <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                                <small className="muted">{entry.area && !entry.areaManual ? 'Detected location' : 'Delivery location'}</small>
+                                <select aria-label="Delivery location" value={entry.area || ''} onChange={event=>updateQueuedPackage(entry.queueId,'area',event.target.value)} style={{width:'auto',maxWidth:'100%',minHeight:34,padding:'5px 10px',fontSize:13}}>
+                                  <option value="">Confirm area</option><option>Malé</option>
+                                  {partnerDeliveryPricing.pricingMode==='package_size'?<option>Hulhumalé</option>:<><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
+                                  <option>Boat</option>
+                                </select>
+                              </div>
+                              <label className="message-queue-instructions">Delivery instructions<textarea rows={2} value={entry.notes || ''} placeholder="Optional instructions for the rider" onChange={event=>updateQueuedPackage(entry.queueId,'notes',event.target.value)} /></label>
+                              <details style={{gridColumn:'1 / -1',borderTop:'1px solid #e5e7eb',paddingTop:8}}>
+                                <summary>Additional details (optional)</summary>
+                                <div style={{display:'grid',gap:10,marginTop:10}}>
+                                  {entry.area==='Boat'?<><label>Boat location<input value={entry.boatLocation || ''} onChange={event=>updateQueuedPackage(entry.queueId,'boatLocation',event.target.value)} /></label><label>Departure time<input value={entry.departureTime || ''} placeholder="HH:MM or 2:30 PM" onChange={event=>updateQueuedPackage(entry.queueId,'departureTime',event.target.value)} /></label></>:<label>Nearby landmark<input value={entry.landmark || ''} onChange={event=>updateQueuedPackage(entry.queueId,'landmark',event.target.value)} /></label>}
+                                  <label>Partner tracking reference<input value={entry.trackingReference || ''} onChange={event=>updateQueuedPackage(entry.queueId,'trackingReference',event.target.value)} /></label>
+                                  <label>Package description<input value={entry.item || ''} onChange={event=>updateQueuedPackage(entry.queueId,'item',event.target.value)} /></label>
+                                </div>
+                              </details>
+                              <p className="message-queue-fee">{entry.area && entry.fee ? 'Delivery fee: MVR '+entry.fee : 'Delivery fee calculated after confirming details'}</p>
                             </div>
                           </details>
                         </div>

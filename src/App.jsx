@@ -2483,6 +2483,11 @@ export default function App() {
     0
   );
 
+  // COD is a per-partner permission, but historical COD transactions remain visible
+  // after the permission is disabled so existing settlements can still be reviewed.
+  const partnerHasCodAccess = Boolean(partnerDeliveryPricing.codEnabled)
+    || packages.some((p) => p.codAmount != null && Number(p.codAmount) > 0);
+
   const staffRoles = new Set((databaseProfile?.staffAssignments || []).map((item) => item.role));
   const hasFinanceAccess = ['department_requester', 'finance_approver', 'payment_officer', 'operations_manager'].some((role) => staffRoles.has(role));
   const hasStaffOperationsAccess = ['operations_manager', 'operations_staff', 'customer_support', 'people_manager'].some((role) => staffRoles.has(role));
@@ -2516,7 +2521,7 @@ export default function App() {
           ['Register Package', '+'],
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
-          ['COD Collections', '▥'],
+          ...(partnerHasCodAccess ? [['COD Collections', '▥']] : []),
           ['Tracking Settings', '↗'],
         ];
 
@@ -3084,14 +3089,14 @@ export default function App() {
           )}
 
           {page === 'Admin Operations' && workspace === 'Admin' && (
-            <><CodCollectionsDashboard packages={newestPackages} workspace="Admin" compact />
+            <><CodCollectionsDashboard packages={newestPackages} workspace="Admin" compact onOpen={() => setPage('COD Collections')} />
             <AdminOperations
               packages={newestPackages}
               liveMode={Boolean(databaseProfile)}
               onUpdate={updatePackageRecord}
             /></>
           )}
-          {page === 'COD Collections' && ['Admin', 'Partner'].includes(workspace) && (
+          {page === 'COD Collections' && (workspace === 'Admin' || (workspace === 'Partner' && partnerHasCodAccess)) && (
             <>
               <CodCollectionsDashboard packages={newestPackages} workspace={workspace} />
               {databaseProfile && <CodSettlementManagement workspace={workspace} />}
@@ -3103,7 +3108,7 @@ export default function App() {
           {page === 'Overview' && (
             <>
               {workspace === 'Partner' && <PartnerAiQuickAsk />}
-              {workspace === 'Partner' && <CodCollectionsDashboard packages={newestPackages} workspace="Partner" compact onOpen={() => setPage('COD Collections')} />}
+              {workspace === 'Partner' && partnerHasCodAccess && <CodCollectionsDashboard packages={newestPackages} workspace="Partner" compact onOpen={() => setPage('COD Collections')} />}
 
               <div className="welcome-card">
                 <div>
@@ -4076,6 +4081,28 @@ function CodCollectionsDashboard({ packages = [], workspace = 'Admin', compact =
   const waiting = orders.filter((p) => !p.codCollectedAt && !['Cancelled', 'Delivered', 'Failed Delivery', 'Returned to Godown'].includes(p.status));
   const collectedTotal = collected.reduce((total, p) => total + Number(p.codCollectedAmount || 0), 0);
   const pendingTotal = waiting.reduce((total, p) => total + Number(p.codAmount || 0), 0);
+  // Dashboard previews must stay small enough that normal package actions remain above the fold.
+  // Full totals, collection evidence and partner/driver breakdowns live on COD Collections.
+  if (compact) {
+    return (
+      <section className="card cod-collections-dashboard cod-collections-compact"
+        aria-label="Cash on delivery summary"
+        style={{ padding: 14, marginBottom: 12, display: 'grid', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gap: 3 }}>
+            <span className="muted" style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.08em' }}>CASH ON DELIVERY</span>
+            <strong style={{ fontSize: 23, lineHeight: 1.15 }}>{moneyCod(collectedTotal)} <span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>collected</span></strong>
+          </div>
+          {onOpen && <button className="secondary-btn" type="button" onClick={onOpen} style={{ padding: '8px 12px', fontSize: 13 }}>Details</button>}
+        </div>
+        <div className="muted" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+          <span>Awaiting: <strong>{moneyCod(pendingTotal)}</strong></span>
+          <span>{orders.length} COD {orders.length === 1 ? 'order' : 'orders'}</span>
+        </div>
+      </section>
+    );
+  }
+
   const groupRows = (keyFn) => {
     const groups = new Map();
     for (const p of collected) {
@@ -5585,7 +5612,7 @@ function DriverWorkflowDashboard({
   };
   return (
     <div className="driver-dashboard">
-      <CodCollectionsDashboard packages={assigned} workspace="Driver" compact />
+      {assigned.some((p) => p.codAmount != null && Number(p.codAmount) > 0) && <CodCollectionsDashboard packages={assigned} workspace="Driver" compact />}
       <div className="driver-banner">
         <div>
           <p className="driver-kicker">DRIVER WORKSPACE</p>

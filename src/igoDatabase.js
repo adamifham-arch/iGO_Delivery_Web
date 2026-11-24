@@ -1,3 +1,4 @@
+import {notificationVisible} from './notificationWorkspaces';
 import { supabase } from './supabase';
 
 const requireClient = () => {
@@ -481,10 +482,15 @@ export async function adminUpdateDriverSettings(userId, changes) {
   return data;
 }
 
-export async function loadNotifications() {
-  const { data, error } = await requireClient().from('notifications').select('*').order('created_at', { ascending: false }).limit(100);
-  if (error) throw error;
-  return data || [];
+export async function loadNotifications(workspace) {
+  const client = requireClient();
+  const rows = [];
+  for(let start=0;;start+=100){
+    const {data,error}=await client.from('notifications').select('*').order('created_at',{ascending:false}).order('id',{ascending:false}).range(start,start+99);
+    if(error)throw error;
+    rows.push(...(data||[]).filter(item=>!workspace||notificationVisible(item,workspace)));
+    if(rows.length>=100||!data||data.length<100)return rows.slice(0,100);
+  }
 }
 
 export async function markNotificationRead(id) {

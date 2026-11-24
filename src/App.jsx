@@ -986,8 +986,6 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [bulkNotice, setBulkNotice] = useState('');
   const [messageDraft, setMessageDraft] = useState('');
-  const [messageAiBusy, setMessageAiBusy] = useState(false);
-  const messageAiBusyRef = useRef(false);
   const [messageQueue, setMessageQueue] = useState([]);
   const [confirmBulkAdd, setConfirmBulkAdd] = useState(false);
   const [confirmClearQueue, setConfirmClearQueue] = useState(false);
@@ -2163,54 +2161,6 @@ export default function App() {
     setPartnerTrackingNext(String(next));
     localStorage.setItem('igo-demo-partner-tracking-settings', JSON.stringify({ format, nextNumber: next }));
     return reference;
-  }
-
-  async function extractMessageWithAI() {
-    if (messageAiBusyRef.current) return;
-    const text = messageDraft.trim();
-    if (!text || text.length > 4000) {setMessageNotice('Paste a customer message of up to 4,000 characters.'); return;}
-    messageAiBusyRef.current = true;
-    setMessageAiBusy(true);
-    setMessageNotice('');
-    const callerUserId = activeUserIdRef.current;
-    try {
-      const {data:{session},error} = await supabase.auth.getSession();
-      if (error || !session?.access_token) throw new Error('Sign in to your partner account first.');
-      const response = await fetch('/api/igo-assistant',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({mode:'extract_package_details',workspace:'Partner',message:text}),signal:AbortSignal.timeout(35000)});
-      const result = await response.json();
-      if(!response.ok) throw new Error(result.error || 'AI extraction is unavailable.');
-      if (activeUserIdRef.current !== callerUserId || workspaceRef.current !== 'Partner') return;
-      if(!Array.isArray(result.packages)||!result.packages.length) throw new Error('No delivery details recognized. Check the message or use basic extraction.');
-      const seen = new Set([...messageQueue,...packages].map(packageDuplicateKey));
-      const drafts = [];
-      for(const p of result.packages.slice(0,5)){
-        const address=String(p.address||'').trim();
-        const boatName=String(p.boatName||'').trim();
-        const detected=detectSinglePackageArea(address,partnerDeliveryPricing.pricingMode);
-        let aiArea = String(p.area||'');
-        if(partnerDeliveryPricing.pricingMode==='package_size' && aiArea.startsWith('Hulhumalé Phase')) aiArea='Hulhumalé';
-        const area = aiArea==='Boat' && boatName ? 'Boat' : detected && aiArea && detected!==aiArea ? '' : detected || (aiArea==='Boat' ? '' : aiArea);
-        const phone=normalizeCustomerPhone(p.phone||'');
-        const draft={customer:String(p.customer||'').trim(),phone:isValidCustomerPhone(phone)&&text.replace(/[^0-9]/g,'').includes(phone)?phone:'',area,areaManual:false,address:area==='Boat'?boatName:address,boatName,boatLocation:String(p.boatLocation||''),departureTime:normalizeDepartureTime(p.departureTime||''),landmark:String(p.landmark||''),item:String(p.item||''),notes:String(p.notes||''),trackingReference:'',packageSize:'',codRequested:false,codAmount:'',fee:area?String(getCurrentDeliveryFee(area,'')??''):''};
-        const key=packageDuplicateKey(draft);
-        if(seen.has(key))continue;
-        seen.add(key);
-        drafts.push({...draft,queueId:Date.now()+Math.random()});
-      }
-      if(!drafts.length){setMessageNotice('All extracted packages are already in the review list or registered.');return;}
-      setMessageQueue(current=>{
-        const existing=new Set(current.map(packageDuplicateKey));
-        return [...current,...drafts.filter(d=>!existing.has(packageDuplicateKey(d)))];
-      });
-      setConfirmBulkAdd(false);
-      setMessageDraft(current=>current.trim()===text?'':current);
-      setMessageNotice('AI extracted '+drafts.length+' draft(s). Review all details before confirming. No packages have been registered.');
-    }catch(error){
-      if(activeUserIdRef.current===callerUserId) setMessageNotice((error.message||'AI extraction failed.')+' You can still use basic extraction.');
-    }finally{
-      messageAiBusyRef.current=false;
-      setMessageAiBusy(false);
-    }
   }
 
   async function fillFromMessage() {
@@ -3426,15 +3376,10 @@ export default function App() {
                       <button
                         type="button"
                         onClick={fillFromMessage}
-                        disabled={messageAiBusy}
-                        className={showAiAssistant && supabaseConfigured ? 'secondary-btn' : 'primary-btn'}
+                        className="primary-btn"
                       >
-                        {showAiAssistant && supabaseConfigured ? 'Basic extraction' : 'Add package to list'}
+                        Add package to list
                       </button>
-                      {showAiAssistant && supabaseConfigured && workspace==='Partner' && <div style={{display:'grid',gap:6}}>
-                        <button type="button" className="primary-btn" disabled={messageAiBusy || !messageDraft.trim()} onClick={extractMessageWithAI}>{messageAiBusy?'Extracting details…':'✦ Extract with AI'}</button>
-                        <small className="muted">AI sends the pasted message to OpenAI to identify delivery details. Only paste information needed for delivery. Review before registering. Up to five packages per extraction.</small>
-                      </div>}
                       {messageNotice && (
                         <p className="bulk-notice" role="status">
                           {messageNotice}

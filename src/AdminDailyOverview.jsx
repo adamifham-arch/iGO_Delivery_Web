@@ -3,7 +3,7 @@ import {supabase} from './supabase';
 
 const money=n=>'MVR '+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const cents=n=>Math.round(Number(n||0)*100);
-const dayKey=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Indian/Maldives',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const dayKey=(date=new Date())=>{const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Indian/Maldives',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date).map(p=>[p.type,p.value]));return parts.year+'-'+parts.month+'-'+parts.day;};
 async function allRows(makeQuery){
   const rows=[];
   for(let start=0;;start+=500){

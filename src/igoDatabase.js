@@ -244,14 +244,16 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
   let invoiceQuery = client.from('invoices').select('*,partners(name),invoice_items(id,package_id,amount,packages(package_number,customer_name,customer_phone,address,area,item_description,delivery_fee)),invoice_charges(id,description,amount,created_at)').order('created_at', { ascending: false });
   let paymentQuery = client.from('payments').select('*,partners(name),invoices!payments_target_invoice_id_fkey(invoice_number),payment_allocations(invoice_id,amount,invoices(invoice_number))').order('submitted_at', { ascending: false });
   let creditQuery = client.from('partner_credit_ledger').select('partner_id,amount');
+  let codAllocationQuery = client.from('cod_invoice_settlement_invoice_allocations').select('settlement_id,invoice_id,amount,cod_invoice_settlement_requests!inner(partner_id,status,reviewed_at)');
   if (partnerId) {
     invoiceQuery = invoiceQuery.eq('partner_id', partnerId);
     paymentQuery = paymentQuery.eq('partner_id', partnerId);
     creditQuery = creditQuery.eq('partner_id', partnerId);
+    codAllocationQuery = codAllocationQuery.eq('cod_invoice_settlement_requests.partner_id', partnerId);
   }
   let partnerQuery = client.from('partners').select('id,invoice_cutoff').order('created_at', { ascending: false });
   if (partnerId) partnerQuery = partnerQuery.eq('id', partnerId);
-  const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult] = await Promise.all([
+  const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult, codAllocationResult] = await Promise.all([
     invoiceQuery,
     paymentQuery,
     isAdmin ? client.from('business_expenses').select('*').order('expense_date', { ascending: false }) : Promise.resolve({ data: [], error: null }),
@@ -259,8 +261,9 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
     client.from('bank_accounts').select('*').order('created_at', { ascending: false }),
     partnerQuery,
     creditQuery,
+    codAllocationQuery,
   ]);
-  for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult]) {
+  for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult, codAllocationResult]) {
     if (result.error) throw result.error;
   }
   const savedCutoffs = [...new Set((partnerResult.data || []).map((row) => row.invoice_cutoff == null ? null : String(row.invoice_cutoff).slice(0, 5)))];
@@ -346,6 +349,13 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
       totals[row.partner_id] = (totals[row.partner_id] || 0) + Number(row.amount || 0);
       return totals;
     }, {}),
+    codInvoiceAllocations: (codAllocationResult.data || []).filter(row => row.cod_invoice_settlement_requests?.status === 'approved').map(row => ({
+      settlementId: row.settlement_id,
+      invoiceDbId: row.invoice_id,
+      amount: Number(row.amount || 0),
+      partnerId: row.cod_invoice_settlement_requests.partner_id,
+      reviewedAt: row.cod_invoice_settlement_requests.reviewed_at,
+    })),
     invoiceCutoff: savedCutoffs.length === 1 ? savedCutoffs[0] || null : null,
     invoiceCutoffMixed: savedCutoffs.length > 1,
   };

@@ -1852,7 +1852,7 @@ export default function App() {
       setPartnerTrackingNext(String(nextNumber));
       setPartnerTrackingNotice('Tracking format saved. New packages will get the next reference automatically.');
     } catch (error) {
-      setPartnerTrackingNotice(error.message || 'Could not save tracking settings.');
+      setPartnerTrackingNotice(error.code === '23505' ? 'This tracking prefix is already in use. Choose a different prefix; changing the number of zeros is not enough.' : error.message || 'Could not save tracking settings.');
     } finally {
       setPartnerTrackingSaving(false);
     }
@@ -2137,7 +2137,8 @@ export default function App() {
       const { data, error } = await query.maybeSingle();
       if (error) throw error;
       if (!data?.id) throw new Error('No partner account is linked to this workspace.');
-      format = String(data.tracking_reference_format || format).trim().toUpperCase();
+      if (!data.tracking_reference_format) return '';
+      format = String(data.tracking_reference_format).trim().toUpperCase();
       nextNumber = Number(data.tracking_reference_next) || 1;
       const zeroes = format.match(/0+$/)?.[0]?.length || 4;
       const normalizedFormat = /0+$/.test(format) ? format : defaultFormat;
@@ -2426,13 +2427,10 @@ export default function App() {
       setMessageNotice('This package is already registered. It was not added again.');
       return;
     }
-    if (!draft.trackingReference) {
-      try {
-        draft.trackingReference = await reservePartnerTrackingReference();
-      } catch (error) {
-        setMessageNotice(error.message || 'Could not assign a partner tracking reference.');
-        return;
-      }
+    // Leave empty references for the database to assign atomically at registration.
+    // Never claim a shared default format or advance a counter for an unconfirmed draft.
+    if (!draft.trackingReference && !supabaseConfigured) {
+      draft.trackingReference = await reservePartnerTrackingReference();
     }
     setMessageQueue((current) => [...current, { ...draft, queueId: Date.now() + Math.random() }]);
     setConfirmBulkAdd(false);
@@ -3397,7 +3395,7 @@ export default function App() {
                 </label>
                 <button className="primary-btn" type="submit" disabled={partnerTrackingSaving}>{partnerTrackingSaving ? 'Saving…' : 'Save format'}</button>
                 {partnerTrackingNotice && <p role="status">{partnerTrackingNotice}</p>}
-                <small>For example, BBD/0000 starts at BBD/0001. The number advances as packages are added.</small>
+                <small>For example, BBD/0000 starts at BBD/0001. Each partner needs a unique prefix, regardless of letter case or number of zeros. The number advances as packages are added.</small>
               </form>
             </section>
           )}

@@ -2,6 +2,7 @@ import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import './index.css';
 import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
 import PartnerInvoiceLedger from './PartnerInvoiceLedger';
+import CodSettlementManagement from './CodSettlementManagement';
 import PartnerAiQuickAsk from './PartnerAiQuickAsk';
 import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
 import { supabase, supabaseConfigured, setAuthRememberMe } from './supabase';
@@ -3091,7 +3092,10 @@ export default function App() {
             /></>
           )}
           {page === 'COD Collections' && ['Admin', 'Partner'].includes(workspace) && (
-            <CodCollectionsDashboard packages={newestPackages} workspace={workspace} />
+            <>
+              <CodCollectionsDashboard packages={newestPackages} workspace={workspace} />
+              {databaseProfile && <CodSettlementManagement workspace={workspace} />}
+            </>
           )}
           {page === 'Add Package' && workspace === 'Admin' && (
             <AdminCustomerPackageCreator onCreated={(created) => setPackages((current) => [created, ...current])} />
@@ -4012,6 +4016,7 @@ export default function App() {
                 <p>{databaseProfile ? 'Official invoices and payment status from your account.' : 'Official records appear after database setup.'}</p>
                 <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} mode="invoices" /></SectionErrorBoundary>
               </div>
+              {databaseProfile && ['Admin','Partner'].includes(workspace) && <CodSettlementManagement workspace={workspace} />}
             </>
           )}
 

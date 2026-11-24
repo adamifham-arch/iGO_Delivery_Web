@@ -4157,6 +4157,7 @@ function PartnerDeliveryPricingManagement() {
   const updateDraft = (id, changes) => {
     setDrafts((current) => ({ ...current, [id]: { ...current[id], ...changes } }));
     setMessage('');
+    setError('');
   };
 
   const save = async (partner) => {
@@ -4223,11 +4224,11 @@ function PartnerDeliveryPricingManagement() {
         </p>
       </div>
       {partners.length > 1 && <label>Find partner
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search partner name…" />
+        <input value={search} onChange={(event) => { setSearch(event.target.value); setError(''); setMessage(''); }} placeholder="Search partner name…" />
       </label>}
       {message && <p role="status" className="notice">{message}</p>}
-      {error && <p role="alert" className="notice">{error}</p>}
-      {loading ? <p>Loading partner rates…</p> : error ? null : visiblePartners.length ? visiblePartners.map((partner) => {
+      {error && <p role="alert" style={{ margin: 0, padding: 12, borderRadius: 8, background: '#fff0ed', color: '#952d20' }}>{error}</p>}
+      {loading ? <p>Loading partner rates…</p> : visiblePartners.length ? visiblePartners.map((partner) => {
         const draft = drafts[partner.id] || { pricingMode: 'route', agreedDeliveryFee: '', packageSizeRates: {} };
         return (
           <article key={partner.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end', padding: 14, border: '1px solid var(--border, #d8dee8)', borderRadius: 12 }}>
@@ -4253,10 +4254,10 @@ function PartnerDeliveryPricingManagement() {
             )}
             <label className="cod-toggle" style={{ gridColumn: '1 / -1' }}><input type="checkbox" checked={Boolean(draft.codEnabled)} onChange={event => updateDraft(partner.id, { codEnabled: event.target.checked })} />Allow this partner to request cash on delivery (optional per package)</label>
             <button className="secondary-btn" type="button" disabled={Boolean(savingId)} onClick={() => void saveCodPermission(partner)}>{savingId === 'cod:' + partner.id ? 'Saving COD setting…' : 'Save COD permission'}</button>
-            <button className="primary-btn" type="button" onClick={() => void save(partner)} disabled={savingId === partner.id || (draft.pricingMode === 'agreed_flat' && !(Number(draft.agreedDeliveryFee) > 0))}>{savingId === partner.id ? 'Saving…' : 'Save rate'}</button>
+            <button className="primary-btn" type="button" onClick={() => void save(partner)} disabled={Boolean(savingId)}>{savingId === partner.id ? 'Saving…' : 'Save rate'}</button>
           </article>
         );
-      }) : <p>{partners.length ? 'No matching partner.' : 'No partner accounts yet.'}</p>}
+      }) : <div><p>{partners.length ? 'No matching partner.' : error ? 'Partner rates could not be loaded.' : 'No partner accounts yet.'}</p>{!partners.length && <button type="button" className="secondary-btn" onClick={()=>void refresh()}>Refresh partner rates</button>}</div>}
       <p style={{ margin: 0, color: '#748094' }}>Only sizes with a saved price appear when registering packages. Rate changes apply to new packages; registered package fees stay unchanged.</p>
     </section>
   );

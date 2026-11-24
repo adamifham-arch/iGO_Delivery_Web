@@ -6992,6 +6992,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         invoices: records.invoices,
         payments: records.payments,
         partnerCredits: records.partnerCredits,
+        codInvoiceAllocations: records.codInvoiceAllocations || [],
         expenses: records.expenses.map((row) => ({ id: row.id, date: row.expense_date, category: row.category, description: row.description, paidTo: row.paid_to, amount: Number(row.amount || 0), reference: row.reference || '', recordedAt: row.created_at })),
         transferAccountName: records.bankAccounts.find((row) => row.active)?.account_name || '',
         transferAccountNumber: records.bankAccounts.find((row) => row.active)?.account_number || '',
@@ -7661,6 +7662,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <PartnerInvoiceLedger
           invoices={partnerInvoices}
           payments={billing.payments}
+          codInvoiceAllocations={billing.codInvoiceAllocations || []}
           partnerCredits={billing.partnerCredits || {}}
           accountName={billing.transferAccountName || ''}
           accountNumber={billing.transferAccountNumber || ''}
@@ -8434,6 +8436,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <PartnerInvoiceLedger
           invoices={billing.invoices}
           payments={billing.payments}
+          codInvoiceAllocations={billing.codInvoiceAllocations || []}
           partnerCredits={billing.partnerCredits || {}}
           accountName={billing.transferAccountName || ''}
           accountNumber={billing.transferAccountNumber || ''}

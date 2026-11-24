@@ -4616,7 +4616,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
               <label className="cod-toggle"><input type="checkbox" checked={Boolean(form.codRequested)} onChange={event => setForm(current => ({ ...current, codRequested: event.target.checked, codAmount: event.target.checked ? current.codAmount : '' }))} />Collect cash on delivery for this package</label>
               {form.codRequested && <label>Customer pays on delivery (MVR) *<input name="codAmount" type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" required value={form.codAmount} onChange={update} placeholder="e.g. 250.00" /></label>}
               <small>Customer cash amount is separate from iGO's delivery fee.</small>
-            </div> 
+            </div>}
             <label className="full-width">Delivery instructions (optional)<textarea name="notes" value={form.notes} onChange={update} rows="2" placeholder="Instructions for the driver" /></label>
           </div>
           <div className="form-actions"><button className="primary-btn" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add package for customer'}</button></div>

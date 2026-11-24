@@ -198,6 +198,7 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
           : <p className="muted">No collected COD cash awaiting iGO receipt verification.</p>}
       </div>
     </>}
+    <div id="cod-settlement-requests" style={{ scrollMarginTop: 92 }}>
     {!loading && <div>
       <h3>{isAdmin?'Partner settlement requests':'Your COD settlement requests'}</h3>
       {requests.length ? requests.map(r => <article key={r.id} style={{ borderBottom: '1px solid #dce3e9', padding: '12px 0', display: 'grid', gap: 6 }}>
@@ -216,5 +217,6 @@ export default function CodSettlementManagement({ workspace = 'Partner' }) {
         {r.status==='rejected' && <small>Rejected: {r.rejection_reason || 'No reason available'}</small>}
       </article>) : <p className="muted">No COD invoice settlement requests yet.</p>}
     </div>}
+    </div>
   </section>;
 }

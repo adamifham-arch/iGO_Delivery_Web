@@ -59,6 +59,8 @@ export function packageFromDb(row) {
     codCollectedAmount: row.cod_collected_amount == null ? null : Number(row.cod_collected_amount),
     codCollectedAt: row.cod_collected_at || null,
     codCollectedBy: row.cod_collected_by || null,
+    codReceivedByIgoAt: row.cod_received_by_igo_at || null,
+    codReceivedByIgoBy: row.cod_received_by_igo_by || null,
     packageSize: row.package_size || '',
     notes: row.notes || '',
     status: statusFromDb(row.status),

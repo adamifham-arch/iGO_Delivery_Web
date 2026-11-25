@@ -2,6 +2,7 @@ import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import './index.css';
 import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
 import PartnerInvoiceLedger from './PartnerInvoiceLedger';
+import PartnerAiQuickAsk from './PartnerAiQuickAsk';
 import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
 import { supabase, supabaseConfigured, setAuthRememberMe } from './supabase';
 import { StaffOperations } from './StaffOperations';
@@ -2964,6 +2965,7 @@ if (authMode === 'invite-password-setup' || invitePasswordSetupRequired) { retur
           )}
           {page === 'Overview' && (
             <>
+              {workspace === 'Partner' && <PartnerAiQuickAsk />}
 
               <div className="welcome-card">
                 <div>

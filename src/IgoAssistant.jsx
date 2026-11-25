@@ -31,6 +31,7 @@ export default function IgoAssistant() {
   const [lastCreated, setLastCreated] = useState([]);
   const bottomRef = useRef(null);
   const submitted = useRef(false);
+  const sendMessageRef = useRef(null);
 
   // Load the superadmin setting before showing the launcher, and refresh it so
   // a change takes effect across other active workspaces/tabs without a reload.
@@ -170,6 +171,30 @@ export default function IgoAssistant() {
       setBusy(false);
     }
   }
+
+  // The partner dashboard can send a question straight into this same assistant,
+  // preserving the authenticated conversation and its package-review safeguards.
+  sendMessageRef.current = sendMessage;
+  useEffect(() => {
+    async function onPartnerQuickAsk(event) {
+      const prompt = String(event?.detail?.message || '').trim().slice(0, 1200);
+      if (!prompt) return;
+      // Check the live superadmin switch; it may have changed in another session.
+      let allowed = false;
+      try { allowed = await loadAiAssistantVisibility(); } catch { /* fail closed */ }
+      if (!allowed) return;
+      setVisible(true);
+      setWorkspace(currentWorkspace());
+      setOpen(true);
+      if (busy || saving || submitted.current) {
+        setDraft(prompt);
+        return;
+      }
+      void sendMessageRef.current?.(prompt);
+    }
+    window.addEventListener('igo-ai-quick-ask', onPartnerQuickAsk);
+    return () => window.removeEventListener('igo-ai-quick-ask', onPartnerQuickAsk);
+  }, [busy, saving]);
 
   function editPackage(index, field, value) {
     setPendingPackages(current => current.map((p, i) => i === index ? { ...p, [field]: value } : p));

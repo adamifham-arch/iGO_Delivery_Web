@@ -35,7 +35,7 @@ const amountApplied = (p, invoice) => {
   return items.length ? items.reduce((s, a) => s + numeric(a.amount), 0) : null;
 };
 
-function PrintableContent({ kind, partnerName, invoices, payments, credit, accountName, accountNumber }) {
+function PrintableContent({ kind, partnerName, invoices, payments, codInvoiceAllocations = [], credit, accountName, accountNumber }) {
   const unpaid = invoices.filter(i => !isVoid(i) && balance(i) > 0);
   const shown = kind === 'invoice' ? invoices : unpaid;
   const sum = (field) => shown.reduce((total, item) => total + numeric(field(item)), 0);
@@ -43,6 +43,7 @@ function PrintableContent({ kind, partnerName, invoices, payments, credit, accou
   const totalPaid = sum(i => i.paidAmount);
   const totalDue = sum(i => balance(i));
   const single = kind === 'invoice' ? shown[0] : null;
+  const codForPrint = codInvoiceAllocations.filter(a => invoices.some(i => i.dbId === a.invoiceDbId));
   return (
     <article className="igo-ledger-print-sheet">
       <header className="igo-ledger-paper-header">
@@ -64,7 +65,7 @@ function PrintableContent({ kind, partnerName, invoices, payments, credit, accou
           <div><span>{kind === 'invoice' ? 'Invoice No.:' : 'Statement:'}</span><strong>{single?.id || 'Outstanding balances'}</strong></div>
           <div><span>{kind === 'invoice' ? 'Issue date:' : 'Statement date:'}</span><strong>{dateLabel(single?.createdAt || nowMaldivesDate())}</strong></div>
           <div><span>Due date:</span><strong>{kind === 'invoice' ? dateLabel(single?.dueDate) : 'See each invoice'}</strong></div>
-          <div className="igo-ledger-method"><span>Payment method:</span><strong>Transfer</strong></div>
+          <div className="igo-ledger-method"><span>Payment:</span><strong>Transfer / approved COD offset</strong></div>
         </div>
       </section>
       {kind === 'invoice' && single ? (
@@ -129,14 +130,15 @@ function PrintableContent({ kind, partnerName, invoices, payments, credit, accou
               </table>
             </section>
           ))}
-          <h3 className="igo-ledger-payment-heading">CONFIRMED PAYMENT HISTORY</h3>
+          <h3 className="igo-ledger-payment-heading">CONFIRMED PAYMENTS AND COD OFFSETS</h3>
           <table className="igo-ledger-payment-history">
-            <thead><tr><th>VERIFIED</th><th>TRANSFER REFERENCE</th><th className="igo-numeric">AMOUNT (MVR)</th></tr></thead>
+            <thead><tr><th>VERIFIED</th><th>REFERENCE / METHOD</th><th className="igo-numeric">AMOUNT (MVR)</th></tr></thead>
             <tbody>
               {payments.filter(p => p.status === 'confirmed').map(p => (
-                <tr key={p.id}><td>{dateLabel(paymentDate(p))}</td><td>{p.reference || '—'}</td><td className="igo-numeric">{money(p.verifiedAmount || p.amount).replace('MVR ', '')}</td></tr>
+                <tr key={p.id}><td>{dateLabel(paymentDate(p))}</td><td>{p.reference || 'Bank transfer'}</td><td className="igo-numeric">{money(p.verifiedAmount || p.amount).replace('MVR ', '')}</td></tr>
               ))}
-              {!payments.some(p => p.status === 'confirmed') && <tr><td colSpan="3">No confirmed payments recorded.</td></tr>}
+              {codForPrint.map(a => <tr key={a.settlementId + a.invoiceDbId}><td>{dateLabel(a.reviewedAt)}</td><td>Approved COD offset · {a.settlementId.slice(0,8)}</td><td className="igo-numeric">{money(a.amount).replace('MVR ', '')}</td></tr>)}
+              {!payments.some(p => p.status === 'confirmed') && !codForPrint.length && <tr><td colSpan="3">No confirmed payments or COD offsets recorded.</td></tr>}
             </tbody>
           </table>
         </>
@@ -170,11 +172,12 @@ function PrintModal({ doc, close }) {
   );
 }
 
-function InvoiceDetail({ invoice, payments, isAdmin, canManageDueDates, liveMode, onDueDateChanged, openPrint }) {
+function InvoiceDetail({ invoice, payments, codInvoiceAllocations = [], isAdmin, canManageDueDates, liveMode, onDueDateChanged, openPrint }) {
   const [date, setDate] = useState(invoice.dueDate || '');
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const associated = registeredPayments(payments, invoice);
+  const codForInvoice = codInvoiceAllocations.filter(a => a.invoiceDbId === invoice.dbId);
   useEffect(() => setDate(invoice.dueDate || ''), [invoice.dueDate, invoice.id]);
   async function saveDate() {
     if (!invoice.dbId || !liveMode) return;
@@ -205,10 +208,11 @@ function InvoiceDetail({ invoice, payments, isAdmin, canManageDueDates, liveMode
           <tbody>{(invoice.lines || []).map((line, k) => <tr key={line.id || line.packageId || k}><td>{line.kind === 'charge' ? 'Extra charge' : (line.packageId || '—')}</td><td>{line.customer || '—'}</td><td>{line.description || line.area || '—'}</td><td>{money(line.amount)}</td></tr>)}
           {!invoice.lines?.length && <tr><td colSpan="4">No item details recorded.</td></tr>}</tbody>
         </table></div>
-        <h4>Confirmed payment history</h4>
+        <h4>Confirmed payments and COD offsets</h4>
         <div className="igo-ledger-scroll"><table><thead><tr><th>Date</th><th>Reference</th><th>Allocated amount</th></tr></thead><tbody>
-          {associated.map(p => <tr key={p.id}><td>{dateLabel(paymentDate(p))}</td><td>{p.reference || '—'}</td><td>{amountApplied(p, invoice) == null ? 'Allocation not listed' : money(amountApplied(p, invoice))}</td></tr>)}
-          {!associated.length && <tr><td colSpan="3">No confirmed payment linked to this invoice.</td></tr>}
+          {associated.map(p => <tr key={p.id}><td>{dateLabel(paymentDate(p))}</td><td>{p.reference || 'Bank transfer'}</td><td>{amountApplied(p, invoice) == null ? 'Allocation not listed' : money(amountApplied(p, invoice))}</td></tr>)}
+          {codForInvoice.map(a => <tr key={a.settlementId + a.invoiceDbId}><td>{dateLabel(a.reviewedAt)}</td><td>Approved COD offset · {a.settlementId.slice(0,8)}</td><td>{money(a.amount)}</td></tr>)}
+          {!associated.length && !codForInvoice.length && <tr><td colSpan="3">No confirmed payment or COD offset linked to this invoice.</td></tr>}
         </tbody></table></div>
         {isAdmin && canManageDueDates && liveMode && <div className="igo-ledger-due-edit">
           <label>Payment due date <input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
@@ -221,7 +225,7 @@ function InvoiceDetail({ invoice, payments, isAdmin, canManageDueDates, liveMode
   );
 }
 
-export default function PartnerInvoiceLedger({ invoices = [], payments = [], partnerCredits = {}, accountName = '', accountNumber = '', workspace = 'Admin', liveMode = false, canManageDueDates = false, onDueDateChanged }) {
+export default function PartnerInvoiceLedger({ invoices = [], payments = [], codInvoiceAllocations = [], partnerCredits = {}, accountName = '', accountNumber = '', workspace = 'Admin', liveMode = false, canManageDueDates = false, onDueDateChanged }) {
   const isAdmin = workspace === 'Admin';
   const [partners, setPartners] = useState([]);
   const [selectedPartner, setSelectedPartner] = useState('all');
@@ -270,6 +274,7 @@ export default function PartnerInvoiceLedger({ invoices = [], payments = [], par
     : filteredInvoices[0]?.partner || 'Your iGO account';
 
   const visiblePayments = payments.filter(p => partnerId == null || p.partnerId === partnerId);
+  const visibleCodAllocations = codInvoiceAllocations.filter(a => partnerId == null || a.partnerId === partnerId);
   const totals = useMemo(() => {
     const outstanding = filteredInvoices.reduce((sum, i) => sum + balance(i), 0);
     const paid = filteredInvoices.reduce((sum, i) => sum + numeric(i.paidAmount), 0);
@@ -295,14 +300,14 @@ export default function PartnerInvoiceLedger({ invoices = [], payments = [], par
   const exportStatement = () => {
     if (isAdmin && selectedPartner === 'all') { setLoadError('Choose a partner to download their statement.'); return; }
     setLoadError('');
-    setPrintDoc({ kind: 'statement', partnerName, invoices: filteredInvoices, payments: visiblePayments, credit, accountName, accountNumber });
+    setPrintDoc({ kind: 'statement', partnerName, invoices: filteredInvoices, payments: visiblePayments, codInvoiceAllocations: visibleCodAllocations, credit, accountName, accountNumber });
   };
-  const exportInvoice = (invoice) => setPrintDoc({ kind: 'invoice', partnerName: invoice.partner || partnerName, invoices: [invoice], payments: visiblePayments, credit: 0, accountName, accountNumber });
+  const exportInvoice = (invoice) => setPrintDoc({ kind: 'invoice', partnerName: invoice.partner || partnerName, invoices: [invoice], payments: visiblePayments, codInvoiceAllocations: visibleCodAllocations, credit: 0, accountName, accountNumber });
 
   return (
     <section className="igo-ledger" aria-label={isAdmin ? 'Partner invoice balances and collections' : 'Your invoice balances and statement'}>
       <header className="igo-ledger-header">
-        <div><span className="igo-ledger-overline">ACCOUNTS RECEIVABLE</span><h3>{isAdmin ? 'Partner balances' : 'Your invoice breakdown'}</h3><p>Unpaid balances are based on confirmed payments only.</p></div>
+        <div><span className="igo-ledger-overline">ACCOUNTS RECEIVABLE</span><h3>{isAdmin ? 'Partner balances' : 'Your invoice breakdown'}</h3><p>Outstanding balances reflect confirmed transfers and admin-approved COD offsets.</p></div>
         <button type="button" className="igo-ledger-statement-button" onClick={exportStatement} disabled={isAdmin && selectedPartner === 'all'}>Outstanding statement (PDF)</button>
       </header>
       {isAdmin && (
@@ -332,10 +337,10 @@ export default function PartnerInvoiceLedger({ invoices = [], payments = [], par
         <input type="search" aria-label="Search invoices, packages and recipients" placeholder="Search invoice / package" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
       <div className="igo-ledger-invoices">
-        {listedInvoices.map(invoice => <InvoiceDetail key={invoice.id} invoice={invoice} payments={visiblePayments} isAdmin={isAdmin} canManageDueDates={canManageDueDates} liveMode={liveMode} onDueDateChanged={onDueDateChanged} openPrint={exportInvoice} />)}
+        {listedInvoices.map(invoice => <InvoiceDetail key={invoice.id} invoice={invoice} payments={visiblePayments} codInvoiceAllocations={visibleCodAllocations} isAdmin={isAdmin} canManageDueDates={canManageDueDates} liveMode={liveMode} onDueDateChanged={onDueDateChanged} openPrint={exportInvoice} />)}
         {!listedInvoices.length && <p className="igo-ledger-empty">No invoices match this selection.</p>}
       </div>
-      <p className="igo-ledger-footnote">Payment submissions awaiting admin verification remain outstanding until confirmed. PDF statements open a print preview; choose “Save as PDF” in your device’s print options.</p>
+      <p className="igo-ledger-footnote">Payment transfers and COD offsets remain outstanding until confirmed by iGO. PDF statements open a print preview; choose “Save as PDF” in your device’s print options.</p>
       {printDoc && <PrintModal doc={printDoc} close={() => setPrintDoc(null)} />}
     </section>
   );

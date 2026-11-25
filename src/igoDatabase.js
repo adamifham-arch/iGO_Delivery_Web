@@ -1,3 +1,4 @@
+import {notificationVisible} from './notificationWorkspaces';
 import { supabase } from './supabase';
 
 const requireClient = () => {
@@ -55,6 +56,12 @@ export function packageFromDb(row) {
     landmark: row.landmark || '',
     item: row.item_description,
     fee: Number(row.delivery_fee || 0),
+    codAmount: row.cod_amount == null ? null : Number(row.cod_amount),
+    codCollectedAmount: row.cod_collected_amount == null ? null : Number(row.cod_collected_amount),
+    codCollectedAt: row.cod_collected_at || null,
+    codCollectedBy: row.cod_collected_by || null,
+    codReceivedByIgoAt: row.cod_received_by_igo_at || null,
+    codReceivedByIgoBy: row.cod_received_by_igo_by || null,
     packageSize: row.package_size || '',
     notes: row.notes || '',
     status: statusFromDb(row.status),
@@ -86,6 +93,8 @@ export function packageToDb(entry) {
     landmark: 'landmark',
     item: 'item_description',
     fee: 'delivery_fee',
+    codAmount: 'cod_amount',
+    codCollectedAmount: 'cod_collected_amount',
     packageSize: 'package_size',
     notes: 'notes',
     status: 'status',
@@ -236,14 +245,16 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
   let invoiceQuery = client.from('invoices').select('*,partners(name),invoice_items(id,package_id,amount,packages(package_number,customer_name,customer_phone,address,area,item_description,delivery_fee)),invoice_charges(id,description,amount,created_at)').order('created_at', { ascending: false });
   let paymentQuery = client.from('payments').select('*,partners(name),invoices!payments_target_invoice_id_fkey(invoice_number),payment_allocations(invoice_id,amount,invoices(invoice_number))').order('submitted_at', { ascending: false });
   let creditQuery = client.from('partner_credit_ledger').select('partner_id,amount');
+  let codAllocationQuery = client.from('cod_invoice_settlement_invoice_allocations').select('settlement_id,invoice_id,amount,cod_invoice_settlement_requests!inner(partner_id,status,reviewed_at)');
   if (partnerId) {
     invoiceQuery = invoiceQuery.eq('partner_id', partnerId);
     paymentQuery = paymentQuery.eq('partner_id', partnerId);
     creditQuery = creditQuery.eq('partner_id', partnerId);
+    codAllocationQuery = codAllocationQuery.eq('cod_invoice_settlement_requests.partner_id', partnerId);
   }
   let partnerQuery = client.from('partners').select('id,invoice_cutoff').order('created_at', { ascending: false });
   if (partnerId) partnerQuery = partnerQuery.eq('id', partnerId);
-  const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult] = await Promise.all([
+  const [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult, codAllocationResult] = await Promise.all([
     invoiceQuery,
     paymentQuery,
     isAdmin ? client.from('business_expenses').select('*').order('expense_date', { ascending: false }) : Promise.resolve({ data: [], error: null }),
@@ -251,8 +262,9 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
     client.from('bank_accounts').select('*').order('created_at', { ascending: false }),
     partnerQuery,
     creditQuery,
+    codAllocationQuery,
   ]);
-  for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult]) {
+  for (const result of [invoiceResult, paymentResult, expenseResult, withdrawalResult, accountResult, partnerResult, creditResult, codAllocationResult]) {
     if (result.error) throw result.error;
   }
   const savedCutoffs = [...new Set((partnerResult.data || []).map((row) => row.invoice_cutoff == null ? null : String(row.invoice_cutoff).slice(0, 5)))];
@@ -338,6 +350,13 @@ export async function loadFinanceRecords({ workspace = 'Admin', partnerId } = {}
       totals[row.partner_id] = (totals[row.partner_id] || 0) + Number(row.amount || 0);
       return totals;
     }, {}),
+    codInvoiceAllocations: (codAllocationResult.data || []).filter(row => row.cod_invoice_settlement_requests?.status === 'approved').map(row => ({
+      settlementId: row.settlement_id,
+      invoiceDbId: row.invoice_id,
+      amount: Number(row.amount || 0),
+      partnerId: row.cod_invoice_settlement_requests.partner_id,
+      reviewedAt: row.cod_invoice_settlement_requests.reviewed_at,
+    })),
     invoiceCutoff: savedCutoffs.length === 1 ? savedCutoffs[0] || null : null,
     invoiceCutoffMixed: savedCutoffs.length > 1,
   };
@@ -463,10 +482,15 @@ export async function adminUpdateDriverSettings(userId, changes) {
   return data;
 }
 
-export async function loadNotifications() {
-  const { data, error } = await requireClient().from('notifications').select('*').order('created_at', { ascending: false }).limit(100);
-  if (error) throw error;
-  return data || [];
+export async function loadNotifications(workspace) {
+  const client = requireClient();
+  const rows = [];
+  for(let start=0;;start+=100){
+    const {data,error}=await client.from('notifications').select('*').order('created_at',{ascending:false}).order('id',{ascending:false}).range(start,start+99);
+    if(error)throw error;
+    rows.push(...(data||[]).filter(item=>!workspace||notificationVisible(item,workspace)));
+    if(rows.length>=100||!data||data.length<100)return rows.slice(0,100);
+  }
 }
 
 export async function markNotificationRead(id) {
@@ -595,10 +619,10 @@ export async function savePaymentAccount({ id, bankName = '', accountName, accou
 }
 
 export async function loadPartnerDeliveryPricing(partnerId) {
-  if (!partnerId) return { pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} };
+  if (!partnerId) return { pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {}, codEnabled: false };
   const { data, error } = await requireClient()
     .from('partners')
-    .select('delivery_pricing_mode,agreed_delivery_fee,package_size_rates')
+    .select('delivery_pricing_mode,agreed_delivery_fee,package_size_rates,cod_enabled')
     .eq('id', partnerId)
     .maybeSingle();
   if (error) {
@@ -615,13 +639,14 @@ export async function loadPartnerDeliveryPricing(partnerId) {
     pricingMode: data?.delivery_pricing_mode || 'route',
     agreedDeliveryFee: data?.agreed_delivery_fee == null ? null : Number(data.agreed_delivery_fee),
     packageSizeRates: data?.package_size_rates || {},
+    codEnabled: data?.cod_enabled === true,
   };
 }
 
 export async function loadPartnerDeliveryPricingSettings() {
   const { data, error } = await requireClient()
     .from('partners')
-    .select('id,name,delivery_pricing_mode,agreed_delivery_fee,package_size_rates')
+    .select('id,name,delivery_pricing_mode,agreed_delivery_fee,package_size_rates,cod_enabled')
     .order('name', { ascending: true });
   if (error) throw error;
   return (data || []).map((row) => ({
@@ -630,6 +655,7 @@ export async function loadPartnerDeliveryPricingSettings() {
     pricingMode: row.delivery_pricing_mode || 'route',
     agreedDeliveryFee: row.agreed_delivery_fee == null ? null : Number(row.agreed_delivery_fee),
     packageSizeRates: row.package_size_rates || {},
+    codEnabled: row.cod_enabled === true,
   }));
 }
 
@@ -650,6 +676,15 @@ export async function savePartnerPackageSizeRates({ partnerId, packageSizeRates 
   });
   if (error) throw error;
   if (data !== true) throw new Error('The package size rates were not saved.');
+}
+
+export async function savePartnerCodSetting({ partnerId, enabled }) {
+  const { data, error } = await requireClient().rpc('save_igo_partner_cod_setting', {
+    p_partner_id: partnerId,
+    p_enabled: Boolean(enabled),
+  });
+  if (error) throw error;
+  if (data !== true) throw new Error('COD permission was not saved.');
 }
 
 export async function saveInvoiceCutoff(time) {

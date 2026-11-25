@@ -2,6 +2,10 @@ import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import './index.css';
 import { buildFinancialWorkbookModel, downloadFinancialReportWorkbook, summarizeFinancialPeriod } from './financialReportXlsx';
 import PartnerInvoiceLedger from './PartnerInvoiceLedger';
+import CodSettlementManagement from './CodSettlementManagement';
+import {notificationVisible} from './notificationWorkspaces';
+import AdminDailyOverview from './AdminDailyOverview';
+import PartnerBillingFrequency from './PartnerBillingFrequency';
 import PartnerAiQuickAsk from './PartnerAiQuickAsk';
 import { PublicLandingSlideshow, SuperadminLandingSlideshowManager } from './LandingSlideshow';
 import { supabase, supabaseConfigured, setAuthRememberMe } from './supabase';
@@ -61,7 +65,10 @@ import {
   loadPartnerDeliveryPricingSettings,
   savePartnerDeliveryPricing,
   savePartnerPackageSizeRates,
+  savePartnerCodSetting,
 } from './igoDatabase';
+
+const validCodAmount = (value) => /^\d{1,6}(?:\.\d{1,2})?$/.test(String(value).trim()) && Number(value) > 0 && Number(value) <= 999999;
 
 const partnerOperatingLocation = 'Malé'; // Admin-configured partner operating location
 const deliveryRates = {
@@ -208,6 +215,21 @@ const isVesselLine = (line) => {
   return /\b(?:boat|dhoni|dhoani|ferry|launch|speed[ -]?boat|speed[ -]?launch)\b/.test(normalized)
     || knownVesselAliases.some((name) => normalized.includes(name));
 };
+const detectSinglePackageArea = (address, pricingMode) => {
+  const text = normalizeMessageText(address);
+  const hulhumale = /\b(?:hulhu?male(?:e)?|hml|h\s*mle|h\s*male)\b/.test(text);
+  const phase2 = /\b(?:phase\s*(?:2|ii|two)|p2|hiyaa?|hyyaa?|vinares?|vinare)\b/.test(text);
+  const phase1 = /\b(?:phase\s*(?:1|i|one)|p1)\b/.test(text);
+  const male = /\b(?:male|mle|maafannu|henveiru|galolhu|machchangolhi)\b/.test(text);
+  if (phase1 && phase2) return '';
+  if (hulhumale || phase1 || phase2) {
+    if (male && !hulhumale) return '';
+    if (pricingMode === 'package_size') return 'Hulhumalé';
+    return phase2 ? 'Hulhumalé Phase 2' : phase1 ? 'Hulhumalé Phase 1' : '';
+  }
+  return male ? 'Malé' : '';
+};
+
 const cleanImportedMessageLine = (line) =>
   String(line || '')
     .replace(/^\s*\[\d{1,2}[/-]\d{1,2}[^\]]*\]\s*/i, '')
@@ -216,36 +238,7 @@ const cleanImportedMessageLine = (line) =>
     .replace(/[🟥🟩🛳️✅☑️]+/gu, '')
     .trim();
 
-const initialPackages = [
-  {
-    id: 'IGO-1001',
-    customer: 'Aminath Ahmed',
-    phone: '7771234',
-    area: 'Hulhumale',
-    item: 'Clothing',
-    fee: 35,
-    status: 'Pending',
-  },
-  {
-    id: 'IGO-1002',
-    driver: 'Ahmed Rasheed',
-    customer: 'Mohamed Ali',
-    phone: '7775678',
-    area: "Male'",
-    item: 'Electronics',
-    fee: 45,
-    status: 'Out for Delivery',
-  },
-  {
-    id: 'IGO-1003',
-    customer: 'Fathimath Zaina',
-    phone: '7779876',
-    area: 'Villimale',
-    item: 'Accessories',
-    fee: 35,
-    status: 'Delivered',
-  },
-];
+const initialPackages = [];
 
 const statusClass = (status) => status.toLowerCase().replaceAll(' ', '-');
 const getStaffLandingPage = (profile) => {
@@ -630,6 +623,7 @@ async function preparePartnerProfileImage(file, maxBytes = 256 * 1024) {
 
 export default function App() {
   const customerNameInputRef = useRef(null);
+  const customerPhoneInputRef = useRef(null);
   const customerMessageInputRef = useRef(null);
   const [navigation, setNavigation] = useState(() => {
     const route = readSavedIgoNavigation();
@@ -690,7 +684,7 @@ export default function App() {
   const [aiAssistantSaving, setAiAssistantSaving] = useState(Boolean(supabaseConfigured));
   const [aiAssistantFeedback, setAiAssistantFeedback] = useState('');
   const [linkedPartnerProfile, setLinkedPartnerProfile] = useState(null);
-  const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
+  const [partnerDeliveryPricing, setPartnerDeliveryPricing] = useState({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {}, codEnabled: false });
   const getCurrentDeliveryFee = (destination, packageSize = '') => getPartnerDeliveryFee(destination, partnerDeliveryPricing, packageSize);
   const [linkedDriverProfile, setLinkedDriverProfile] = useState(null);
   const [partnerSetupOpen, setPartnerSetupOpen] = useState(false);
@@ -975,6 +969,8 @@ export default function App() {
   const [partnerTrackingNext, setPartnerTrackingNext] = useState('1');
   const [partnerTrackingNotice, setPartnerTrackingNotice] = useState('');
   const [partnerTrackingSaving, setPartnerTrackingSaving] = useState(false);
+  const [customerLookup, setCustomerLookup] = useState({key:'',status:'idle',rows:[]});
+  const [dismissedCustomerLookup, setDismissedCustomerLookup] = useState('');
   const [form, setForm] = useState({
     customer: '',
     phone: '',
@@ -983,13 +979,66 @@ export default function App() {
     boatLocation: '',
     departureTime: '',
     landmark: '',
-    area: 'Malé',
+    area: '',
+    areaManual: false,
     packageSize: '',
     item: '',
-    fee: String(getCurrentDeliveryFee('Malé') ?? ''),
+    fee: '',
     notes: '',
     trackingReference: '',
+    codRequested: false,
+    codAmount: '',
   });
+
+  // Search only the signed-in partner's own previous deliveries, never a global customer directory.
+  const lookupPhone = normalizeCustomerPhone(form.phone);
+  const lookupKey = [databaseUser?.id || '',linkedPartnerProfile?.id || '',workspace,lookupPhone].join('|');
+  useEffect(() => {
+    if (!supabase || !databaseUser || workspace !== 'Partner' || page !== 'Register Package' || !showForm ||
+      !isValidCustomerPhone(lookupPhone) || !(databaseProfile?.role === 'partner' && accountApprovalStatus === 'approved' ||
+      databaseProfile?.role === 'admin' && linkedPartnerProfile?.approval_status === 'approved')) return undefined;
+    let active = true;
+    setCustomerLookup({key:lookupKey,status:'loading',rows:[]});
+    const timer = window.setTimeout(async () => {
+      try {
+        const partnerId = databaseProfile.role === 'admin' ? linkedPartnerProfile.id : await getCurrentPartnerId();
+        if (!partnerId) return;
+        const {data,error} = await supabase.from('packages')
+          .select('customer_name,customer_phone,address,area,created_at')
+          .eq('partner_id',partnerId).eq('customer_phone',lookupPhone).neq('area','Boat')
+          .order('created_at',{ascending:false}).limit(30);
+        if (error) throw error;
+        const seen = new Set();
+        const rows = (data || []).filter(row=>{
+          const key=[row.customer_name,row.address,row.area].map(v=>String(v||'').trim().toLowerCase()).join('|');
+          if(!row.address?.trim() || !row.customer_name?.trim() || seen.has(key)) return false;
+          seen.add(key);return true;
+        }).slice(0,4);
+        if(active) setCustomerLookup({key:lookupKey,status:'ready',rows});
+      }catch{
+        if(active) setCustomerLookup({key:lookupKey,status:'unavailable',rows:[]});
+      }
+    },250);
+    return ()=>{active=false;window.clearTimeout(timer);};
+  },[databaseUser?.id,databaseProfile?.role,accountApprovalStatus,linkedPartnerProfile?.id,linkedPartnerProfile?.approval_status,workspace,page,showForm,lookupPhone,lookupKey]);
+  const applyPreviousCustomer = (row) => {
+    if(customerLookup.key!==lookupKey || workspaceRef.current!=='Partner' || customerLookup.status!=='ready') return;
+    setForm(current=>{
+      if(normalizeCustomerPhone(current.phone)!==lookupPhone || current.area==='Boat') return current;
+      const next={...current,customer:current.customer.trim() || row.customer_name};
+      if(!current.address.trim()){
+        next.address=row.address;
+        const allowed=partnerDeliveryPricing.pricingMode==='package_size'?['Malé','Hulhumalé']:['Malé','Hulhumalé Phase 1','Hulhumalé Phase 2'];
+        const historyArea=partnerDeliveryPricing.pricingMode==='package_size' && String(row.area).startsWith('Hulhumalé')?'Hulhumalé':row.area;
+        const detected=detectSinglePackageArea(row.address,partnerDeliveryPricing.pricingMode);
+        next.area=detected && allowed.includes(historyArea) && detected!==historyArea?'':detected || (allowed.includes(historyArea)?historyArea:'');
+        next.areaManual=false;
+        next.fee=next.area?String(getCurrentDeliveryFee(next.area,next.packageSize)??''):'';
+      }
+      return next;
+    });
+    setDismissedCustomerLookup(lookupKey);
+  };
 
   useEffect(() => {
     if (!supabase || !databaseUser || workspace !== 'Partner') return undefined;
@@ -1029,7 +1078,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
-        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {}, codEnabled: false });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseLoading(false);
@@ -1105,7 +1154,7 @@ export default function App() {
         setIsSuperadmin(false);
         setLinkedPartnerProfile(null);
         setLinkedDriverProfile(null);
-        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {} });
+        setPartnerDeliveryPricing({ pricingMode: 'route', agreedDeliveryFee: null, packageSizeRates: {}, codEnabled: false });
         setPartnerLogo('');
         setPackages([]);
         setDatabaseError(error.message || 'Could not load this iGO account.');
@@ -1604,6 +1653,7 @@ export default function App() {
   };
 
   function handleNotificationNavigate(item) {
+    if (!notificationVisible(item, workspace)) return;
     const explicitPage = [item.target_page, item.related_page, item.page, item.destination]
       .find((value) => typeof value === 'string' && value.trim());
     const explicitTarget = [
@@ -1613,7 +1663,7 @@ export default function App() {
       item.related_section,
       item.target_section,
     ].find((value) => typeof value === 'string' && value.trim());
-    const pages = ['Admin Operations', 'Add Package', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'Overview', 'Website controls', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
+    const pages = ['Admin Operations', 'Add Package', 'User Management', 'Approvals', 'Packages', 'Register Package', 'Finance Management', 'Invoices & Payments', 'COD Collections', 'Overview', 'Website controls', 'Profile', 'About', 'Driver Overview', 'My Deliveries', 'Staff Operations'];
     let destination = pages.find((page) => page.toLowerCase() === String(explicitPage || '').trim().toLowerCase());
     const notificationText = [item.type, item.category, item.entity_type, item.related_type, item.title, item.message]
       .filter(Boolean).join(' ');
@@ -1628,7 +1678,17 @@ export default function App() {
 
     let targetId = explicitTarget;
     let targetWorkspace = '';
-    if (/new user awaiting approval/.test(title)) {
+    // COD settlement notifications are financial review tasks, not new-partner
+    // approval requests. Handle them before the generic "partner request" rule.
+    if (/^cod payout (requested|transferred|rejected)$/.test(title)) {
+      destination = 'COD Collections';
+      targetId = 'cod-payout-requests';
+      targetWorkspace = title === 'cod payout requested' ? 'Admin' : 'Partner';
+    } else if (/\bcod\b.*\b(?:settlement|invoice offset)\b|\b(?:settlement|invoice offset)\b.*\bcod\b/.test(title)) {
+      destination = 'COD Collections';
+      targetId = 'cod-settlement-requests';
+      targetWorkspace = /requested/.test(title) ? 'Admin' : 'Partner';
+    } else if (/new user awaiting approval/.test(title)) {
       destination = destination || 'Approvals';
       targetId = targetId || 'pending-account-approvals';
       targetWorkspace = 'Admin';
@@ -1643,10 +1703,14 @@ export default function App() {
     } else if (/driver withdrawal request/.test(title)) {
       destination = destination || 'Finance Management';
       targetId = targetId || 'admin-withdrawal-requests';
-      targetWorkspace = 'Admin';
+      targetWorkspace = workspace === 'Staff' ? 'Staff' : 'Admin';
+      if (workspace === 'Staff') { destination = 'Staff Operations'; targetId = 'staff-payment-status'; }
     } else if (/partner payment submitted/.test(title)) {
       destination = destination || 'Finance Management';
       targetId = targetId || 'admin-payment-review';
+      targetWorkspace = 'Admin';
+    } else if (title === 'payment approved' && !notificationVisible(item, 'Partner')) {
+      destination = 'Finance Management';
       targetWorkspace = 'Admin';
     } else if (/invoice available|payment approved|payment needs attention/.test(title)) {
       destination = destination || 'Invoices & Payments';
@@ -1778,11 +1842,16 @@ export default function App() {
 
   const updateForm = (e) => {
     const { name, value } = e.target;
-    setForm((current) => ({
-      ...current,
-      [name]: name === 'phone' ? normalizeCustomerPhone(value) : name === 'area' && partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : value,
-      ...(name === 'area' || name === 'packageSize' ? { fee: String(getCurrentDeliveryFee(name === 'area' ? value : current.area, name === 'packageSize' ? value : current.packageSize) ?? '') } : {}),
-    }));
+    setForm((current) => {
+      const next = { ...current, [name]: name === 'phone' ? normalizeCustomerPhone(value) : value };
+      if (name === 'area') {
+        next.areaManual = Boolean(value);
+        if (partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase')) next.area = 'Hulhumalé';
+      }
+      if (name === 'address' && !current.areaManual) next.area = detectSinglePackageArea(value, partnerDeliveryPricing.pricingMode);
+      if (['area','address','packageSize'].includes(name)) next.fee = next.area ? String(getCurrentDeliveryFee(next.area, next.packageSize) ?? '') : '';
+      return next;
+    });
   };
 
   async function savePartnerTrackingSettings(event) {
@@ -1816,7 +1885,7 @@ export default function App() {
       setPartnerTrackingNext(String(nextNumber));
       setPartnerTrackingNotice('Tracking format saved. New packages will get the next reference automatically.');
     } catch (error) {
-      setPartnerTrackingNotice(error.message || 'Could not save tracking settings.');
+      setPartnerTrackingNotice(error.code === '23505' ? 'This tracking prefix is already in use. Choose a different prefix; changing the number of zeros is not enough.' : error.message || 'Could not save tracking settings.');
     } finally {
       setPartnerTrackingSaving(false);
     }
@@ -1824,7 +1893,19 @@ export default function App() {
 
   async function registerPackage(e) {
     e.preventDefault();
+    if (form.codRequested && (!partnerDeliveryPricing.codEnabled || !validCodAmount(form.codAmount))) {
+      setNotice('Enter a valid cash-on-delivery amount between MVR 0.01 and 999,999.00.');
+      return;
+    }
 
+    if (!form.customer.trim() || !isValidCustomerPhone(form.phone)) {
+      setNotice('Enter the customer name and a valid 7-digit contact number.');
+      return;
+    }
+    if (!form.area) {
+      setNotice('Confirm the delivery area before adding the package.');
+      return;
+    }
     const contactError = packageContactError(form);
     if (contactError) {
       setNotice(contactError);
@@ -1855,6 +1936,7 @@ export default function App() {
       phone: normalizeCustomerPhone(form.phone),
       id: `IGO-${1001 + packages.length}`,
       fee: Number(form.fee),
+      codAmount: partnerDeliveryPricing.codEnabled && form.codRequested ? Number(form.codAmount) : null,
       packageSize: form.packageSize || '',
       status: 'Pending',
     };
@@ -1892,11 +1974,15 @@ export default function App() {
         boatLocation: '',
         departureTime: '',
         landmark: '',
-        area: 'Malé',
+        area: '',
+        areaManual: false,
         packageSize: '',
         item: '',
-        fee: String(getCurrentDeliveryFee('Malé') ?? ''),
+        fee: '',
+        trackingReference: '',
         notes: '',
+        codRequested: false,
+        codAmount: '',
       });
 
       setMessageDraft('');
@@ -1904,7 +1990,8 @@ export default function App() {
       setNotice('');
       setShowForm(true);
       setPage('Register Package');
-      window.requestAnimationFrame(() => customerNameInputRef.current?.focus());
+      setDismissedCustomerLookup('');
+      window.requestAnimationFrame(() => customerPhoneInputRef.current?.focus());
     } else {
       setShowForm(false);
       setPage('Packages');
@@ -2084,7 +2171,8 @@ export default function App() {
       const { data, error } = await query.maybeSingle();
       if (error) throw error;
       if (!data?.id) throw new Error('No partner account is linked to this workspace.');
-      format = String(data.tracking_reference_format || format).trim().toUpperCase();
+      if (!data.tracking_reference_format) return '';
+      format = String(data.tracking_reference_format).trim().toUpperCase();
       nextNumber = Number(data.tracking_reference_next) || 1;
       const zeroes = format.match(/0+$/)?.[0]?.length || 4;
       const normalizedFormat = /0+$/.test(format) ? format : defaultFormat;
@@ -2276,19 +2364,22 @@ export default function App() {
       && !/\bh\s*(?:mle|male)\b/.test(normalizeMessageText(explicitArea));
     const isBoatDelivery = Boolean(detectedBoat) || /\b(?:boat|dhoni|dhoani|ferry|launch|speed boat|speed launch)\b/.test(normalizedAreaText);
 
-    if (explicitHml || hasHulhumale || knownHulhumaleFlat) {
-      if (partnerDeliveryPricing.pricingMode === 'package_size') updates.area = 'Hulhumalé';
+    const detectedArea = detectSinglePackageArea([explicitArea, inferredAddress].join(' '), partnerDeliveryPricing.pricingMode);
+    if (isBoatDelivery) updates.area = 'Boat';
+    else if (detectedArea) updates.area = detectedArea;
+    else if (explicitHml || hasHulhumale || knownHulhumaleFlat) {
+      if (phase1 && phase2) updates.area = '';
+      else if (partnerDeliveryPricing.pricingMode === 'package_size') updates.area = 'Hulhumalé';
       else if (phase2) updates.area = 'Hulhumalé Phase 2';
-      else updates.area = 'Hulhumalé Phase 1';
-    } else if (isBoatDelivery) updates.area = 'Boat';
-    else if (explicitMale || /\b(?:maafannu|henveiru|galolhu|machchangolhi|villimale|villingili)\b/.test(normalizedAreaText)) updates.area = 'Malé';
+      else if (phase1) updates.area = 'Hulhumalé Phase 1';
+    } else if (explicitMale) updates.area = 'Malé';
 
     if (!Object.keys(updates).length) {
       setMessageNotice('No customer details recognized. Use labels such as Name:, Phone:, Address:, and Destination:.');
       return;
     }
 
-    const draftArea = updates.area || form.area || 'Malé';
+    const draftArea = updates.area || '';
     const boatName = draftArea === 'Boat'
       ? (detectedBoat || (inferredAddress && isVesselLine(inferredAddress) ? inferredAddress : ''))
       : '';
@@ -2309,7 +2400,8 @@ export default function App() {
       boatLocation: readMessageField(text, 'boat\\s*location|harbour|jetty'),
       departureTime: normalizeDepartureTime((labeledDepartureClock || boatTimingMatch?.[1] || '').replace(/^(\d{1,2})\.(\d{2})$/, '$1:$2')),
       landmark: landmark || readMessageField(customerText, 'nearby\\s*landmark|landmark'),
-      fee: String(getCurrentDeliveryFee(draftArea, '') ?? ''),
+      areaManual: false,
+      fee: draftArea ? String(getCurrentDeliveryFee(draftArea, '') ?? '') : '',
     };
     Object.assign(draft, deliveryDetails(draft));
     const duplicateKey = packageDuplicateKey(draft);
@@ -2321,13 +2413,10 @@ export default function App() {
       setMessageNotice('This package is already registered. It was not added again.');
       return;
     }
-    if (!draft.trackingReference) {
-      try {
-        draft.trackingReference = await reservePartnerTrackingReference();
-      } catch (error) {
-        setMessageNotice(error.message || 'Could not assign a partner tracking reference.');
-        return;
-      }
+    // Leave empty references for the database to assign atomically at registration.
+    // Never claim a shared default format or advance a counter for an unconfirmed draft.
+    if (!draft.trackingReference && !supabaseConfigured) {
+      draft.trackingReference = await reservePartnerTrackingReference();
     }
     setMessageQueue((current) => [...current, { ...draft, queueId: Date.now() + Math.random() }]);
     setConfirmBulkAdd(false);
@@ -2338,25 +2427,28 @@ export default function App() {
   }
 
   function updateQueuedPackage(queueId, field, value) {
-    setMessageQueue((current) =>
-      current.map((entry) =>
-        entry.queueId === queueId
-          ? {
-              ...entry,
-              [field]: field === 'phone' ? normalizeCustomerPhone(value) : field === 'area' && partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase') ? 'Hulhumalé' : value,
-              ...(field === 'area' || field === 'packageSize'
-                ? { fee: String(getCurrentDeliveryFee(field === 'area' ? value : entry.area, field === 'packageSize' ? value : entry.packageSize) ?? '') }
-                : {}),
-            }
-          : entry
-      )
-    );
+    setMessageQueue(current => current.map(entry => {
+      if (entry.queueId !== queueId) return entry;
+      const next = {...entry, [field]: field === 'phone' ? normalizeCustomerPhone(value) : value};
+      if (field === 'area') {
+        next.areaManual = Boolean(value);
+        if (partnerDeliveryPricing.pricingMode === 'package_size' && value.startsWith('Hulhumalé Phase')) next.area = 'Hulhumalé';
+        if (next.area === 'Boat' && !next.boatName && entry.address) next.boatName = entry.address;
+      }
+      if (field === 'address' && !entry.areaManual) next.area = detectSinglePackageArea(value, partnerDeliveryPricing.pricingMode);
+      if (field === 'codRequested') next.codAmount = value ? entry.codAmount || '' : '';
+      if (['area','address','packageSize'].includes(field)) next.fee = next.area ? String(getCurrentDeliveryFee(next.area,next.packageSize) ?? '') : '';
+      return next;
+    }));
+    setConfirmBulkAdd(false);
   }
 
   async function confirmAddQueuedPackages() {
     const incomplete = messageQueue.filter(
       (entry) =>
+        !String(entry.customer || '').trim() || !isValidCustomerPhone(entry.phone || '') || !entry.area ||
         packageContactError(entry) ||
+        (entry.codRequested && (!partnerDeliveryPricing.codEnabled || !validCodAmount(entry.codAmount))) ||
         (partnerDeliveryPricing.pricingMode === 'package_size' && (!entry.packageSize || !getCurrentDeliveryFee(entry.area, entry.packageSize))) ||
         !(entry.area === 'Boat' ? entry.boatName : entry.address)?.trim() ||
         !validDepartureTime(
@@ -2367,7 +2459,7 @@ export default function App() {
     );
     if (incomplete.length) {
       setMessageNotice(
-        'Land deliveries need a customer name or phone. Boat deliveries need both, plus a boat name. Check the delivery address, package size, and departure time.'
+        'Check the customer name, contact number, address and delivery area for each package. Confirm package size and COD amount where applicable.'
       );
       setConfirmBulkAdd(false);
       return;
@@ -2396,6 +2488,7 @@ export default function App() {
         phone: normalizeCustomerPhone(entry.phone),
         id: 'IGO-' + (1001 + packages.length + index),
         fee: getCurrentDeliveryFee(entry.area, entry.packageSize),
+        codAmount: partnerDeliveryPricing.codEnabled && entry.codRequested ? Number(entry.codAmount) : null,
         packageSize: entry.packageSize || '',
         status: 'Pending',
       }));
@@ -2467,6 +2560,11 @@ export default function App() {
     0
   );
 
+  // COD is a per-partner permission, but historical COD transactions remain visible
+  // after the permission is disabled so existing settlements can still be reviewed.
+  const partnerHasCodAccess = Boolean(partnerDeliveryPricing.codEnabled)
+    || packages.some((p) => p.codAmount != null && Number(p.codAmount) > 0);
+
   const staffRoles = new Set((databaseProfile?.staffAssignments || []).map((item) => item.role));
   const hasFinanceAccess = ['department_requester', 'finance_approver', 'payment_officer', 'operations_manager'].some((role) => staffRoles.has(role));
   const hasStaffOperationsAccess = ['operations_manager', 'operations_staff', 'customer_support', 'people_manager'].some((role) => staffRoles.has(role));
@@ -2488,6 +2586,7 @@ export default function App() {
           ['Add Package', '+'],
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
+          ['COD Collections', '▥'],
           ['Finance Management', '♙'],
           ['Approvals', '✓', 'Pending user approvals'],
           ['User Management', '♙'],
@@ -2499,6 +2598,7 @@ export default function App() {
           ['Register Package', '+'],
           ['Packages', '▤'],
           ['Invoices & Payments', '▣'],
+          ...(partnerHasCodAccess ? [['COD Collections', '▥']] : []),
           ['Tracking Settings', '↗'],
         ];
 
@@ -2841,7 +2941,7 @@ export default function App() {
           <span className="breadcrumb">
             {workspace} / {page}
           </span>
-          <button className="workspace-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const app = event.currentTarget.closest('.app'); const night = app.dataset.theme !== 'night'; app.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button>{databaseProfile && <NotificationCenter onNavigate={handleNotificationNavigate} />}
+          <button className="workspace-theme-toggle" type="button" aria-label="Switch theme" title="Switch theme" onClick={(event) => { const app = event.currentTarget.closest('.app'); const night = app.dataset.theme !== 'night'; app.dataset.theme = night ? 'night' : 'day'; localStorage.setItem('igo-theme', night ? 'night' : 'day'); event.currentTarget.textContent = night ? '☀' : '☾'; }}>{localStorage.getItem('igo-theme') === 'night' ? '☀' : '☾'}</button>{databaseProfile && <NotificationCenter key={(databaseUser?.id || '') + ':' + workspace} workspace={workspace} onNavigate={handleNotificationNavigate} currentPage={page} />}
 <div className="profile-menu-container">
             <button
               type="button"
@@ -2995,6 +3095,7 @@ export default function App() {
               <DriverWorkflowDashboard
                 packages={newestPackages}
                 driverName={viewedProfileName}
+                actorId={databaseUser?.id || ''}
                 liveMode={Boolean(databaseProfile)}
                 onUpdate={updatePackageRecord}
               />
@@ -3066,11 +3167,19 @@ export default function App() {
           )}
 
           {page === 'Admin Operations' && workspace === 'Admin' && (
+            <>{databaseProfile?.role === 'admin' && <AdminDailyOverview key={databaseUser?.id} onNavigate={setPage} />}
+            <CodCollectionsDashboard packages={newestPackages} workspace="Admin" compact onOpen={() => setPage('COD Collections')} />
             <AdminOperations
               packages={newestPackages}
               liveMode={Boolean(databaseProfile)}
               onUpdate={updatePackageRecord}
-            />
+            /></>
+          )}
+          {page === 'COD Collections' && (workspace === 'Admin' || (workspace === 'Partner' && partnerHasCodAccess)) && (
+            <>
+              <CodCollectionsDashboard packages={newestPackages} workspace={workspace} />
+              {databaseProfile && <CodSettlementManagement workspace={workspace} />}
+            </>
           )}
           {page === 'Add Package' && workspace === 'Admin' && (
             <AdminCustomerPackageCreator onCreated={(created) => setPackages((current) => [created, ...current])} />
@@ -3078,6 +3187,7 @@ export default function App() {
           {page === 'Overview' && (
             <>
               {workspace === 'Partner' && <PartnerAiQuickAsk />}
+              {workspace === 'Partner' && partnerHasCodAccess && <CodCollectionsDashboard packages={newestPackages} workspace="Partner" compact onOpen={() => setPage('COD Collections')} />}
 
               <div className="welcome-card">
                 <div>
@@ -3273,7 +3383,7 @@ export default function App() {
                 </label>
                 <button className="primary-btn" type="submit" disabled={partnerTrackingSaving}>{partnerTrackingSaving ? 'Saving…' : 'Save format'}</button>
                 {partnerTrackingNotice && <p role="status">{partnerTrackingNotice}</p>}
-                <small>For example, BBD/0000 starts at BBD/0001. The number advances as packages are added.</small>
+                <small>For example, BBD/0000 starts at BBD/0001. Each partner needs a unique prefix, regardless of letter case or number of zeros. The number advances as packages are added.</small>
               </form>
             </section>
           )}
@@ -3298,13 +3408,13 @@ export default function App() {
                         }
                         rows="4"
                         placeholder={
-                          'Name: ...\nPhone: ...\nDestination: ...\nAddress: ...\nLandmark: ...\nFor Boat use Boat name:, Boat location:, Departure time: instead of Address.\nPackage: ...\nInstructions: ...'
+                          'Name: ...\nContact: ...\nAddress: ...\nInstructions: ...'
                         }
                       />
                       <button
                         type="button"
-                        className="primary-btn"
                         onClick={fillFromMessage}
+                        className="primary-btn"
                       >
                         Add package to list
                       </button>
@@ -3362,119 +3472,45 @@ export default function App() {
                               </button>
                             )}
                           </div>
-                          {partnerDeliveryPricing.pricingMode === 'package_size' && (
-                            <div className="package-size-chips message-queue-size-chips" role="group" aria-label="Package size">
-                              {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
-                                <button key={size} type="button" className={entry.packageSize === size ? 'selected' : ''} aria-label={label + ' package size, MVR ' + partnerDeliveryPricing.packageSizeRates[size]} aria-pressed={entry.packageSize === size} onClick={() => updateQueuedPackage(entry.queueId, 'packageSize', size)}>
-                                  <span className="package-size-initial">{size}</span><span className="package-size-label">{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
-                                </button>
-                              ))}
-                              {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}
-                            </div>
-                          )}
-                          <details className="message-queue-edit">
-                            <summary>Edit package details</summary>
-                            <div className="message-queue-fields">
-                          <label>
-                            Name
-                            <input
-                              value={entry.customer}
-                              onChange={(event) =>
-                                updateQueuedPackage(
-                                  entry.queueId,
-                                  'customer',
-                                  event.target.value
-                                )
-                              }
-                            />
-                          </label>
-                          <label>
-                            Phone
-                            <input
-                              type="tel"
-                              inputMode="tel"
-                              pattern="[79][0-9]{6}"
-                              title="Enter 7 digits starting with 7 or 9."
-                              value={entry.phone}
-                              onChange={(event) =>
-                                updateQueuedPackage(
-                                  entry.queueId,
-                                  'phone',
-                                  event.target.value
-                                )
-                              }
-                            />
-                          </label>
-                          <label>
-                            Partner tracking reference (optional)
-                            <input value={entry.trackingReference || ''} placeholder="e.g. BBD/0036" onChange={(event) => updateQueuedPackage(entry.queueId, 'trackingReference', event.target.value)} />
-                          </label>
-                          <label>
-                            Island / area *
-                            <select
-                              value={entry.area}
-                              onChange={(event) =>
-                                updateQueuedPackage(
-                                  entry.queueId,
-                                  'area',
-                                  event.target.value
-                                )
-                              }
-                            >
-                              <option>Malé</option>
-                              {partnerDeliveryPricing.pricingMode === 'package_size' ? <option>Hulhumalé</option> : <><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
-                              <option>Boat</option>
+                          <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',fontSize:13}}>
+                            <span className="muted">{entry.area || 'Confirm delivery area'}</span>
+                            {entry.notes && <span className="muted">· Instructions: {entry.notes}</span>}
+                          </div>
+                          {(!entry.customer?.trim() || !isValidCustomerPhone(entry.phone || '') || !entry.area || !(entry.area==='Boat'?entry.boatName:entry.address)?.trim()) && <small role="status" style={{color:'#952d20'}}>Check missing customer details or delivery area below.</small>}
+                          {partnerDeliveryPricing.pricingMode === 'package_size' && <label style={{display:'grid',gap:4}}>Package size *
+                            <select value={entry.packageSize || ''} onChange={event=>updateQueuedPackage(entry.queueId,'packageSize',event.target.value)}>
+                              <option value="">Select package size</option>
+                              {Object.entries(packageSizeLabels).filter(([size])=>Number(partnerDeliveryPricing.packageSizeRates?.[size])>0).map(([size,label])=><option key={size} value={size}>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</option>)}
                             </select>
-                          </label>
-                          {(entry.area === 'Boat'
-                            ? [
-                                ['boatName', 'Boat name *'],
-                                ['boatLocation', 'Boat location (optional)'],
-                                ['departureTime', 'Departure time (optional)'],
-                              ]
-                            : [
-                                ['address', 'Delivery address *'],
-                                ['landmark', 'Nearby landmark (optional)'],
-                              ]
-                          ).map(([field, label]) => (
-                            <label key={field}>
-                              {label}
-                              <input
-                                value={entry[field] || ''}
-                                required={
-                                  field === 'address' || field === 'boatName'
-                                }
-                                placeholder={
-                                  field === 'departureTime'
-                                    ? 'HH:MM or 2:30 PM'
-                                    : undefined
-                                }
-                                onChange={(event) =>
-                                  updateQueuedPackage(
-                                    entry.queueId,
-                                    field,
-                                    event.target.value
-                                  )
-                                }
-                              />
-                            </label>
-                          ))}
-                          <label className="message-queue-instructions">
-                            Delivery instructions (optional)
-                            <textarea
-                              rows={2}
-                              value={entry.notes || ''}
-                              placeholder="Call before delivery, fragile item, etc."
-                              onChange={(event) =>
-                                updateQueuedPackage(entry.queueId, 'notes', event.target.value)
-                              }
-                            />
-                          </label>
-                          <p className="message-queue-fee">
-                            {partnerDeliveryPricing.pricingMode === 'package_size' && entry.packageSize ? `${packageSizeLabels[entry.packageSize]} package · ` : ''}{entry.fee ? `Delivery fee: MVR ${entry.fee}` : partnerDeliveryPricing.pricingMode === 'package_size' ? 'Choose a priced package size' : 'Delivery fee not available'}
-                          </p>
-                          {entry.item && <p>Package: {entry.item}</p>}
-                          {entry.notes && <p>Instructions: {entry.notes}</p>}
+                          </label>}
+                          {partnerDeliveryPricing.codEnabled && <div style={{display:'grid',gap:6}}>
+                            <label style={{display:'flex',alignItems:'center',gap:8,flexDirection:'row',justifyContent:'flex-start'}}><input style={{width:18,height:18,minHeight:0,margin:0,flex:'0 0 auto'}} type="checkbox" checked={Boolean(entry.codRequested)} onChange={event=>updateQueuedPackage(entry.queueId,'codRequested',event.target.checked)}/>Cash on delivery</label>
+                            {entry.codRequested&&<label>COD amount (MVR) *<input type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" value={entry.codAmount || ''} onChange={event=>updateQueuedPackage(entry.queueId,'codAmount',event.target.value)} /></label>}
+                          </div>}
+                          <details className="message-queue-edit" open={!entry.customer?.trim() || !isValidCustomerPhone(entry.phone || '') || !entry.area || !(entry.area==='Boat'?entry.boatName:entry.address)?.trim()}>
+                            <summary>Edit package details</summary>
+                            <div className="message-queue-fields" style={{gap:12}}>
+                              <label>Customer name *<input value={entry.customer} onChange={event=>updateQueuedPackage(entry.queueId,'customer',event.target.value)} required /></label>
+                              <label>Customer contact number *<input type="tel" inputMode="tel" pattern="[79][0-9]{6}" title="Enter 7 digits starting with 7 or 9." value={entry.phone} onChange={event=>updateQueuedPackage(entry.queueId,'phone',event.target.value)} required /></label>
+                              <label>{entry.area==='Boat'?'Boat name *':'Customer address *'}<input value={(entry.area==='Boat'?entry.boatName:entry.address)||''} onChange={event=>updateQueuedPackage(entry.queueId,entry.area==='Boat'?'boatName':'address',event.target.value)} required /></label>
+                              <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                                <small className="muted">{entry.area && !entry.areaManual ? 'Detected location' : 'Delivery location'}</small>
+                                <select aria-label="Delivery location" value={entry.area || ''} onChange={event=>updateQueuedPackage(entry.queueId,'area',event.target.value)} style={{width:'auto',maxWidth:'100%',minHeight:34,padding:'5px 10px',fontSize:13}}>
+                                  <option value="">Confirm area</option><option>Malé</option>
+                                  {partnerDeliveryPricing.pricingMode==='package_size'?<option>Hulhumalé</option>:<><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
+                                  <option>Boat</option>
+                                </select>
+                              </div>
+                              <label className="message-queue-instructions">Delivery instructions<textarea rows={2} value={entry.notes || ''} placeholder="Optional instructions for the rider" onChange={event=>updateQueuedPackage(entry.queueId,'notes',event.target.value)} /></label>
+                              <details style={{gridColumn:'1 / -1',borderTop:'1px solid #e5e7eb',paddingTop:8}}>
+                                <summary>Additional details (optional)</summary>
+                                <div style={{display:'grid',gap:10,marginTop:10}}>
+                                  {entry.area==='Boat'?<><label>Boat location<input value={entry.boatLocation || ''} onChange={event=>updateQueuedPackage(entry.queueId,'boatLocation',event.target.value)} /></label><label>Departure time<input value={entry.departureTime || ''} placeholder="HH:MM or 2:30 PM" onChange={event=>updateQueuedPackage(entry.queueId,'departureTime',event.target.value)} /></label></>:<label>Nearby landmark<input value={entry.landmark || ''} onChange={event=>updateQueuedPackage(entry.queueId,'landmark',event.target.value)} /></label>}
+                                  <label>Partner tracking reference<input value={entry.trackingReference || ''} onChange={event=>updateQueuedPackage(entry.queueId,'trackingReference',event.target.value)} /></label>
+                                  <label>Package description<input value={entry.item || ''} onChange={event=>updateQueuedPackage(entry.queueId,'item',event.target.value)} /></label>
+                                </div>
+                              </details>
+                              <p className="message-queue-fee">{entry.area && entry.fee ? 'Delivery fee: MVR '+entry.fee : 'Delivery fee calculated after confirming details'}</p>
                             </div>
                           </details>
                         </div>
@@ -3548,153 +3584,69 @@ export default function App() {
                         'input:not([readonly]):not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button[type="submit"]'
                       )
                     );
-                    const index = fields.indexOf(e.target);
-                    if (index >= 0) fields[index + 1]?.focus();
+                    const visibleFields = fields.filter(field => field.getClientRects().length > 0);
+                    const index = visibleFields.indexOf(e.target);
+                    if (index >= 0) visibleFields[index + 1]?.focus();
                   }}
                 >
                   {' '}
-                  <h3>Customer and delivery details</h3>
-                  <div className="form-grid">
-                    <label>
-                      Customer name {form.area === 'Boat' ? '*' : '(optional)'}
-                      <input
-                        ref={customerNameInputRef}
-                        name="customer"
-                        value={form.customer}
-                        onChange={updateForm}
-                        required={form.area === 'Boat'}
-                        placeholder="Full name"
-                      />
+                  <div className="form-grid" style={{gap:12}}>
+                    <label className="full-width">Customer contact number *
+                      <input ref={customerPhoneInputRef} type="tel" inputMode="tel" pattern="[79][0-9]{6}" title="Enter 7 digits starting with 7 or 9." name="phone" value={form.phone} onChange={event=>{setDismissedCustomerLookup('');updateForm(event);}} required placeholder="Phone number" />
                     </label>
-                    <label>
-                      Customer phone {form.area === 'Boat' ? '*' : '(optional)'}
-                      <input
-                        type="tel"
-                        inputMode="tel"
-                        pattern="[79][0-9]{6}"
-                        title="Enter 7 digits starting with 7 or 9."
-                        name="phone"
-                        value={form.phone}
-                        onChange={updateForm}
-                        required={form.area === 'Boat'}
-                        placeholder="Phone number"
-                      />
+                    {workspace==='Partner' && form.area!=='Boat' && isValidCustomerPhone(lookupPhone) && customerLookup.key===lookupKey && dismissedCustomerLookup!==lookupKey && (!form.customer.trim() || !form.address.trim()) && <>
+                      {customerLookup.status==='loading' && <small className="full-width muted" role="status">Checking previous deliveries…</small>}
+                      {customerLookup.status==='ready' && customerLookup.rows.length>0 && <div className="full-width" style={{border:'1px solid var(--border,#d8dee8)',borderRadius:8,padding:10,display:'grid',gap:8}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><strong style={{fontSize:13}}>Previous customer details</strong><button type="button" className="secondary-btn" style={{fontSize:12,padding:'4px 8px'}} onClick={()=>setDismissedCustomerLookup(lookupKey)}>Dismiss</button></div>
+                        {customerLookup.rows.map((row,index)=><button key={index} type="button" className="secondary-btn" style={{textAlign:'left',display:'grid',gap:3,padding:8,whiteSpace:'normal'}} onClick={()=>applyPreviousCustomer(row)}><strong>{row.customer_name}</strong><small>{row.address} · {row.area}</small><small>Use previous details</small></button>)}
+                        <small className="muted">Only empty fields will be filled. Confirm the delivery address.</small>
+                      </div>}
+                    </>}
+                    <label className="full-width">Customer name *
+                      <input ref={customerNameInputRef} name="customer" value={form.customer} onChange={updateForm} required placeholder="Full name" />
                     </label>
-                    <label className="full-width">
-                      Island / area *
-                      <select
-                        name="area"
-                        value={form.area}
-                        onChange={updateForm}
-                        required
-                      >
-                        <option>Malé</option>
+                    {form.area === 'Boat' ? (
+                      <label className="full-width">Boat name *
+                        <input name="boatName" value={form.boatName} onChange={updateForm} required placeholder="Name of the boat" />
+                      </label>
+                    ) : (
+                      <label className="full-width">Customer address *
+                        <input name="address" value={form.address} onChange={updateForm} required placeholder="House, street, building and area" />
+                      </label>
+                    )}
+                    {(form.address.trim() || form.area) ? <div className="full-width" style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                      <small className="muted">{form.area && !form.areaManual ? 'Detected location' : 'Delivery location'}</small>
+                      <select name="area" aria-label="Delivery location" value={form.area} onChange={updateForm} required style={{width:'auto',maxWidth:'100%',minHeight:34,padding:'5px 10px',fontSize:13}}>
+                        <option value="">Confirm area</option><option>Malé</option>
                         {partnerDeliveryPricing.pricingMode === 'package_size' ? <option>Hulhumalé</option> : <><option>Hulhumalé Phase 1</option><option>Hulhumalé Phase 2</option></>}
                         <option>Boat</option>
                       </select>
+                    </div> : <div className="full-width" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                      <small className="muted">Location is detected from the address.</small>
+                      <button type="button" className="secondary-btn" style={{padding:'5px 10px',fontSize:12}} onClick={()=>updateForm({target:{name:'area',value:'Boat'}})}>Boat delivery</button>
+                    </div>}
+                    <label className="full-width">Delivery instructions
+                      <textarea name="notes" value={form.notes} onChange={updateForm} placeholder="Optional instructions for the driver" rows="2" />
                     </label>
-                    {partnerDeliveryPricing.pricingMode === 'package_size' && (
-                      <div className="package-size-chips" role="group" aria-label="Package size">
-                        {Object.entries(packageSizeLabels).filter(([size]) => Number(partnerDeliveryPricing.packageSizeRates?.[size]) > 0).map(([size, label]) => (
-                          <button key={size} type="button" className={form.packageSize === size ? 'selected' : ''} aria-label={label + ' package size, MVR ' + partnerDeliveryPricing.packageSizeRates[size]} aria-pressed={form.packageSize === size} onClick={() => updateForm({ target: { name: 'packageSize', value: size } })}>
-                            <span className="package-size-initial">{size}</span><span className="package-size-label">{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</span>
-                          </button>
-                        ))}
-                        {!Object.keys(partnerDeliveryPricing.packageSizeRates || {}).some((size) => Number(partnerDeliveryPricing.packageSizeRates[size]) > 0) && <span className="muted">No package size rates set. Contact iGO.</span>}
+                    {partnerDeliveryPricing.pricingMode === 'package_size' && <label className="full-width">Package size *
+                      <select name="packageSize" value={form.packageSize} onChange={updateForm} required>
+                        <option value="">Select package size</option>
+                        {Object.entries(packageSizeLabels).filter(([size])=>Number(partnerDeliveryPricing.packageSizeRates?.[size])>0).map(([size,label])=><option key={size} value={size}>{label} · MVR {partnerDeliveryPricing.packageSizeRates[size]}</option>)}
+                      </select>
+                    </label>}
+                    {partnerDeliveryPricing.codEnabled && <div className="full-width">
+                      <label style={{display:'flex',alignItems:'center',gap:8,flexDirection:'row',justifyContent:'flex-start'}}><input style={{width:18,height:18,minHeight:0,margin:0,flex:'0 0 auto'}} type="checkbox" checked={Boolean(form.codRequested)} onChange={event=>setForm(current=>({...current,codRequested:event.target.checked,codAmount:event.target.checked?current.codAmount:''}))}/>Cash on delivery</label>
+                      {form.codRequested&&<label>COD amount (MVR) *<input name="codAmount" type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" required value={form.codAmount} onChange={updateForm} placeholder="Customer pays"/></label>}
+                    </div>}
+                    <details className="full-width" style={{borderTop:'1px solid #e5e7eb',paddingTop:8}}>
+                      <summary style={{cursor:'pointer',fontSize:13}}>Additional details (optional)</summary>
+                      <div style={{display:'grid',gap:10,marginTop:10}}>
+                        {form.area==='Boat' ? <><label>Boat location<input name="boatLocation" value={form.boatLocation} onChange={updateForm} placeholder="Harbour or jetty"/></label><label>Departure time<input type="time" name="departureTime" value={form.departureTime} onChange={updateForm}/></label></> : <label>Nearby landmark<input name="landmark" value={form.landmark} onChange={updateForm} placeholder="Nearby landmark"/></label>}
+                        <label>Partner tracking reference<input name="trackingReference" value={form.trackingReference} onChange={updateForm} placeholder="Auto-generated if configured"/></label>
+                        <label>Package description<input name="item" value={form.item} onChange={updateForm} placeholder="e.g. Clothing order"/></label>
                       </div>
-                    )}
-                    {form.area === 'Boat' ? (
-                      <>
-                        <label className="full-width">
-                          Boat name *
-                          <input
-                            name="boatName"
-                            value={form.boatName}
-                            onChange={updateForm}
-                            required
-                            placeholder="Name of the boat"
-                          />
-                        </label>
-                        <label>
-                          Boat location (optional)
-                          <input
-                            name="boatLocation"
-                            value={form.boatLocation}
-                            onChange={updateForm}
-                            placeholder="Harbour, jetty or pickup point"
-                          />
-                        </label>
-                        <label>
-                          Departure time (optional)
-                          <input
-                            type="time"
-                            name="departureTime"
-                            value={form.departureTime}
-                            onChange={updateForm}
-                          />
-                        </label>
-                      </>
-                    ) : (
-                      <>
-                        <label className="full-width">
-                          Delivery address *
-                          <input
-                            name="address"
-                            value={form.address}
-                            onChange={updateForm}
-                            required
-                            placeholder="House, street or building"
-                          />
-                        </label>
-                        <label className="full-width">
-                          Nearby landmark (optional)
-                          <input
-                            name="landmark"
-                            value={form.landmark}
-                            onChange={updateForm}
-                            placeholder="A nearby shop, mosque or other landmark"
-                          />
-                        </label>
-                      </>
-                    )}
-                    <label className="full-width">
-                      Delivery instructions
-                      <textarea
-                        name="notes"
-                        value={form.notes}
-                        onChange={updateForm}
-                        placeholder="Optional notes for the driver"
-                        rows="3"
-                      />
-                    </label>
-                    <label>
-                      Partner tracking reference (optional)
-                      <input
-                        name="trackingReference"
-                        value={form.trackingReference}
-                        onChange={updateForm}
-                        placeholder="e.g. BBD/0036"
-                      />
-                    </label>
-                    <label>
-                      Package description (optional)
-                      <input
-                        name="item"
-                        value={form.item}
-                        onChange={updateForm}
-                        placeholder="e.g. Clothing order"
-                      />
-                    </label>
-                    <label>
-                      Delivery fee (MVR) *
-                      <input
-                        type="text"
-                        value={form.fee}
-                        readOnly
-                        aria-label="Calculated delivery fee in MVR"
-                      />
-                      <small>{partnerDeliveryPricing.pricingMode === 'agreed_flat' ? 'This customer’s agreed rate applies to every delivery area.' : 'Calculated from the delivery route.'}</small>
-                    </label>
+                    </details>
+                    <div className="full-width" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'8px 0'}}><span>Delivery fee</span><strong>{form.area && form.fee ? 'MVR '+Number(form.fee).toFixed(2) : 'Calculated automatically'}</strong></div>
                   </div>
                   <div className="form-actions">
                     <button
@@ -3977,11 +3929,12 @@ export default function App() {
                 <p>{databaseProfile ? 'Official invoices and payment status from your account.' : 'Official records appear after database setup.'}</p>
                 <SectionErrorBoundary><FinanceManagement packages={packages} workspace={workspace} liveMode={Boolean(databaseProfile)} mode="invoices" /></SectionErrorBoundary>
               </div>
+              {databaseProfile && ['Admin','Partner'].includes(workspace) && <CodSettlementManagement workspace={workspace} />}
             </>
           )}
 
           <footer>
-            iGO Delivery · {databaseProfile ? 'Connected to Supabase' : 'Demo workspace'}
+            iGO Delivery
           </footer>
         </section>
       </main>
@@ -4028,6 +3981,150 @@ export default function App() {
   );
 }
 
+
+function RiderCashHandover({actorId,packages}) {
+  const [rows,setRows]=useState([]);
+  const [load,setLoad]=useState('loading');
+  useEffect(()=>{
+    if(!supabase||!actorId)return undefined;
+    let active=true;
+    const refresh=async()=>{
+      const {data,error}=await supabase.from('packages').select('id,package_number,cod_collected_amount,cod_collected_at,cod_received_by_igo_at').eq('cod_collected_by',actorId).eq('status','delivered').not('cod_collected_at','is',null).order('cod_collected_at',{ascending:false});
+      if(active){setLoad(error?'error':'ready');if(!error)setRows(data||[]);}
+    };
+    void refresh();
+    const interval=window.setInterval(refresh,30000);
+    window.addEventListener('focus',refresh);
+    window.addEventListener('igo-live-finance-updated',refresh);
+    return()=>{active=false;window.clearInterval(interval);window.removeEventListener('focus',refresh);window.removeEventListener('igo-live-finance-updated',refresh);};
+  },[actorId,packages]);
+  const money=n=>'MVR '+Number(n||0).toFixed(2);
+  const pending=rows.filter(r=>!r.cod_received_by_igo_at);
+  const received=rows.filter(r=>r.cod_received_by_igo_at);
+  const sum=list=>list.reduce((n,r)=>n+Number(r.cod_collected_amount||0),0);
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Indian/Maldives',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const isToday=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Indian/Maldives',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(t))===today;
+  return <section className="card" aria-label="My COD cash handover" style={{padding:14,display:'grid',gap:8,marginBottom:12}}>
+    <strong>My COD cash handover</strong>
+    {load==='loading'?<small className="muted">Loading cash records…</small>:load==='error'?<small role="alert">Could not refresh cash records. Check with iGO before handing over cash.</small>:<>
+    <span className="muted">Cash still to hand over (all dates)</span><strong style={{fontSize:23}}>{money(sum(pending))}</strong>
+    <small>Collected today: {money(sum(rows.filter(r=>isToday(r.cod_collected_at))))} · Confirmed received today: {money(sum(received.filter(r=>isToday(r.cod_received_by_igo_at))))}</small>
+    <small className="muted">Separate from your delivery earnings. iGO confirms receipt after physical handover.</small>
+    {pending.length>0&&<details><summary>{pending.length} packages awaiting handover</summary>{pending.map(r=><div key={r.id} style={{display:'flex',justifyContent:'space-between',padding:'7px 0'}}><span>IGO-{r.package_number}</span><strong>{money(r.cod_collected_amount)}</strong></div>)}</details>}
+    </>}
+  </section>;
+}
+
+function CodCollectionsDashboard({ packages = [], workspace = 'Admin', compact = false, onOpen }) {
+  const moneyCod = (value) => 'MVR ' + Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const orders = packages.filter((p) => p.codAmount != null && Number(p.codAmount) > 0);
+  const collected = orders.filter((p) => p.codCollectedAt && p.codCollectedAmount != null);
+  const waiting = orders.filter((p) => !p.codCollectedAt && !['Cancelled', 'Delivered', 'Failed Delivery', 'Returned to Godown'].includes(p.status));
+  const collectedTotal = collected.reduce((total, p) => total + Number(p.codCollectedAmount || 0), 0);
+  const receivedTotal = collected.filter(p=>p.codReceivedByIgoAt).reduce((n,p)=>n+Number(p.codCollectedAmount||0),0);
+  const awaitingHandover = collectedTotal-receivedTotal;
+  const pendingTotal = waiting.reduce((total, p) => total + Number(p.codAmount || 0), 0);
+  // Dashboard previews must stay small enough that normal package actions remain above the fold.
+  // Full totals, collection evidence and partner/driver breakdowns live on COD Collections.
+  if (compact) {
+    return (
+      <section className="card cod-collections-dashboard cod-collections-compact"
+        aria-label="Cash on delivery summary"
+        style={{ padding: 14, marginBottom: 12, display: 'grid', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gap: 3 }}>
+            <span className="muted" style={{ fontWeight: 700, fontSize: 11, letterSpacing: '0.08em' }}>CASH ON DELIVERY</span>
+            <strong style={{ fontSize: 23, lineHeight: 1.15 }}>{moneyCod(collectedTotal)} <span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>collected</span></strong>
+          </div>
+          {onOpen && <button className="secondary-btn" type="button" onClick={onOpen} style={{ padding: '8px 12px', fontSize: 13 }}>Details</button>}
+        </div>
+        <div className="muted" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+          <span>To collect: <strong>{moneyCod(pendingTotal)}</strong></span>
+          <span>Awaiting cash handover: <strong>{moneyCod(awaitingHandover)}</strong></span>
+          <span>Received by iGO: <strong>{moneyCod(receivedTotal)}</strong></span>
+          <span>{orders.length} COD {orders.length === 1 ? 'order' : 'orders'}</span>
+        </div>
+      </section>
+    );
+  }
+
+  const groupRows = (keyFn) => {
+    const groups = new Map();
+    for (const p of collected) {
+      const key = keyFn(p) || 'Unassigned';
+      const row = groups.get(key) || { label: key, amount: 0, count: 0 };
+      row.amount += Number(p.codCollectedAmount || 0);
+      row.count++;
+      groups.set(key, row);
+    }
+    return [...groups.values()].sort((a,b) => b.amount-a.amount || a.label.localeCompare(b.label));
+  };
+  const groupTitle = workspace === 'Admin' ? 'Collected by partner' : workspace === 'Partner' ? 'Collected by driver' : 'Collected for partner';
+  const groupValue = workspace === 'Admin' || workspace === 'Driver'
+    ? (p) => p.partnerName || 'Unknown partner'
+    : (p) => p.driver || 'Unassigned driver';
+  const groupByDriver = workspace === 'Admin' ? groupRows((p) => p.driver || 'Unassigned driver') : [];
+  return (
+    <section className="card cod-collections-dashboard" aria-label="COD cash collections" style={{ padding: 18, marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div>
+          <p className="eyebrow" style={{ marginBottom: 4 }}>CASH ON DELIVERY</p>
+          <h2 style={{ margin: '0 0 5px' }}>{compact ? 'COD cash collected' : 'COD Collections'}</h2>
+          <p className="muted" style={{ margin: 0 }}>Money collected from customers for partner orders. Not iGO delivery-fee revenue.</p>
+        </div>
+        {compact && onOpen && <button className="secondary-btn" type="button" onClick={onOpen}>View COD details</button>}
+        {compact && workspace === 'Admin' && <span className="muted">Open COD Collections for the full breakdown</span>}
+      </div>
+      <div className="stats-grid" style={{ marginBottom: 12 }}>
+        <div className="stat-card"><span className="stat-label">Total cash collected</span><strong>{moneyCod(collectedTotal)}</strong><small>{collected.length} confirmed COD deliveries</small></div>
+        <div className="stat-card"><span className="stat-label">Awaiting collection</span><strong>{moneyCod(pendingTotal)}</strong><small>{waiting.length} active COD deliveries</small></div>
+        <div className="stat-card"><span className="stat-label">COD orders registered</span><strong>{orders.length}</strong><small>Only orders marked COD are counted</small></div>
+        <div className="stat-card"><span className="stat-label">Awaiting physical cash handover</span><strong>{moneyCod(awaitingHandover)}</strong></div>
+        <div className="stat-card"><span className="stat-label">Cash received by iGO</span><strong>{moneyCod(receivedTotal)}</strong></div>
+      </div>
+      <small className="muted">Cash is recorded when the driver confirms collection and delivery. These figures do not establish that cash has been remitted to iGO or paid to partners.</small>
+      {!compact && (
+        <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+          <div className="card" style={{ padding: 14 }}>
+            <h3 style={{ margin: '0 0 10px' }}>{groupTitle}</h3>
+            {groupRows(groupValue).length
+              ? groupRows(groupValue).map((row) => (
+                <p key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, margin: '8px 0' }}>
+                  <span>{row.label} <small>({row.count})</small></span><strong>{moneyCod(row.amount)}</strong>
+                </p>
+              )) : <p className="muted">No COD cash collected yet.</p>}
+          </div>
+          {workspace === 'Admin' && <div className="card" style={{ padding: 14 }}>
+            <h3 style={{ margin: '0 0 10px' }}>Collected by driver</h3>
+            {groupByDriver.length ? groupByDriver.map((row) => (
+              <p key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, margin: '8px 0' }}>
+                <span>{row.label} <small>({row.count})</small></span><strong>{moneyCod(row.amount)}</strong>
+              </p>
+            )) : <p className="muted">No COD cash collected yet.</p>}
+          </div>}
+          <div className="card" style={{ padding: 14 }}>
+            <h3 style={{ margin: '0 0 10px' }}>Package collection records</h3>
+            {orders.length ? (
+              <div style={{ display: 'grid', gap: 9 }}>
+                {orders.map((p) => <article key={p.dbId || p.id} style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 9, display: 'flex', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+                  <div><strong>{p.id} · {p.customer || 'Customer'}</strong>
+                    <div className="muted">{workspace === 'Admin' ? (p.partnerName || 'Partner') + ' · ' : ''}{p.driver || 'Driver unassigned'} · {p.status}</div>
+                    {p.codCollectedAt && <small className="muted">Cash recorded {new Date(p.codCollectedAt).toLocaleString()}</small>}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <strong>{moneyCod(p.codCollectedAt ? p.codCollectedAmount : p.codAmount)}</strong>
+                    <div style={{ fontSize: 12 }}>{p.codCollectedAt ? 'Cash collected' : 'Not collected'}</div>
+                  </div>
+                </article>)}
+              </div>
+            ) : <p className="muted">No cash-on-delivery packages have been registered in this workspace.</p>}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function PartnerDeliveryPricingManagement() {
   const [partners, setPartners] = useState([]);
   const [drafts, setDrafts] = useState({});
@@ -4046,6 +4143,7 @@ function PartnerDeliveryPricingManagement() {
       setDrafts(Object.fromEntries(rows.map((partner) => [partner.id, {
         pricingMode: partner.pricingMode || 'route',
         agreedDeliveryFee: partner.agreedDeliveryFee == null ? '' : String(partner.agreedDeliveryFee),
+        codEnabled: Boolean(partner.codEnabled),
         packageSizeRates: Object.fromEntries(['S', 'M', 'L', 'XL'].map((size) => [
           size,
           partner.packageSizeRates?.[size] == null ? '' : String(partner.packageSizeRates[size]),
@@ -4068,6 +4166,7 @@ function PartnerDeliveryPricingManagement() {
   const updateDraft = (id, changes) => {
     setDrafts((current) => ({ ...current, [id]: { ...current[id], ...changes } }));
     setMessage('');
+    setError('');
   };
 
   const save = async (partner) => {
@@ -4097,10 +4196,26 @@ function PartnerDeliveryPricingManagement() {
           agreedDeliveryFee: draft.pricingMode === 'agreed_flat' ? agreedDeliveryFee : null,
         });
       }
-      setMessage('Saved delivery pricing for ' + partner.name + '. It applies to new packages; existing packages keep their saved fee.');
+      setMessage('Saved delivery pricing for ' + partner.name + '. New packages use the updated rate.');
       await refresh();
     } catch (saveError) {
       setError(saveError.message || 'Could not save this customer rate.');
+    } finally {
+      setSavingId('');
+    }
+  };
+
+  const saveCodPermission = async (partner) => {
+    const enabled = Boolean(drafts[partner.id]?.codEnabled);
+    setSavingId('cod:' + partner.id);
+    setError('');
+    setMessage('');
+    try {
+      await savePartnerCodSetting({ partnerId: partner.id, enabled });
+      setMessage((enabled ? 'Enabled' : 'Disabled') + ' optional cash-on-delivery requests for ' + partner.name + '. Existing COD package records are unchanged.');
+      await refresh();
+    } catch (saveError) {
+      setError(saveError.message || 'Could not save the COD permission.');
     } finally {
       setSavingId('');
     }
@@ -4112,17 +4227,17 @@ function PartnerDeliveryPricingManagement() {
     <section id="partner-delivery-pricing" className="card" style={{ padding: 20, display: 'grid', gap: 16 }}>
       <div>
         <p className="eyebrow">CUSTOMER BILLING</p>
-        <h2 style={{ margin: '4px 0 6px' }}>Partner delivery rates</h2>
+        <h2 style={{ margin: '4px 0 6px' }}>Partner delivery rates &amp; COD permissions</h2>
         <p style={{ margin: 0, color: '#748094' }}>
           Choose route pricing, one agreed rate, or separate prices by package size.
         </p>
       </div>
       {partners.length > 1 && <label>Find partner
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search partner name…" />
+        <input value={search} onChange={(event) => { setSearch(event.target.value); setError(''); setMessage(''); }} placeholder="Search partner name…" />
       </label>}
       {message && <p role="status" className="notice">{message}</p>}
-      {error && <p role="alert" className="notice">{error}</p>}
-      {loading ? <p>Loading partner rates…</p> : error ? null : visiblePartners.length ? visiblePartners.map((partner) => {
+      {error && <p role="alert" style={{ margin: 0, padding: 12, borderRadius: 8, background: '#fff0ed', color: '#952d20' }}>{error}</p>}
+      {loading ? <p>Loading partner rates…</p> : visiblePartners.length ? visiblePartners.map((partner) => {
         const draft = drafts[partner.id] || { pricingMode: 'route', agreedDeliveryFee: '', packageSizeRates: {} };
         return (
           <article key={partner.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end', padding: 14, border: '1px solid var(--border, #d8dee8)', borderRadius: 12 }}>
@@ -4146,10 +4261,12 @@ function PartnerDeliveryPricingManagement() {
                 ))}
               </div>
             )}
-            <button className="primary-btn" type="button" onClick={() => void save(partner)} disabled={savingId === partner.id || (draft.pricingMode === 'agreed_flat' && !(Number(draft.agreedDeliveryFee) > 0))}>{savingId === partner.id ? 'Saving…' : 'Save rate'}</button>
+            <label className="cod-toggle" style={{ gridColumn: '1 / -1' }}><input type="checkbox" checked={Boolean(draft.codEnabled)} onChange={event => updateDraft(partner.id, { codEnabled: event.target.checked })} />Allow this partner to request cash on delivery (optional per package)</label>
+            <button className="secondary-btn" type="button" disabled={Boolean(savingId)} onClick={() => void saveCodPermission(partner)}>{savingId === 'cod:' + partner.id ? 'Saving COD setting…' : 'Save COD permission'}</button>
+            <button className="primary-btn" type="button" onClick={() => void save(partner)} disabled={Boolean(savingId)}>{savingId === partner.id ? 'Saving…' : 'Save rate'}</button>
           </article>
         );
-      }) : <p>{partners.length ? 'No matching partner.' : 'No partner accounts yet.'}</p>}
+      }) : <div><p>{partners.length ? 'No matching partner.' : error ? 'Partner rates could not be loaded.' : 'No partner accounts yet.'}</p>{!partners.length && <button type="button" className="secondary-btn" onClick={()=>void refresh()}>Refresh partner rates</button>}</div>}
       <p style={{ margin: 0, color: '#748094' }}>Only sizes with a saved price appear when registering packages. Rate changes apply to new packages; registered package fees stay unchanged.</p>
     </section>
   );
@@ -4476,7 +4593,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [partnerId, setPartnerId] = useState('');
-  const [form, setForm] = useState({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '' });
+  const [form, setForm] = useState({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '', codRequested: false, codAmount: '' });
 
   useEffect(() => {
     let active = true;
@@ -4485,7 +4602,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
       setError('');
       try {
         const { data, error: loadError } = await supabase.from('partners')
-          .select('id,name,approval_status,delivery_pricing_mode,agreed_delivery_fee,package_size_rates')
+          .select('id,name,approval_status,delivery_pricing_mode,agreed_delivery_fee,package_size_rates,cod_enabled')
           .eq('approval_status', 'approved').order('name', { ascending: true });
         if (loadError) throw loadError;
         if (active) {
@@ -4494,6 +4611,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
             pricingMode: row.delivery_pricing_mode || 'route',
             agreedDeliveryFee: row.agreed_delivery_fee == null ? null : Number(row.agreed_delivery_fee),
             packageSizeRates: row.package_size_rates || {},
+            codEnabled: row.cod_enabled === true,
           }));
           setPartners(rows);
           setPartnerId((current) => current || rows[0]?.id || '');
@@ -4528,6 +4646,9 @@ function AdminCustomerPackageCreator({ onCreated }) {
       setError('Choose a package size with a saved rate for this partner.'); return;
     }
     if (!(Number(fee) > 0)) { setError('A delivery rate is not set for this package.'); return; }
+    if (form.codRequested && (!partner.codEnabled || !validCodAmount(form.codAmount))) {
+      setError('Enter a valid COD amount between MVR 0.01 and 999,999.00.'); return;
+    }
     setSaving(true);
     try {
       const [created] = await createPackages([{
@@ -4536,11 +4657,11 @@ function AdminCustomerPackageCreator({ onCreated }) {
         boatLocation: form.area === 'Boat' ? form.boatLocation.trim() : '',
         departureTime: form.area === 'Boat' ? form.departureTime : '',
         landmark: form.area === 'Boat' ? '' : form.landmark.trim(),
-        packageSize: form.packageSize, fee: Number(fee), item: form.item.trim(), notes: form.notes.trim(), status: 'Pending',
+        packageSize: form.packageSize, fee: Number(fee), codAmount: partner.codEnabled && form.codRequested ? Number(form.codAmount) : null, item: form.item.trim(), notes: form.notes.trim(), status: 'Pending',
       }], partner.id);
       onCreated?.(created);
       setMessage((created?.id || 'Package') + ' added for ' + partner.name + '.');
-      setForm({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '' });
+      setForm({ customer: '', phone: '', area: "Malé", address: '', boatName: '', boatLocation: '', departureTime: '', landmark: '', packageSize: '', item: '', notes: '', codRequested: false, codAmount: '' });
     } catch (saveError) { setError(saveError.message || 'Could not add the package.'); }
     finally { setSaving(false); }
   };
@@ -4552,7 +4673,7 @@ function AdminCustomerPackageCreator({ onCreated }) {
         <form className="package-form" onSubmit={submit}>
           <div className="form-grid">
             <label className="full-width">Partner
-              <select value={partnerId} onChange={(event) => { setPartnerId(event.target.value); setForm((current) => ({ ...current, packageSize: '' })); setError(''); setMessage(''); }} required>
+              <select value={partnerId} onChange={(event) => { setPartnerId(event.target.value); setForm((current) => ({ ...current, packageSize: '', codRequested: false, codAmount: '' })); setError(''); setMessage(''); }} required>
                 {partners.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
               </select>
             </label>
@@ -4577,6 +4698,11 @@ function AdminCustomerPackageCreator({ onCreated }) {
             </>}
             <label>Package description (optional)<input name="item" value={form.item} onChange={update} placeholder="Item or order details" /></label>
             <label>Delivery fee<input value={fee ? 'MVR ' + fee : partner?.pricingMode === 'package_size' ? 'Choose a package size' : 'Rate unavailable'} readOnly /></label>
+            {partner?.codEnabled && <div className="full-width cod-request-fields">
+              <label className="cod-toggle"><input type="checkbox" checked={Boolean(form.codRequested)} onChange={event => setForm(current => ({ ...current, codRequested: event.target.checked, codAmount: event.target.checked ? current.codAmount : '' }))} />Collect cash on delivery for this package</label>
+              {form.codRequested && <label>Customer pays on delivery (MVR) *<input name="codAmount" type="number" min="0.01" max="999999" step="0.01" inputMode="decimal" required value={form.codAmount} onChange={update} placeholder="e.g. 250.00" /></label>}
+              <small>Customer cash amount is separate from iGO's delivery fee.</small>
+            </div>}
             <label className="full-width">Delivery instructions (optional)<textarea name="notes" value={form.notes} onChange={update} rows="2" placeholder="Instructions for the driver" /></label>
           </div>
           <div className="form-actions"><button className="primary-btn" type="submit" disabled={saving}>{saving ? 'Adding…' : 'Add package for customer'}</button></div>
@@ -4841,12 +4967,18 @@ function AdminOperations({ packages, onUpdate, onCreated, liveMode = false, staf
                     <dt>Delivery fee</dt>
                     <dd>MVR {p.fee}</dd>
                   </div>
+                  {p.codAmount != null && <div className="cod-request-summary"><dt>Cash on delivery</dt><dd>MVR {Number(p.codAmount).toFixed(2)} · {p.codCollectedAt ? 'Cash collected' : 'Awaiting collection'}</dd></div>}
                 </dl>
                 <form
                   className="ops-assignment"
                   onSubmit={(e) => {
                     e.preventDefault();
+                    if (p.codAmount != null && draft.status === 'Delivered' && p.status !== 'Delivered' && !draft.codConfirmed) {
+                      setFeedback('Confirm customer cash was actually received before marking this COD package delivered.');
+                      return;
+                    }
                     onUpdate(p.id, {
+                      ...(p.codAmount != null && draft.status === 'Delivered' && p.status !== 'Delivered' ? { codCollectedAmount: Number(p.codAmount) } : {}),
                       driver: draft.driver.trim(),
                       status: draft.status,
                       failureReason:
@@ -4881,6 +5013,10 @@ function AdminOperations({ packages, onUpdate, onCreated, liveMode = false, staf
                       ))}
                     </select>
                   </label>
+                  {p.codAmount != null && draft.status === 'Delivered' && p.status !== 'Delivered' && (staffMode
+                    ? <p className="cod-notice">COD amount MVR {Number(p.codAmount).toFixed(2)}: only an assigned driver or admin can confirm the cash collection.</p>
+                    : <label className="cod-toggle"><input type="checkbox" required checked={Boolean(draft.codConfirmed)} onChange={event => change(p, 'codConfirmed', event.target.checked)} />I verified that MVR {Number(p.codAmount).toFixed(2)} was collected from the customer</label>
+                  )}
                   {p.area === 'Boat' && draft.status === 'Delivered' && (
                     <label className="ops-photo-upload">
                       Boat handover photo *
@@ -4999,6 +5135,7 @@ function PackageTable({ packages }) {
             <th>Phone</th>
             <th>Area</th>
             <th>Fee</th>
+            <th>COD customer cash</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -5014,6 +5151,7 @@ function PackageTable({ packages }) {
               <td>{p.phone}</td>
               <td>{p.area}</td>
               <td>MVR {p.fee}</td>
+              <td>{p.codAmount != null ? <span className="cod-status">MVR {Number(p.codAmount).toFixed(2)} · {p.codCollectedAt ? 'Collected' : 'Pending'}</span> : '—'}</td>
               <td>
                 <span className={`status status-${statusClass(p.status)}`}>
                   {p.status}
@@ -5042,8 +5180,9 @@ function PackageTable({ packages }) {
               </div>
               <div className="package-mobile-details">
                 <strong>{p.customer}</strong>
-                <span>MVR {p.fee}</span>
+                <span>Delivery fee MVR {p.fee}</span>
               </div>
+              {p.codAmount != null && <div className="package-mobile-contact"><span className="cod-status">COD MVR {Number(p.codAmount).toFixed(2)} · {p.codCollectedAt ? 'Cash collected' : 'To collect'}</span></div>}
               <div className="package-mobile-contact">
                 <span>Partner · {p.partnerName || p.partner || 'Partner not linked'}</span>
               </div>
@@ -5227,6 +5366,7 @@ function DriverWorkflowDashboard({
   packages,
   onUpdate,
   driverName = 'Ahmed Rasheed',
+  actorId = '',
   liveMode = false,
 }) {
   const [online, setOnline] = useState(() => {
@@ -5239,6 +5379,7 @@ function DriverWorkflowDashboard({
     }
   });
   const [selected, setSelected] = useState([]);
+  const [codConfirmed, setCodConfirmed] = useState({});
   const [activePartner, setActivePartner] = useState(''); const [routeTab, setRouteTab] = useState('pickup'); const [deferredPickupIds, setDeferredPickupIds] = useState([]);
   const [proofs, setProofs] = useState({});
   const [reasons, setReasons] = useState({});
@@ -5301,6 +5442,8 @@ function DriverWorkflowDashboard({
     (p) => !['Delivered', 'Cancelled'].includes(p.status)
   );
   const delivered = assigned.filter((p) => p.status === 'Delivered'); const pendingPickups = active.filter((p) => p.status === 'Pending' && !deferredPickupIds.includes(p.id)); const inDelivery = active.filter((p) => p.status !== 'Pending'); const deferredPending = active.filter((p) => p.status === 'Pending' && deferredPickupIds.includes(p.id)); useEffect(() => { if (routeTab === 'pickup' && pendingPickups.length === 0 && inDelivery.length > 0) setRouteTab('delivery'); }, [routeTab, pendingPickups.length, inDelivery.length]); const routePackages = routeTab === 'delivered' ? delivered : routeTab === 'delivery' ? inDelivery : pendingPickups;
+  const useCompactRouteList = routeTab === 'delivery' || routeTab === 'delivered';
+  const RoutePackageRow = useCompactRouteList ? 'details' : 'article';
   const earned = delivered.reduce(
     (total, p) => total + ((Number(p.fee) || 0) * rate) / 100,
     0
@@ -5411,11 +5554,17 @@ function DriverWorkflowDashboard({
     });
   };
   const confirmBoatDelivery = (p) => {
-    if (!proofs[p.id]) return;
-    onUpdate(p.id, { status: 'Delivered', proofPhoto: proofs[p.id] });
+    if (!proofs[p.id] || (p.codAmount != null && !codConfirmed[p.id])) return;
+    onUpdate(p.id, {
+      status: 'Delivered',
+      proofPhoto: proofs[p.id],
+      ...(p.codAmount != null ? { codCollectedAmount: Number(p.codAmount) } : {}),
+    });
   };
   return (
     <div className="driver-dashboard">
+      {liveMode && actorId && <RiderCashHandover actorId={actorId} packages={packages} />}
+      {!liveMode && assigned.some((p) => p.codAmount != null && Number(p.codAmount) > 0) && <CodCollectionsDashboard packages={assigned} workspace="Driver" compact />}
       <div className="driver-banner">
         <div>
           <p className="driver-kicker">DRIVER WORKSPACE</p>
@@ -5551,7 +5700,8 @@ function DriverWorkflowDashboard({
                       {p.id} · {p.customer}
                     </strong>
                     <br />
-                    {p.area || 'Destination not recorded'} · MVR {p.fee}
+                    {p.area || 'Destination not recorded'} · Delivery fee MVR {p.fee}
+                    {p.codAmount != null && <><br /><strong className="cod-status">COD · collect MVR {Number(p.codAmount).toFixed(2)}</strong></>}
                   </span>
                 </label>
               ))}
@@ -5578,11 +5728,30 @@ function DriverWorkflowDashboard({
           </div>
           <span className="driver-count">{active.length} active</span>
         </div>
-        <div role="tablist" aria-label="Package trip stages" style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}><button type="button" role="tab" aria-selected={routeTab === 'pickup'} className="secondary-btn" onClick={() => setRouteTab('pickup')}>Pickups ({pendingPickups.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivery'} className="secondary-btn" onClick={() => setRouteTab('delivery')}>Deliveries ({inDelivery.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivered'} className="secondary-btn" onClick={() => setRouteTab('delivered')}>Delivered ({delivered.length})</button></div>{routeTab === 'delivery' && pendingPickups.length > 0 && <button type="button" className="secondary-btn" onClick={() => setRouteTab('pickup')}>Return to pickups ({pendingPickups.length})</button>}{routeTab === 'pickup' && inDelivery.length > 0 && <button type="button" className="driver-action" onClick={() => setRouteTab('delivery')}>Start delivery run ({inDelivery.length})</button>}{deferredPending.length > 0 && <button type="button" className="secondary-btn" onClick={() => setDeferredPickupIds([])}>Restore {deferredPending.length} skipped package(s)</button>}{routePackages.length ? (
-          <div className="driver-delivery-list">
+        <div role="tablist" aria-label="Package trip stages" style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}><button type="button" role="tab" aria-selected={routeTab === 'pickup'} className="secondary-btn" onClick={() => setRouteTab('pickup')}>Pickups ({pendingPickups.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivery'} className="secondary-btn" onClick={() => setRouteTab('delivery')}>Deliveries ({inDelivery.length})</button><button type="button" role="tab" aria-selected={routeTab === 'delivered'} className="secondary-btn" onClick={() => setRouteTab('delivered')}>Delivered ({delivered.length})</button></div>{routeTab === 'delivery' && pendingPickups.length > 0 && <button type="button" className="secondary-btn" onClick={() => setRouteTab('pickup')}>Return to pickups ({pendingPickups.length})</button>}{routeTab === 'pickup' && inDelivery.length > 0 && <button type="button" className="driver-action" onClick={() => setRouteTab('delivery')}>Start delivery run ({inDelivery.length})</button>}{deferredPending.length > 0 && <button type="button" className="secondary-btn" onClick={() => setDeferredPickupIds([])}>Restore {deferredPending.length} skipped package(s)</button>}{routeTab === 'delivery' && inDelivery.length > 0 && <p className="driver-collected-list-caption">Collected packages · tap a row to view delivery details and actions</p>}{routePackages.length ? (
+          <div className={useCompactRouteList ? 'driver-collected-list' : 'driver-delivery-list'}>
             {routePackages.map((p) => (
-              <article className="driver-delivery-card" key={p.id}>
-                <div className="driver-delivery-top">
+              <RoutePackageRow className={useCompactRouteList ? 'driver-collected-row' : 'driver-delivery-card'} key={p.id}>
+                {useCompactRouteList && (
+                  <summary className="driver-collected-summary">
+                    <span className="driver-collected-identity">
+                      <span className="driver-collected-id">{p.id}</span>
+                      <strong>{p.customer || 'Customer'}</strong>
+                    </span>
+                    <span className="driver-collected-destination">
+                      {p.area === 'Boat' ? p.boatName || p.address || 'Boat destination' : p.address || p.area || 'Destination not recorded'}
+                    </span>
+                    <span className="driver-collected-meta">
+                      <span>{p.partnerName || p.partner || 'Partner'}</span>
+                      <span className={'driver-collected-status status-' + statusClass(p.status)}>{p.status}</span>
+                      {p.codAmount != null && <strong className="driver-collected-cod">{p.codCollectedAt ? 'COD collected' : 'Collect COD'} · MVR {Number(p.codAmount).toFixed(2)}</strong>}
+                    </span>
+                    {typeof p.notes === 'string' && p.notes.trim() && <span className="driver-collected-note"><strong>Instructions:</strong> {p.notes.trim()}</span>}
+                    <span className="driver-collected-chevron" aria-hidden="true">⌄</span>
+                  </summary>
+                )}
+                <div className={useCompactRouteList ? 'driver-collected-expanded' : undefined}>
+                {!useCompactRouteList && <div className="driver-delivery-top">
                   <div>
                     <span className="driver-package-id">{p.id}</span>
                     <h4>{p.customer}</h4>
@@ -5590,8 +5759,28 @@ function DriverWorkflowDashboard({
                   <span className={'status status-' + statusClass(p.status)}>
                     {p.status}
                   </span>
-                </div>
-                {p.status === 'Pending' ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#fff7d6', color: '#664f00', fontWeight: 700 }}><strong>Next step:</strong> Go to {p.partnerName || p.partner || 'the partner'} to collect this package.</p> : ['Picked Up', 'Out for Delivery'].includes(p.status) ? <p style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#eaf6ef', color: '#155b43', fontWeight: 700 }}><strong>Next step:</strong> Deliver to {p.area === 'Boat' ? p.boatName || p.address || 'the boat' : p.address || p.area || 'the customer address'}.</p> : null}<details className="driver-route-details"><summary>Partner &amp; delivery details</summary><div className="driver-delivery-details">
+                </div>}
+                {p.status === 'Pending' ? <p className="driver-next-step" style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#fff7d6', color: '#664f00', fontWeight: 700 }}><strong>Next step:</strong> Go to {p.partnerName || p.partner || 'the partner'} to collect this package.</p> : ['Picked Up', 'Out for Delivery'].includes(p.status) ? <p className="driver-next-step" style={{ margin: '0 0 14px', padding: '10px 12px', borderRadius: 10, background: '#eaf6ef', color: '#155b43', fontWeight: 700 }}><strong>Next step:</strong> Deliver to {p.area === 'Boat' ? p.boatName || p.address || 'the boat' : p.address || p.area || 'the customer address'}.</p> : null}
+                {!useCompactRouteList && typeof p.notes === 'string' && p.notes.trim() && (
+                  <section
+                    className="driver-partner-instructions"
+                    aria-label="Partner delivery instructions"
+                    style={{
+                      margin: '0 0 14px',
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      background: '#fff6d7',
+                      border: '1px solid #e8cd73',
+                      color: '#584716',
+                    }}
+                  >
+                    <strong style={{ display: 'block', marginBottom: 5 }}>
+                      Partner delivery instructions
+                    </strong>
+                    <p style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{p.notes.trim()}</p>
+                  </section>
+                )}
+                <details className="driver-route-details"><summary>Partner &amp; delivery details</summary><div className="driver-delivery-details">
                   <section className="driver-stop-group" aria-label="Partner pickup">
                     <strong>Partner pickup</strong>
                     <span>{p.partnerName || p.partner || 'Partner'}{p.partnerPhone ? ' · ' + p.partnerPhone : ''}</span>
@@ -5631,6 +5820,11 @@ function DriverWorkflowDashboard({
                     </div>
                   </section>
                 </div></details>
+                {p.codAmount != null && <div className="cod-driver-alert" role="note">
+                  <strong>{p.codCollectedAt ? 'COD collected' : 'CASH TO COLLECT'} · MVR {Number(p.codAmount).toFixed(2)}</strong>
+                  <small>Customer payment for the partner. Separate from delivery fee MVR {p.fee}.</small>
+                  {p.codCollectedAt && <small>Recorded {new Date(p.codCollectedAt).toLocaleString()}</small>}
+                </div>}
                 <div className="driver-delivery-footer">
                   <span>
                     Driver pay{' '}
@@ -5652,6 +5846,12 @@ function DriverWorkflowDashboard({
                     >
                       Start delivery
                     </button>
+                  )}
+                  {p.status === 'Out for Delivery' && p.codAmount != null && (
+                    <label className="cod-toggle cod-driver-confirm">
+                      <input type="checkbox" checked={Boolean(codConfirmed[p.id])} onChange={event => setCodConfirmed(current => ({ ...current, [p.id]: event.target.checked }))} />
+                      I collected MVR {Number(p.codAmount).toFixed(2)} cash from the customer
+                    </label>
                   )}
                   {p.status === 'Out for Delivery' &&
                     (p.area === 'Boat' ? (
@@ -5678,7 +5878,7 @@ function DriverWorkflowDashboard({
                         <button
                           type="button"
                           className="driver-action"
-                          disabled={!proofs[p.id]}
+                          disabled={!proofs[p.id] || (p.codAmount != null && !codConfirmed[p.id])}
                           onClick={() => confirmBoatDelivery(p)}
                         >
                           Deliver with proof
@@ -5688,10 +5888,12 @@ function DriverWorkflowDashboard({
                       <button
                         type="button"
                         className="driver-action"
+                        disabled={p.codAmount != null && !codConfirmed[p.id]}
                         onClick={() =>
                           onUpdate(p.id, {
                             status: 'Delivered',
                             deliveredAt: new Date().toISOString(),
+                            ...(p.codAmount != null ? { codCollectedAmount: Number(p.codAmount) } : {}),
                           })
                         }
                       >
@@ -5746,7 +5948,8 @@ function DriverWorkflowDashboard({
                     </button>
                   </details>
                 )}
-              </article>
+                </div>
+              </RoutePackageRow>
             ))}
           </div>
         ) : (
@@ -6316,9 +6519,11 @@ function ProfileChangeRequests({ profile, user, workspace, setNotice }) {
   </section>;
 }
 
-function NotificationCenter({ onNavigate }) {
+function NotificationCenter({ onNavigate, currentPage, workspace }) {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
+  // Also dismiss the panel if navigation changes through history or another control.
+  useEffect(() => { setOpen(false); }, [currentPage]);
   const [error, setError] = useState('');
   const [telegramConnection, setTelegramConnection] = useState(undefined);
   const [telegramLink, setTelegramLink] = useState('');
@@ -6348,7 +6553,7 @@ function NotificationCenter({ onNavigate }) {
       if (!active || refreshing || document.visibilityState !== 'visible') return;
       refreshing = true;
       try {
-        const rows = await loadNotifications();
+        const rows = await loadNotifications(workspace);
         if (active) { setNotifications(rows); setError(''); }
       } catch (loadError) {
         if (active) setError(loadError.message || 'Could not load notifications.');
@@ -6824,6 +7029,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         invoices: records.invoices,
         payments: records.payments,
         partnerCredits: records.partnerCredits,
+        codInvoiceAllocations: records.codInvoiceAllocations || [],
         expenses: records.expenses.map((row) => ({ id: row.id, date: row.expense_date, category: row.category, description: row.description, paidTo: row.paid_to, amount: Number(row.amount || 0), reference: row.reference || '', recordedAt: row.created_at })),
         transferAccountName: records.bankAccounts.find((row) => row.active)?.account_name || '',
         transferAccountNumber: records.bankAccounts.find((row) => row.active)?.account_number || '',
@@ -7146,6 +7352,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         setLiveError(`Could not identify ${partnerName}'s partner account. Refresh the page and try again.`);
         return;
       }
+      if (!window.confirm(partnerId ? 'Generate an invoice now for this partner, regardless of their automatic billing schedule?' : 'Generate invoices now for all partners, regardless of their automatic billing schedules?')) return;
       await generateLiveInvoices(partnerId || null);
       return;
     }
@@ -7493,6 +7700,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <PartnerInvoiceLedger
           invoices={partnerInvoices}
           payments={billing.payments}
+          codInvoiceAllocations={billing.codInvoiceAllocations || []}
           partnerCredits={billing.partnerCredits || {}}
           accountName={billing.transferAccountName || ''}
           accountNumber={billing.transferAccountNumber || ''}
@@ -8205,7 +8413,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <h3>Invoices</h3>{mode === 'management' && <>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 10, marginBottom: 14 }}>
             <div className="invoice-cutoff-controls">
-              <label>Daily cutoff (Maldives time)
+              <label>Invoice cutoff (Maldives time)
                 <input type="time" step="60" value={billing.cutoff} onChange={(event) => { setCutoffFeedback(''); setCutoffFeedbackError(false); setBilling((current) => ({ ...current, cutoff: event.target.value })); }} aria-label="Daily invoice cutoff time in Maldives time" />
               </label>
               <div className="invoice-cutoff-actions">
@@ -8231,10 +8439,11 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
             {cutoffFeedback || (cutoffSaving ? 'Saving daily cutoff…' : invoiceCutoffMixed
               ? 'Partner cutoff settings differ. Saving or removing here will apply the setting to all partners.'
               : savedInvoiceCutoff
-                ? `Daily invoice cutoff is saved for all partners at ${savedInvoiceCutoff} Maldives time.`
-                : 'No daily invoice cutoff is set. Automatic invoice generation is off.')}
+                ? `Invoice cutoff is saved for all partners at ${savedInvoiceCutoff} Maldives time. Automatic generation follows each partner's billing frequency.`
+                : 'No invoice cutoff is set. Automatic invoice generation is off.')}
             {!cutoffSaving && !cutoffFeedback && cutoffHasUnsavedChanges && <strong> Unsaved change — save to apply.</strong>}
           </p>
+          {workspace === 'Admin' && liveMode && <PartnerBillingFrequency adminUser={adminUser} cutoffVersion={savedInvoiceCutoff + String(invoiceCutoffMixed)} />}
           {readyPartners.length > 0 && (
             <section className="ready-partners" aria-labelledby="ready-partners-heading">
               <div className="ready-partners-heading">
@@ -8266,6 +8475,7 @@ function FinanceManagement({ packages = [], workspace = 'Admin', liveMode = fals
         <PartnerInvoiceLedger
           invoices={billing.invoices}
           payments={billing.payments}
+          codInvoiceAllocations={billing.codInvoiceAllocations || []}
           partnerCredits={billing.partnerCredits || {}}
           accountName={billing.transferAccountName || ''}
           accountNumber={billing.transferAccountNumber || ''}

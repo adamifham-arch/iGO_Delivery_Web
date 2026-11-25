@@ -3934,7 +3934,7 @@ export default function App() {
           )}
 
           <footer>
-            iGO Delivery · {databaseProfile ? 'Connected to Supabase' : 'Demo workspace'}
+            iGO Delivery
           </footer>
         </section>
       </main>

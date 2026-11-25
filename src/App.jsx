@@ -238,36 +238,7 @@ const cleanImportedMessageLine = (line) =>
     .replace(/[🟥🟩🛳️✅☑️]+/gu, '')
     .trim();
 
-const initialPackages = [
-  {
-    id: 'IGO-1001',
-    customer: 'Aminath Ahmed',
-    phone: '7771234',
-    area: 'Hulhumale',
-    item: 'Clothing',
-    fee: 35,
-    status: 'Pending',
-  },
-  {
-    id: 'IGO-1002',
-    driver: 'Ahmed Rasheed',
-    customer: 'Mohamed Ali',
-    phone: '7775678',
-    area: "Male'",
-    item: 'Electronics',
-    fee: 45,
-    status: 'Out for Delivery',
-  },
-  {
-    id: 'IGO-1003',
-    customer: 'Fathimath Zaina',
-    phone: '7779876',
-    area: 'Villimale',
-    item: 'Accessories',
-    fee: 35,
-    status: 'Delivered',
-  },
-];
+const initialPackages = [];
 
 const statusClass = (status) => status.toLowerCase().replaceAll(' ', '-');
 const getStaffLandingPage = (profile) => {
